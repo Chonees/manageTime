@@ -253,22 +253,29 @@ export const saveTask = async (task) => {
   
   // Obtener el ID del usuario actual
   let userId = '1';
+  let isAdmin = false;
+  
   try {
     const userJson = await AsyncStorage.getItem('user');
     if (userJson) {
       const user = JSON.parse(userJson);
       userId = user.id;
+      isAdmin = user.isAdmin === true;
     }
   } catch (error) {
     console.error('Error al obtener usuario para crear tarea:', error);
   }
+  
+  // Si es administrador y se especificó un userId en la tarea, usar ese
+  // De lo contrario, usar el ID del usuario actual
+  const assignedUserId = (isAdmin && task.userId) ? task.userId : userId;
   
   const newTask = {
     id: (mockTasks.length + 1).toString(),
     title: task.title,
     description: task.description || '',
     completed: false,
-    userId: userId,
+    userId: assignedUserId,
     createdAt: new Date().toISOString()
   };
   

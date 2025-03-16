@@ -7,7 +7,9 @@ import {
   FlatList, 
   StyleSheet,
   Alert,
-  ActivityIndicator
+  ActivityIndicator,
+  Modal,
+  ScrollView
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
@@ -16,11 +18,14 @@ import * as api from '../services/api';
 const TaskScreen = ({ navigation }) => {
   const { user } = useAuth();
   const [tasks, setTasks] = useState([]);
+  const [users, setUsers] = useState([]);
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskDescription, setNewTaskDescription] = useState('');
+  const [selectedUserId, setSelectedUserId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [showUserSelector, setShowUserSelector] = useState(false);
 
   // Cargar tareas
   const loadTasks = async () => {
@@ -43,9 +48,24 @@ const TaskScreen = ({ navigation }) => {
     }
   };
 
-  // Cargar tareas al montar el componente
+  // Cargar usuarios si es administrador
+  const loadUsers = async () => {
+    if (!user?.isAdmin) return;
+    
+    try {
+      const usersData = await api.getUsers();
+      setUsers(usersData);
+    } catch (error) {
+      console.error('Error al cargar usuarios:', error);
+    }
+  };
+
+  // Cargar tareas y usuarios al montar el componente
   useEffect(() => {
     loadTasks();
+    if (user?.isAdmin) {
+      loadUsers();
+    }
   }, []);
 
   // Añadir nueva tarea
@@ -56,14 +76,22 @@ const TaskScreen = ({ navigation }) => {
     }
 
     try {
-      const result = await api.saveTask({ 
+      const taskData = { 
         title: newTaskTitle,
-        description: newTaskDescription 
-      });
+        description: newTaskDescription
+      };
+      
+      // Si es admin y hay un usuario seleccionado, asignar la tarea a ese usuario
+      if (user?.isAdmin && selectedUserId) {
+        taskData.userId = selectedUserId;
+      }
+      
+      const result = await api.saveTask(taskData);
       
       setTasks([...tasks, result.task]);
       setNewTaskTitle('');
       setNewTaskDescription('');
+      setSelectedUserId(null);
       setShowAddForm(false);
     } catch (error) {
       console.error('Error al añadir tarea:', error);
@@ -101,50 +129,108 @@ const TaskScreen = ({ navigation }) => {
     ));
   };
 
+  // Seleccionar usuario para asignar tarea
+  const selectUser = (userId) => {
+    setSelectedUserId(userId);
+    setShowUserSelector(false);
+  };
+
   // Renderizar cada tarea
-  const renderTask = ({ item }) => (
-    <View style={styles.taskItem}>
-      <TouchableOpacity 
-        style={styles.taskCheckbox}
-        onPress={() => toggleComplete(item.id)}
-      >
-        <Ionicons 
-          name={item.completed ? 'checkbox' : 'square-outline'} 
-          size={24} 
-          color={item.completed ? '#4CAF50' : '#757575'} 
-        />
-      </TouchableOpacity>
-      
-      <View style={styles.taskContent}>
-        <Text 
-          style={[
-            styles.taskTitle, 
-            item.completed && styles.taskCompleted
-          ]}
+  const renderTask = ({ item }) => {
+    // Encontrar el nombre del usuario asignado si es administrador
+    let assignedUserName = '';
+    if (user?.isAdmin && users.length > 0) {
+      const assignedUser = users.find(u => u.id === item.userId);
+      assignedUserName = assignedUser ? assignedUser.username : 'Usuario desconocido';
+    }
+    
+    return (
+      <View style={styles.taskItem}>
+        <TouchableOpacity 
+          style={styles.taskCheckbox}
+          onPress={() => toggleComplete(item.id)}
         >
-          {item.title}
-        </Text>
+          <Ionicons 
+            name={item.completed ? 'checkbox' : 'square-outline'} 
+            size={24} 
+            color={item.completed ? '#4CAF50' : '#757575'} 
+          />
+        </TouchableOpacity>
         
-        {item.description ? (
+        <View style={styles.taskContent}>
           <Text 
             style={[
-              styles.taskDescription, 
+              styles.taskTitle, 
               item.completed && styles.taskCompleted
             ]}
-            numberOfLines={2}
           >
-            {item.description}
+            {item.title}
           </Text>
-        ) : null}
+          
+          {item.description ? (
+            <Text 
+              style={[
+                styles.taskDescription, 
+                item.completed && styles.taskCompleted
+              ]}
+              numberOfLines={2}
+            >
+              {item.description}
+            </Text>
+          ) : null}
+          
+          {/* Mostrar el usuario asignado si es administrador */}
+          {user?.isAdmin && (
+            <Text style={styles.assignedUser}>
+              Asignado a: {assignedUserName}
+            </Text>
+          )}
+        </View>
+        
+        <TouchableOpacity 
+          style={styles.deleteButton}
+          onPress={() => confirmDeleteTask(item.id)}
+        >
+          <Ionicons name="trash-outline" size={24} color="#F44336" />
+        </TouchableOpacity>
       </View>
-      
-      <TouchableOpacity 
-        style={styles.deleteButton}
-        onPress={() => confirmDeleteTask(item.id)}
-      >
-        <Ionicons name="trash-outline" size={24} color="#F44336" />
-      </TouchableOpacity>
-    </View>
+    );
+  };
+
+  // Renderizar el selector de usuarios
+  const renderUserSelector = () => (
+    <Modal
+      visible={showUserSelector}
+      transparent={true}
+      animationType="slide"
+      onRequestClose={() => setShowUserSelector(false)}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContent}>
+          <Text style={styles.modalTitle}>Seleccionar Usuario</Text>
+          
+          <ScrollView style={styles.userList}>
+            {users.map(user => (
+              <TouchableOpacity
+                key={user.id}
+                style={styles.userItem}
+                onPress={() => selectUser(user.id)}
+              >
+                <Text style={styles.userName}>{user.username}</Text>
+                <Text style={styles.userEmail}>{user.email}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+          
+          <TouchableOpacity
+            style={styles.closeButton}
+            onPress={() => setShowUserSelector(false)}
+          >
+            <Text style={styles.closeButtonText}>Cancelar</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
   );
 
   return (
@@ -175,6 +261,21 @@ const TaskScreen = ({ navigation }) => {
             numberOfLines={3}
           />
           
+          {/* Botón para seleccionar usuario si es administrador */}
+          {user?.isAdmin && (
+            <TouchableOpacity
+              style={styles.userSelectButton}
+              onPress={() => setShowUserSelector(true)}
+            >
+              <Text style={styles.userSelectButtonText}>
+                {selectedUserId 
+                  ? `Asignar a: ${users.find(u => u.id === selectedUserId)?.username || 'Usuario'}`
+                  : 'Seleccionar Usuario'}
+              </Text>
+              <Ionicons name="chevron-down" size={20} color="#4A90E2" />
+            </TouchableOpacity>
+          )}
+          
           <View style={styles.formButtons}>
             <TouchableOpacity 
               style={[styles.formButton, styles.cancelButton]}
@@ -182,6 +283,7 @@ const TaskScreen = ({ navigation }) => {
                 setShowAddForm(false);
                 setNewTaskTitle('');
                 setNewTaskDescription('');
+                setSelectedUserId(null);
               }}
             >
               <Text style={styles.cancelButtonText}>Cancelar</Text>
@@ -241,6 +343,9 @@ const TaskScreen = ({ navigation }) => {
           />
         </>
       )}
+      
+      {/* Modal para seleccionar usuario */}
+      {renderUserSelector()}
     </View>
   );
 };
@@ -273,6 +378,20 @@ const styles = StyleSheet.create({
   textArea: {
     height: 80,
     textAlignVertical: 'top',
+  },
+  userSelectButton: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#f9f9f9',
+    borderRadius: 5,
+    padding: 12,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#ddd',
+  },
+  userSelectButtonText: {
+    color: '#4A90E2',
   },
   formButtons: {
     flexDirection: 'row',
@@ -381,12 +500,19 @@ const styles = StyleSheet.create({
   },
   taskTitle: {
     fontSize: 16,
+    fontWeight: 'bold',
     color: '#333',
+    marginBottom: 5,
   },
   taskDescription: {
     fontSize: 14,
     color: '#666',
+  },
+  assignedUser: {
+    fontSize: 12,
+    color: '#4A90E2',
     marginTop: 5,
+    fontStyle: 'italic',
   },
   taskCompleted: {
     textDecorationLine: 'line-through',
@@ -403,13 +529,62 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 18,
     color: '#666',
-    fontWeight: 'bold',
+    marginBottom: 10,
   },
   emptySubtext: {
     fontSize: 14,
     color: '#999',
     textAlign: 'center',
-    marginTop: 10,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    padding: 20,
+    width: '100%',
+    maxHeight: '80%',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 15,
+    textAlign: 'center',
+  },
+  userList: {
+    maxHeight: 300,
+  },
+  userItem: {
+    padding: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  userName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  userEmail: {
+    fontSize: 14,
+    color: '#666',
+    marginTop: 5,
+  },
+  closeButton: {
+    backgroundColor: '#f5f5f5',
+    padding: 12,
+    borderRadius: 5,
+    alignItems: 'center',
+    marginTop: 15,
+  },
+  closeButtonText: {
+    color: '#666',
+    fontWeight: 'bold',
   },
 });
 
