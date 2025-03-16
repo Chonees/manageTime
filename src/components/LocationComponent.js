@@ -1,13 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Dimensions, Alert, Platform } from 'react-native';
 import * as Location from 'expo-location';
 import MapView, { Marker } from 'react-native-maps';
+import { useAuth } from '../context/AuthContext';
+import * as api from '../services/api';
 
-const LocationComponent = ({ onLocationPermissionChange }) => {
+const LocationComponent = ({ onLocationChange, showWorkControls = false }) => {
+  const { user } = useAuth();
   const [location, setLocation] = useState(null);
   const [errorMsg, setErrorMsg] = useState(null);
   const [loading, setLoading] = useState(true);
   const [permissionGranted, setPermissionGranted] = useState(false);
+  const [isWorking, setIsWorking] = useState(false);
+  const [workStartTime, setWorkStartTime] = useState(null);
+  const [loadingAction, setLoadingAction] = useState(false);
+  const [mapReady, setMapReady] = useState(false);
 
   const getLocation = async () => {
     setLoading(true);
@@ -21,11 +28,6 @@ const LocationComponent = ({ onLocationPermissionChange }) => {
       
       const isGranted = status === 'granted';
       setPermissionGranted(isGranted);
-      
-      // Notify parent component about permission status
-      if (onLocationPermissionChange) {
-        onLocationPermissionChange(isGranted);
-      }
       
       if (!isGranted) {
         setErrorMsg('Esta aplicación requiere acceso a tu ubicación para funcionar. Por favor, habilita los servicios de ubicación en la configuración de tu dispositivo.');
@@ -48,6 +50,11 @@ const LocationComponent = ({ onLocationPermissionChange }) => {
       }
       
       setLocation(currentLocation);
+      
+      // Notify parent component about location update
+      if (onLocationChange) {
+        onLocationChange(currentLocation);
+      }
     } catch (error) {
       console.error('Location error:', error);
       setErrorMsg('No se pudo obtener la ubicación: ' + (error.message || 'Error desconocido'));
@@ -59,7 +66,117 @@ const LocationComponent = ({ onLocationPermissionChange }) => {
   // Get location when component mounts
   useEffect(() => {
     getLocation();
+    
+    // Check if user is currently working
+    const checkWorkStatus = async () => {
+      try {
+        // En una implementación real, esto sería una llamada a la API
+        // const status = await api.getWorkStatus();
+        // setIsWorking(status.isWorking);
+        // if (status.isWorking && status.startTime) {
+        //   setWorkStartTime(new Date(status.startTime));
+        // }
+        
+        // Simulación para desarrollo
+        setIsWorking(false);
+        setWorkStartTime(null);
+      } catch (error) {
+        console.error('Error checking work status:', error);
+      }
+    };
+    
+    if (showWorkControls) {
+      checkWorkStatus();
+    }
   }, []);
+
+  // Función para iniciar trabajo
+  const handleStartWork = async () => {
+    if (!location) {
+      Alert.alert('Error', 'No se puede iniciar el trabajo sin ubicación');
+      return;
+    }
+    
+    try {
+      setLoadingAction(true);
+      
+      const coords = {
+        latitude: location.coords.latitude,
+        longitude: location.coords.longitude
+      };
+      
+      await api.startWork(coords);
+      
+      setIsWorking(true);
+      setWorkStartTime(new Date());
+      
+      Alert.alert('Éxito', 'Has iniciado tu jornada de trabajo');
+    } catch (error) {
+      Alert.alert('Error', error.message || 'No se pudo iniciar el trabajo');
+    } finally {
+      setLoadingAction(false);
+    }
+  };
+
+  // Función para finalizar trabajo
+  const handleEndWork = async () => {
+    if (!location) {
+      Alert.alert('Error', 'No se puede finalizar el trabajo sin ubicación');
+      return;
+    }
+    
+    try {
+      setLoadingAction(true);
+      
+      const coords = {
+        latitude: location.coords.latitude,
+        longitude: location.coords.longitude
+      };
+      
+      await api.endWork(coords);
+      
+      setIsWorking(false);
+      setWorkStartTime(null);
+      
+      Alert.alert('Éxito', 'Has finalizado tu jornada de trabajo');
+    } catch (error) {
+      Alert.alert('Error', error.message || 'No se pudo finalizar el trabajo');
+    } finally {
+      setLoadingAction(false);
+    }
+  };
+
+  // Formatear tiempo de trabajo
+  const formatWorkTime = () => {
+    if (!workStartTime) return '00:00:00';
+    
+    const now = new Date();
+    const diffMs = now - workStartTime;
+    
+    const hours = Math.floor(diffMs / (1000 * 60 * 60));
+    const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+    const seconds = Math.floor((diffMs % (1000 * 60)) / 1000);
+    
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+  };
+
+  // Actualizar tiempo cada segundo si está trabajando
+  useEffect(() => {
+    let interval;
+    
+    if (isWorking && workStartTime) {
+      interval = setInterval(() => {
+        // Forzar actualización del componente
+        setWorkStartTime(prevTime => new Date(prevTime.getTime()));
+      }, 500);
+    }
+    
+    return () => {
+      if (interval) {
+        clearInterval(interval);
+      }
+    };
+  }, [isWorking, workStartTime]);
 
   // Render different content based on state
   let content;
@@ -90,24 +207,70 @@ const LocationComponent = ({ onLocationPermissionChange }) => {
     
     content = (
       <View style={styles.locationInfoContainer}>
-        <MapView 
-          style={styles.map}
-          initialRegion={{
-            latitude: latitude,
-            longitude: longitude,
-            latitudeDelta: 0.0922,
-            longitudeDelta: 0.0421,
-          }}
-        >
-          <Marker
-            coordinate={{
-              latitude: latitude,
-              longitude: longitude,
-            }}
-            title="Mi ubicación"
-            description="Estoy aquí"
-          />
-        </MapView>
+        {/* Renderizado condicional del mapa para evitar errores */}
+        <View style={styles.mapContainer}>
+          {Platform.OS === 'ios' ? (
+            <MapView 
+              style={styles.map}
+              initialRegion={{
+                latitude: latitude,
+                longitude: longitude,
+                latitudeDelta: 0.0922,
+                longitudeDelta: 0.0421,
+              }}
+              onMapReady={() => setMapReady(true)}
+            >
+              {mapReady && (
+                <Marker
+                  coordinate={{
+                    latitude: latitude,
+                    longitude: longitude,
+                  }}
+                  title="Mi ubicación"
+                  description="Estoy aquí"
+                />
+              )}
+            </MapView>
+          ) : (
+            <View style={styles.map}>
+              <Text style={styles.locationText}>
+                Latitud: {latitude.toFixed(6)}, Longitud: {longitude.toFixed(6)}
+              </Text>
+            </View>
+          )}
+        </View>
+        
+        {showWorkControls && (
+          <View style={styles.workControlsContainer}>
+            {isWorking ? (
+              <>
+                <View style={styles.workTimeContainer}>
+                  <Text style={styles.workTimeLabel}>Tiempo de trabajo:</Text>
+                  <Text style={styles.workTimeValue}>{formatWorkTime()}</Text>
+                </View>
+                <TouchableOpacity 
+                  style={[styles.workButton, styles.endWorkButton]}
+                  onPress={handleEndWork}
+                  disabled={loadingAction}
+                >
+                  <Text style={styles.workButtonText}>
+                    {loadingAction ? 'Finalizando...' : 'Finalizar Trabajo'}
+                  </Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <TouchableOpacity 
+                style={[styles.workButton, styles.startWorkButton]}
+                onPress={handleStartWork}
+                disabled={loadingAction}
+              >
+                <Text style={styles.workButtonText}>
+                  {loadingAction ? 'Iniciando...' : 'Iniciar Trabajo'}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
       </View>
     );
   }
@@ -176,11 +339,20 @@ const styles = StyleSheet.create({
   locationInfoContainer: {
     padding: 20,
   },
-  map: {
+  mapContainer: {
     width: '100%',
     height: 250,
     borderRadius: 8,
     marginBottom: 15,
+    overflow: 'hidden',
+    backgroundColor: '#f5f5f5',
+  },
+  map: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   locationLabel: {
     fontSize: 16,
@@ -192,6 +364,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#666',
     marginBottom: 5,
+    textAlign: 'center',
   },
   refreshButton: {
     backgroundColor: '#4A90E2',
@@ -203,19 +376,56 @@ const styles = StyleSheet.create({
   refreshButtonText: {
     color: '#fff',
     fontSize: 16,
-    fontWeight: '500',
+    fontWeight: 'bold',
   },
   retryButton: {
-    backgroundColor: '#e74c3c',
-    paddingVertical: 8,
-    paddingHorizontal: 15,
-    borderRadius: 4,
-    alignSelf: 'center',
+    backgroundColor: '#3498db',
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 5,
   },
   retryButtonText: {
     color: '#fff',
-    fontSize: 14,
-    fontWeight: '500',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  workControlsContainer: {
+    marginTop: 10,
+  },
+  workButton: {
+    padding: 15,
+    borderRadius: 5,
+    alignItems: 'center',
+  },
+  startWorkButton: {
+    backgroundColor: '#2ecc71',
+  },
+  endWorkButton: {
+    backgroundColor: '#e74c3c',
+  },
+  workButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  workTimeContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 15,
+    backgroundColor: '#f8f8f8',
+    padding: 10,
+    borderRadius: 5,
+  },
+  workTimeLabel: {
+    fontSize: 16,
+    color: '#333',
+    fontWeight: 'bold',
+  },
+  workTimeValue: {
+    fontSize: 16,
+    color: '#e74c3c',
+    fontWeight: 'bold',
   },
 });
 
