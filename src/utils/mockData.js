@@ -1,6 +1,6 @@
-// Datos simulados para desarrollo y pruebas
+// Mock data for development and testing
 
-// Usuarios de prueba
+// Test users
 export const mockUsers = [
   {
     id: '1',
@@ -36,7 +36,7 @@ export const mockUsers = [
   }
 ];
 
-// Historial de ubicaciones
+// Location history
 export const mockLocationHistory = [
   {
     id: '1',
@@ -88,7 +88,7 @@ export const mockLocationHistory = [
   }
 ];
 
-// Tareas
+// Tasks
 export const mockTasks = [
   {
     id: '1',

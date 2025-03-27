@@ -22,27 +22,27 @@ const DashboardScreen = ({ navigation }) => {
   const [position, setPosition] = useState(null);
   const [tasks, setTasks] = useState([]);
 
-  // Cargar datos iniciales
+  // Load initial data
   useEffect(() => {
     loadDashboardData();
   }, []);
 
-  // Función para cargar datos del dashboard
+  // Function to load dashboard data
   const loadDashboardData = async () => {
     setLoading(true);
     try {
-      // Cargar tareas pendientes
+      // Load pending tasks
       const userTasks = await api.getUserTasks();
-      setTasks(userTasks.filter(task => !task.completed).slice(0, 3)); // Solo mostrar 3 tareas pendientes
+      setTasks(userTasks.filter(task => !task.completed).slice(0, 3)); // Only show 3 pending tasks
     } catch (error) {
       console.error('Error loading dashboard data:', error);
-      setError('No se pudieron cargar los datos. Por favor, intenta de nuevo.');
+      setError('Could not load data. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
-  // Función para obtener la ubicación actual
+  // Function to get current location
   const handleLocationChange = (location) => {
     if (location && location.coords) {
       setPosition({
@@ -52,7 +52,7 @@ const DashboardScreen = ({ navigation }) => {
     }
   };
 
-  // Función para refrescar los datos
+  // Function to refresh data
   const onRefresh = async () => {
     setRefreshing(true);
     try {
@@ -64,13 +64,13 @@ const DashboardScreen = ({ navigation }) => {
     }
   };
 
-  // Función para cerrar sesión
+  // Function to log out
   const handleLogout = async () => {
     try {
       await logout();
-      // No es necesario navegar, el AppNavigator lo hará automáticamente
+      // No need to navigate, AppNavigator will do it automatically
     } catch (error) {
-      Alert.alert('Error', 'Error al cerrar sesión');
+      Alert.alert('Error', 'Error logging out');
     }
   };
 
@@ -82,27 +82,27 @@ const DashboardScreen = ({ navigation }) => {
       }
     >
       <View style={styles.header}>
-        <Text style={styles.welcomeText}>Bienvenido, {user?.username || 'Usuario'}</Text>
+        <Text style={styles.welcomeText}>Welcome, {user?.username || 'User'}</Text>
         <TouchableOpacity 
           style={styles.logoutButton}
           onPress={handleLogout}
         >
-          <Text style={styles.logoutButtonText}>Cerrar Sesión</Text>
+          <Text style={styles.logoutButtonText}>Log Out</Text>
         </TouchableOpacity>
       </View>
 
       {error && <Text style={styles.errorText}>{error}</Text>}
 
-      {/* Componente de ubicación con controles de trabajo */}
+      {/* Location component with work controls */}
       <LocationComponent 
         onLocationChange={handleLocationChange} 
         showWorkControls={true} 
       />
 
-      {/* Resumen de tareas pendientes */}
+      {/* Pending tasks summary */}
       <View style={styles.card}>
         <View style={styles.cardHeader}>
-          <Text style={styles.cardTitle}>Tareas Pendientes</Text>
+          <Text style={styles.cardTitle}>Pending Tasks</Text>
         </View>
         <View style={styles.cardBody}>
           {loading ? (
@@ -117,7 +117,7 @@ const DashboardScreen = ({ navigation }) => {
                   <View style={styles.taskContent}>
                     <Text style={styles.taskTitle}>{task.title}</Text>
                     <Text style={styles.taskDescription} numberOfLines={1}>
-                      {task.description || 'Sin descripción'}
+                      {task.description || 'No description'}
                     </Text>
                   </View>
                 </View>
@@ -126,11 +126,11 @@ const DashboardScreen = ({ navigation }) => {
                 style={styles.viewAllButton}
                 onPress={() => navigation.navigate('Tasks')}
               >
-                <Text style={styles.viewAllButtonText}>Ver todas las tareas</Text>
+                <Text style={styles.viewAllButtonText}>View all tasks</Text>
               </TouchableOpacity>
             </>
           ) : (
-            <Text style={styles.emptyText}>No tienes tareas pendientes</Text>
+            <Text style={styles.emptyText}>You have no pending tasks</Text>
           )}
         </View>
       </View>
@@ -141,7 +141,7 @@ const DashboardScreen = ({ navigation }) => {
           onPress={() => navigation.navigate('Tasks')}
         >
           <Ionicons name="list" size={24} color="#fff" style={styles.buttonIcon} />
-          <Text style={styles.navButtonText}>Mis Tareas</Text>
+          <Text style={styles.navButtonText}>My Tasks</Text>
         </TouchableOpacity>
         
         <TouchableOpacity 
@@ -149,7 +149,7 @@ const DashboardScreen = ({ navigation }) => {
           onPress={() => navigation.navigate('LocationHistory')}
         >
           <Ionicons name="map" size={24} color="#fff" style={styles.buttonIcon} />
-          <Text style={styles.navButtonText}>Historial de Ubicaciones</Text>
+          <Text style={styles.navButtonText}>Location History</Text>
         </TouchableOpacity>
       </View>
     </ScrollView>

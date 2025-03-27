@@ -1,14 +1,14 @@
-// URL base de la API
+// API Base URL
 const API_URL = 'http://localhost:5000/api';
 
-// Importar datos simulados para desarrollo
+// Import mock data for development
 import { mockUsers, mockLocationHistory, mockTasks } from '../utils/mockData';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Función auxiliar para simular retraso de red
+// Helper function to simulate network delay
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-// Función auxiliar para manejar errores de fetch
+// Helper function to handle fetch errors
 const handleResponse = async (response) => {
   const data = await response.json();
   
@@ -20,78 +20,51 @@ const handleResponse = async (response) => {
   return data;
 };
 
-// Función para iniciar sesión
+// Login function
 export const login = async (username, password) => {
-  // Simulación de API para desarrollo
-  await delay(1000); // Simular retraso de red
+  // Simulate API delay for development
+  await delay(1000); // Simulate network delay
   
   const user = mockUsers.find(u => u.username === username);
   
   if (!user) {
-    throw new Error('Usuario no encontrado');
+    throw new Error('User not found');
   }
   
-  // En un entorno real, la contraseña se verificaría en el servidor
-  // Aquí simplemente simulamos que cualquier contraseña funciona para desarrollo
+  // In a real environment, the password would be verified on the server
+  // Here we simply simulate that any password works for development
   
-  // Asegurarse de que la propiedad isAdmin esté definida correctamente
+  // Ensure the isAdmin property is correctly defined
   const userToSave = {
     ...user,
-    isAdmin: user.isAdmin === true // Asegurarse de que sea un booleano explícito
+    isAdmin: user.isAdmin === true // Ensure it's an explicit boolean
   };
   
-  // Guardar token simulado
+  // Save simulated token
   await AsyncStorage.setItem('token', 'fake-jwt-token');
   await AsyncStorage.setItem('user', JSON.stringify(userToSave));
   
-  console.log('Usuario logueado:', userToSave);
+  console.log('User logged in:', userToSave);
   
   return { user: userToSave };
 };
 
-// Función para registrar un nuevo usuario
-export const register = async (username, password, email) => {
-  // Simulación de API para desarrollo
-  await delay(1000); // Simular retraso de red
-  
-  const existingUser = mockUsers.find(u => u.username === username || u.email === email);
-  
-  if (existingUser) {
-    throw new Error('El nombre de usuario o email ya está en uso');
-  }
-  
-  // En un entorno real, el usuario se guardaría en la base de datos
-  const newUser = {
-    id: (mockUsers.length + 1).toString(),
-    username,
-    email,
-    isAdmin: false,
-    isActive: true,
-    createdAt: new Date().toISOString()
-  };
-  
-  // Añadir a la lista simulada (solo para desarrollo)
-  mockUsers.push(newUser);
-  
-  return { success: true, message: 'Usuario registrado correctamente' };
-};
-
-// Función para cerrar sesión
+// Logout function
 export const logout = async () => {
-  // Simulación de API para desarrollo
-  await delay(500); // Simular retraso de red
+  // Simulate API delay for development
+  await delay(500); // Simulate network delay
   
-  // Eliminar token simulado
+  // Remove simulated token
   await AsyncStorage.removeItem('token');
   await AsyncStorage.removeItem('user');
   
   return { success: true };
 };
 
-// Función para verificar si el token es válido
+// Function to verify if token is valid
 export const checkToken = async () => {
-  // Simulación de API para desarrollo
-  await delay(500); // Simular retraso de red
+  // Simulate API delay for development
+  await delay(500); // Simulate network delay
   
   const token = await AsyncStorage.getItem('token');
   
@@ -99,33 +72,33 @@ export const checkToken = async () => {
     return { valid: false };
   }
   
-  // En un entorno real, se verificaría el token en el servidor
-  // Aquí recuperamos el usuario guardado en AsyncStorage
+  // In a real environment, the token would be verified on the server
+  // Here we retrieve the user saved in AsyncStorage
   try {
     const userJson = await AsyncStorage.getItem('user');
     if (userJson) {
       const user = JSON.parse(userJson);
-      // Asegurarse de que la propiedad isAdmin esté definida correctamente
+      // Ensure the isAdmin property is correctly defined
       if (user.isAdmin === undefined) {
-        user.isAdmin = false; // Por defecto, un usuario no es administrador
+        user.isAdmin = false; // By default, a user is not an admin
       }
       return { valid: true, user };
     }
     
-    // Si no hay usuario guardado, consideramos que no hay sesión válida
+    // If no user is saved, consider there's no valid session
     return { valid: false };
   } catch (error) {
-    console.error('Error al recuperar usuario:', error);
+    console.error('Error retrieving user:', error);
     return { valid: false };
   }
 };
 
-// Función para iniciar trabajo
+// Function to start work
 export const startWork = async (coords) => {
-  // Simulación de API para desarrollo
-  await delay(1000); // Simular retraso de red
+  // Simulate API delay for development
+  await delay(1000); // Simulate network delay
   
-  // Obtener el ID del usuario actual
+  // Get the ID of the current user
   let userId = '1';
   try {
     const userJson = await AsyncStorage.getItem('user');
@@ -134,10 +107,10 @@ export const startWork = async (coords) => {
       userId = user.id;
     }
   } catch (error) {
-    console.error('Error al obtener usuario para registro de trabajo:', error);
+    console.error('Error getting user for work log:', error);
   }
   
-  // En un entorno real, se guardaría en la base de datos
+  // In a real environment, this would be saved in the database
   const newLocationEntry = {
     id: (mockLocationHistory.length + 1).toString(),
     userId: userId,
@@ -147,18 +120,18 @@ export const startWork = async (coords) => {
     timestamp: new Date().toISOString()
   };
   
-  // Añadir a la lista simulada (solo para desarrollo)
+  // Add to simulated list (only for development)
   mockLocationHistory.push(newLocationEntry);
   
-  return { success: true, message: 'Trabajo iniciado correctamente' };
+  return { success: true, message: 'Work started successfully' };
 };
 
-// Función para finalizar trabajo
+// Function to end work
 export const endWork = async (coords) => {
-  // Simulación de API para desarrollo
-  await delay(1000); // Simular retraso de red
+  // Simulate API delay for development
+  await delay(1000); // Simulate network delay
   
-  // Obtener el ID del usuario actual
+  // Get the ID of the current user
   let userId = '1';
   try {
     const userJson = await AsyncStorage.getItem('user');
@@ -167,10 +140,10 @@ export const endWork = async (coords) => {
       userId = user.id;
     }
   } catch (error) {
-    console.error('Error al obtener usuario para registro de trabajo:', error);
+    console.error('Error getting user for work log:', error);
   }
   
-  // En un entorno real, se guardaría en la base de datos
+  // In a real environment, this would be saved in the database
   const newLocationEntry = {
     id: (mockLocationHistory.length + 1).toString(),
     userId: userId,
@@ -180,18 +153,18 @@ export const endWork = async (coords) => {
     timestamp: new Date().toISOString()
   };
   
-  // Añadir a la lista simulada (solo para desarrollo)
+  // Add to simulated list (only for development)
   mockLocationHistory.push(newLocationEntry);
   
-  return { success: true, message: 'Trabajo finalizado correctamente' };
+  return { success: true, message: 'Work ended successfully' };
 };
 
-// Función para obtener historial de ubicaciones
+// Function to get location history
 export const getLocationHistory = async (userId) => {
-  // Simulación de API para desarrollo
-  await delay(1000); // Simular retraso de red
+  // Simulate API delay for development
+  await delay(1000); // Simulate network delay
   
-  // Si no se proporciona userId, obtener el del usuario actual
+  // If no userId is provided, get the current user's ID
   if (!userId) {
     try {
       const userJson = await AsyncStorage.getItem('user');
@@ -200,7 +173,7 @@ export const getLocationHistory = async (userId) => {
         userId = user.id;
       }
     } catch (error) {
-      console.error('Error al obtener usuario para historial:', error);
+      console.error('Error getting user for history:', error);
     }
   }
   
@@ -213,20 +186,20 @@ export const getLocationHistory = async (userId) => {
   return history;
 };
 
-// Función para obtener todos los usuarios (solo admin)
+// Function to get all users (admin only)
 export const getUsers = async () => {
-  // Simulación de API para desarrollo
-  await delay(1000); // Simular retraso de red
+  // Simulate API delay for development
+  await delay(1000); // Simulate network delay
   
   return [...mockUsers];
 };
 
-// Función para obtener tareas del usuario actual
+// Function to get current user tasks
 export const getUserTasks = async () => {
-  // Simulación de API para desarrollo
-  await delay(800); // Simular retraso de red
+  // Simulate API delay for development
+  await delay(800); // Simulate network delay
   
-  // Obtener el ID del usuario actual
+  // Get the ID of the current user
   let userId = null;
   try {
     const userJson = await AsyncStorage.getItem('user');
@@ -235,23 +208,23 @@ export const getUserTasks = async () => {
       userId = user.id;
     }
   } catch (error) {
-    console.error('Error al obtener usuario para tareas:', error);
+    console.error('Error getting user for tasks:', error);
   }
   
   if (!userId) {
     return [];
   }
   
-  // Filtrar tareas por usuario
+  // Filter tasks by user
   return mockTasks.filter(task => task.userId === userId);
 };
 
-// Función para guardar una tarea
+// Function to save a task
 export const saveTask = async (task) => {
-  // Simulación de API para desarrollo
-  await delay(800); // Simular retraso de red
+  // Simulate API delay for development
+  await delay(800); // Simulate network delay
   
-  // Obtener el ID del usuario actual
+  // Get the ID of the current user
   let userId = '1';
   let isAdmin = false;
   
@@ -263,11 +236,11 @@ export const saveTask = async (task) => {
       isAdmin = user.isAdmin === true;
     }
   } catch (error) {
-    console.error('Error al obtener usuario para crear tarea:', error);
+    console.error('Error getting user for creating task:', error);
   }
   
-  // Si es administrador y se especificó un userId en la tarea, usar ese
-  // De lo contrario, usar el ID del usuario actual
+  // If admin and a userId is specified in the task, use that
+  // Otherwise, use the current user's ID
   const assignedUserId = (isAdmin && task.userId) ? task.userId : userId;
   
   const newTask = {
@@ -279,24 +252,24 @@ export const saveTask = async (task) => {
     createdAt: new Date().toISOString()
   };
   
-  // Añadir a la lista simulada (solo para desarrollo)
+  // Add to simulated list (only for development)
   mockTasks.push(newTask);
   
   return { success: true, task: newTask };
 };
 
-// Función para obtener todas las tareas (admin)
+// Function to get all tasks (admin)
 export const getTasks = async () => {
-  // Simulación de API para desarrollo
-  await delay(800); // Simular retraso de red
+  // Simulate API delay for development
+  await delay(800); // Simulate network delay
   
   return [...mockTasks];
 };
 
-// Función para eliminar una tarea
+// Function to delete a task
 export const deleteTask = async (taskId) => {
-  // Simulación de API para desarrollo
-  await delay(500); // Simular retraso de red
+  // Simulate API delay for development
+  await delay(500); // Simulate network delay
   
   const index = mockTasks.findIndex(task => task.id === taskId);
   
@@ -304,6 +277,6 @@ export const deleteTask = async (taskId) => {
     mockTasks.splice(index, 1);
     return { success: true };
   } else {
-    throw new Error('Tarea no encontrada');
+    throw new Error('Task not found');
   }
 };
