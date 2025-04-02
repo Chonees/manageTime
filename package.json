@@ -28,7 +28,10 @@
     "react-native-web": "~0.19.13"
   },
   "devDependencies": {
-    "@babel/core": "^7.20.0"
+    "@babel/core": "^7.20.0",
+    "@expo/webpack-config": "^19.0.1",
+    "babel-preset-expo": "^12.0.10",
+    "react-native-reanimated": "^3.17.2"
   },
   "private": true
 }

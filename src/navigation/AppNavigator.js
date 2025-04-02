@@ -6,6 +6,7 @@ import { ActivityIndicator, View, StyleSheet, Text } from 'react-native';
 // Pantallas de autenticación
 import LoginScreen from '../screens/auth/LoginScreen';
 import RegisterScreen from '../screens/auth/RegisterScreen';
+import DiagnosticScreen from '../screens/DiagnosticScreen';
 
 // Pantallas de usuario
 import DashboardScreen from '../screens/DashboardScreen';
@@ -44,6 +45,11 @@ const AuthNavigator = () => (
       name="Register" 
       component={RegisterScreen} 
       options={{ title: 'Registrarse' }}
+    />
+    <Stack.Screen 
+      name="Diagnostic" 
+      component={DiagnosticScreen} 
+      options={{ title: 'Diagnóstico de Conexión' }}
     />
   </Stack.Navigator>
 );

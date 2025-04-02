@@ -16,7 +16,7 @@ import { useAuth } from '../../context/AuthContext';
 const LoginScreen = ({ navigation }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const { login, loading, error } = useAuth();
+  const { login, loading, error, setLoading, setError } = useAuth();
 
   const handleLogin = async () => {
     if (!username.trim() || !password.trim()) {
@@ -25,11 +25,31 @@ const LoginScreen = ({ navigation }) => {
     }
 
     try {
-      await login(username, password);
-      // No es necesario navegar, el AppNavigator lo hará automáticamente
+      setLoading(true);
+      setError(null);
+      console.log('Iniciando sesión para usuario:', username);
+      
+      // Usar admin@managetime.com (minúscula) si el usuario ingresa admin@manageTime.com
+      const normalizedUsername = username.toLowerCase();
+      console.log('Usuario normalizado:', normalizedUsername);
+      
+      const result = await login(normalizedUsername, password);
+      
+      if (!result || !result.success) {
+        const errorMessage = result?.error || 'No se pudo iniciar sesión. Intenta nuevamente.';
+        console.log('Login fallido:', errorMessage);
+        setError(errorMessage);
+        Alert.alert('Error de inicio de sesión', errorMessage);
+      } else {
+        console.log('Login exitoso, usuario:', result.user?.username);
+        // No es necesario navegar, el AppNavigator lo hará automáticamente
+      }
     } catch (error) {
       console.error('Error en login:', error);
-      // El error ya se maneja en el contexto de autenticación
+      setError('Ocurrió un error durante el inicio de sesión. Intenta nuevamente.');
+      Alert.alert('Error', 'Ocurrió un error durante el inicio de sesión. Intenta nuevamente.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -84,6 +104,13 @@ const LoginScreen = ({ navigation }) => {
               <Text style={styles.registerLink}>Regístrate aquí</Text>
             </TouchableOpacity>
           </View>
+          
+          <TouchableOpacity 
+            style={styles.diagnosticButton}
+            onPress={() => navigation.navigate('Diagnostic')}
+          >
+            <Text style={styles.diagnosticText}>Diagnosticar problemas de conexión</Text>
+          </TouchableOpacity>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -163,6 +190,19 @@ const styles = StyleSheet.create({
     color: '#4A90E2',
     fontWeight: 'bold',
     marginLeft: 5,
+  },
+  diagnosticButton: {
+    backgroundColor: '#4A90E2',
+    height: 50,
+    borderRadius: 5,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 15,
+  },
+  diagnosticText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 });
 

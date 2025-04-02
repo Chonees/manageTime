@@ -40,15 +40,23 @@ const RegisterScreen = ({ navigation }) => {
     }
 
     try {
-      await register(username, password, email);
-      Alert.alert(
-        'Registro Exitoso', 
-        'Tu cuenta ha sido creada correctamente. Ahora puedes iniciar sesión.',
-        [{ text: 'OK', onPress: () => navigation.navigate('Login') }]
-      );
+      console.log('Iniciando registro de usuario:', username);
+      const result = await register(username, password, email);
+      
+      if (result.success) {
+        console.log('Registro completado con éxito');
+        Alert.alert(
+          'Registro Exitoso', 
+          'Tu cuenta ha sido creada correctamente. Ahora puedes iniciar sesión.',
+          [{ text: 'OK', onPress: () => navigation.navigate('Login') }]
+        );
+      } else {
+        console.log('Registro fallido:', result.error);
+        Alert.alert('Error', result.error || 'No se pudo completar el registro. Intenta nuevamente.');
+      }
     } catch (error) {
       console.error('Error en registro:', error);
-      // El error ya se maneja en el contexto de autenticación
+      Alert.alert('Error', error.message || 'Ocurrió un error durante el registro. Intenta nuevamente.');
     }
   };
 
