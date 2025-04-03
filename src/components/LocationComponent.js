@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Dimensions, Alert, Platform } from 'react-native';
 import * as Location from 'expo-location';
-import MapView, { Marker } from 'react-native-maps';
+import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import { useAuth } from '../context/AuthContext';
 import * as api from '../services/api';
+import { mapConfig } from '../services/platform-config';
 
 const LocationComponent = ({ onLocationChange, showWorkControls = false }) => {
   const { user } = useAuth();
@@ -15,6 +16,7 @@ const LocationComponent = ({ onLocationChange, showWorkControls = false }) => {
   const [workStartTime, setWorkStartTime] = useState(null);
   const [loadingAction, setLoadingAction] = useState(false);
   const [mapReady, setMapReady] = useState(false);
+  const [mapError, setMapError] = useState(false);
 
   const getLocation = async () => {
     setLoading(true);
@@ -35,18 +37,42 @@ const LocationComponent = ({ onLocationChange, showWorkControls = false }) => {
         return;
       }
       
-      console.log('Getting current position...');
-      // Get the current location with a timeout
-      const currentLocation = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Highest,
-        timeout: 15000, // 15 second timeout
-        maximumAge: 10000, // Accept positions that are up to 10 seconds old
-      });
+      // Verificar si los servicios de ubicación están habilitados
+      const enabled = await Location.hasServicesEnabledAsync();
+      if (!enabled) {
+        setErrorMsg('Los servicios de ubicación están desactivados. Por favor, actívalos en la configuración de tu dispositivo.');
+        setLoading(false);
+        return;
+      }
       
-      console.log('Location received:', currentLocation ? 'success' : 'null');
+      console.log('Getting current position...');
+      
+      // Importar la configuración de la plataforma
+      const { getPlatformConfig, getPlatformOptions } = require('../services/platform-config');
+      const locationConfig = getPlatformConfig('location');
+      const platformOptions = getPlatformOptions('location');
+      
+      // Opciones para obtener la ubicación
+      const options = {
+        accuracy: Location.Accuracy[Platform.OS === 'android' ? 'Balanced' : 'BestForNavigation'],
+        timeout: locationConfig.timeout || 20000,
+        maximumAge: locationConfig.maximumAge || 10000,
+        ...platformOptions
+      };
+      
+      console.log('Location options:', JSON.stringify(options));
+      const currentLocation = await Location.getCurrentPositionAsync(options);
+      
+      console.log('Location received:', currentLocation ? JSON.stringify(currentLocation.coords) : 'null');
       
       if (!currentLocation) {
         throw new Error('Location data is null');
+      }
+      
+      if (!currentLocation.coords || 
+          typeof currentLocation.coords.latitude !== 'number' || 
+          typeof currentLocation.coords.longitude !== 'number') {
+        throw new Error('Coordenadas inválidas o incompletas');
       }
       
       setLocation(currentLocation);
@@ -58,42 +84,132 @@ const LocationComponent = ({ onLocationChange, showWorkControls = false }) => {
     } catch (error) {
       console.error('Location error:', error);
       setErrorMsg('No se pudo obtener la ubicación: ' + (error.message || 'Error desconocido'));
+      
+      // Intentar con una precisión menor si falla
+      if (error.message && (error.message.includes('timeout') || error.message.includes('location'))) {
+        try {
+          console.log('Intentando con precisión menor...');
+          const lowAccuracyLocation = await Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.Low,
+            timeout: 10000
+          });
+          
+          if (lowAccuracyLocation && 
+              lowAccuracyLocation.coords && 
+              typeof lowAccuracyLocation.coords.latitude === 'number' && 
+              typeof lowAccuracyLocation.coords.longitude === 'number') {
+            
+            console.log('Ubicación obtenida con precisión menor:', JSON.stringify(lowAccuracyLocation.coords));
+            setLocation(lowAccuracyLocation);
+            setErrorMsg(null);
+            
+            if (onLocationChange) {
+              onLocationChange(lowAccuracyLocation);
+            }
+          }
+        } catch (fallbackError) {
+          console.error('Error en fallback de ubicación:', fallbackError);
+        }
+      }
     } finally {
       setLoading(false);
     }
   };
 
-  // Get location when component mounts
+  // Efecto para obtener la ubicación al montar el componente
   useEffect(() => {
-    getLocation();
+    let isMounted = true;
+    let locationSubscription = null;
     
-    // Check if user is currently working
-    const checkWorkStatus = async () => {
+    const setupLocation = async () => {
       try {
-        // En una implementación real, esto sería una llamada a la API
-        // const status = await api.getWorkStatus();
-        // setIsWorking(status.isWorking);
-        // if (status.isWorking && status.startTime) {
-        //   setWorkStartTime(new Date(status.startTime));
-        // }
+        // Obtener la ubicación inicial
+        await getLocation();
         
-        // Simulación para desarrollo
-        setIsWorking(false);
-        setWorkStartTime(null);
+        // Configurar actualizaciones de ubicación en tiempo real
+        if (isMounted) {
+          // Importar la configuración de la plataforma
+          const { getPlatformConfig, getPlatformOptions } = require('../services/platform-config');
+          const locationConfig = getPlatformConfig('location');
+          const platformOptions = getPlatformOptions('location');
+          
+          // Opciones para la suscripción de ubicación
+          const watchOptions = {
+            accuracy: Location.Accuracy[Platform.OS === 'android' ? 'Balanced' : 'BestForNavigation'],
+            distanceInterval: Platform.OS === 'android' ? 5 : 10, // Metros
+            timeInterval: Platform.OS === 'android' ? 5000 : 10000, // Milisegundos
+            ...platformOptions
+          };
+          
+          console.log('Configurando watch position con opciones:', JSON.stringify(watchOptions));
+          
+          locationSubscription = await Location.watchPositionAsync(
+            watchOptions,
+            (newLocation) => {
+              if (isMounted) {
+                console.log('Nueva ubicación recibida (watch):', JSON.stringify(newLocation.coords));
+                setLocation(newLocation);
+                
+                if (onLocationChange) {
+                  onLocationChange(newLocation);
+                }
+              }
+            }
+          );
+        }
       } catch (error) {
-        console.error('Error checking work status:', error);
+        console.error('Error al configurar la ubicación:', error);
       }
     };
     
+    setupLocation();
+    
+    // Limpiar al desmontar
+    return () => {
+      isMounted = false;
+      if (locationSubscription) {
+        locationSubscription.remove();
+      }
+    };
+  }, []);
+
+  // Check if user is currently working
+  const checkWorkStatus = async () => {
+    try {
+      // En una implementación real, esto sería una llamada a la API
+      // const status = await api.getWorkStatus();
+      // setIsWorking(status.isWorking);
+      // if (status.isWorking && status.startTime) {
+      //   setWorkStartTime(new Date(status.startTime));
+      // }
+      
+      // Simulación para desarrollo
+      setIsWorking(false);
+      setWorkStartTime(null);
+    } catch (error) {
+      console.error('Error checking work status:', error);
+    }
+  };
+
+  // Verificar el estado de trabajo cuando se muestran los controles
+  useEffect(() => {
     if (showWorkControls) {
       checkWorkStatus();
     }
-  }, []);
+  }, [showWorkControls]);
 
   // Función para iniciar trabajo
   const handleStartWork = async () => {
+    console.log('Iniciando trabajo, location:', location);
+    
     if (!location) {
       Alert.alert('Error', 'No se puede iniciar el trabajo sin ubicación');
+      return;
+    }
+    
+    if (!location.coords || typeof location.coords.latitude !== 'number' || typeof location.coords.longitude !== 'number') {
+      console.error('Coordenadas inválidas:', location.coords);
+      Alert.alert('Error', 'Coordenadas inválidas. Por favor, actualiza tu ubicación e intenta nuevamente.');
       return;
     }
     
@@ -104,6 +220,8 @@ const LocationComponent = ({ onLocationChange, showWorkControls = false }) => {
         latitude: location.coords.latitude,
         longitude: location.coords.longitude
       };
+      
+      console.log('Enviando coordenadas al servidor:', coords);
       
       await api.startWork(coords);
       
@@ -112,6 +230,7 @@ const LocationComponent = ({ onLocationChange, showWorkControls = false }) => {
       
       Alert.alert('Éxito', 'Has iniciado tu jornada de trabajo');
     } catch (error) {
+      console.error('Error al iniciar trabajo:', error);
       Alert.alert('Error', error.message || 'No se pudo iniciar el trabajo');
     } finally {
       setLoadingAction(false);
@@ -120,8 +239,16 @@ const LocationComponent = ({ onLocationChange, showWorkControls = false }) => {
 
   // Función para finalizar trabajo
   const handleEndWork = async () => {
+    console.log('Finalizando trabajo, location:', location);
+    
     if (!location) {
       Alert.alert('Error', 'No se puede finalizar el trabajo sin ubicación');
+      return;
+    }
+    
+    if (!location.coords || typeof location.coords.latitude !== 'number' || typeof location.coords.longitude !== 'number') {
+      console.error('Coordenadas inválidas:', location.coords);
+      Alert.alert('Error', 'Coordenadas inválidas. Por favor, actualiza tu ubicación e intenta nuevamente.');
       return;
     }
     
@@ -133,6 +260,8 @@ const LocationComponent = ({ onLocationChange, showWorkControls = false }) => {
         longitude: location.coords.longitude
       };
       
+      console.log('Enviando coordenadas al servidor:', coords);
+      
       await api.endWork(coords);
       
       setIsWorking(false);
@@ -140,6 +269,7 @@ const LocationComponent = ({ onLocationChange, showWorkControls = false }) => {
       
       Alert.alert('Éxito', 'Has finalizado tu jornada de trabajo');
     } catch (error) {
+      console.error('Error al finalizar trabajo:', error);
       Alert.alert('Error', error.message || 'No se pudo finalizar el trabajo');
     } finally {
       setLoadingAction(false);
@@ -151,11 +281,11 @@ const LocationComponent = ({ onLocationChange, showWorkControls = false }) => {
     if (!workStartTime) return '00:00:00';
     
     const now = new Date();
-    const diffMs = now - workStartTime;
+    const diff = now - workStartTime;
     
-    const hours = Math.floor(diffMs / (1000 * 60 * 60));
-    const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
-    const seconds = Math.floor((diffMs % (1000 * 60)) / 1000);
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    const seconds = Math.floor((diff % (1000 * 60)) / 1000);
     
     return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
   };
@@ -177,6 +307,17 @@ const LocationComponent = ({ onLocationChange, showWorkControls = false }) => {
       }
     };
   }, [isWorking, workStartTime]);
+
+  // Manejar errores del mapa
+  const handleMapError = (error) => {
+    console.error('Error en el mapa:', error);
+    setMapError(true);
+    Alert.alert(
+      'Error en el mapa',
+      'No se pudo cargar el mapa. Se mostrará una vista alternativa.',
+      [{ text: 'OK' }]
+    );
+  };
 
   // Render different content based on state
   let content;
@@ -205,20 +346,71 @@ const LocationComponent = ({ onLocationChange, showWorkControls = false }) => {
     const latitude = typeof location.coords.latitude === 'number' ? location.coords.latitude : 0;
     const longitude = typeof location.coords.longitude === 'number' ? location.coords.longitude : 0;
     
-    content = (
-      <View style={styles.locationInfoContainer}>
-        {/* Renderizado condicional del mapa para evitar errores */}
-        <View style={styles.mapContainer}>
-          {Platform.OS === 'ios' ? (
+    // Si hay un error con el mapa, mostrar la vista alternativa
+    if (mapError) {
+      content = (
+        <View style={styles.locationInfoContainer}>
+          <View style={styles.mapContainer}>
+            <View style={styles.map}>
+              <Text style={styles.locationText}>
+                Latitud: {latitude.toFixed(6)}, Longitud: {longitude.toFixed(6)}
+              </Text>
+            </View>
+          </View>
+          
+          {showWorkControls && (
+            <View style={styles.workControlsContainer}>
+              {isWorking ? (
+                <>
+                  <View style={styles.workTimeContainer}>
+                    <Text style={styles.workTimeLabel}>Tiempo de trabajo:</Text>
+                    <Text style={styles.workTimeValue}>{formatWorkTime()}</Text>
+                  </View>
+                  <TouchableOpacity 
+                    style={[styles.workButton, styles.endWorkButton]}
+                    onPress={handleEndWork}
+                    disabled={loadingAction}
+                  >
+                    <Text style={styles.workButtonText}>
+                      {loadingAction ? 'Finalizando...' : 'Finalizar Trabajo'}
+                    </Text>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <TouchableOpacity 
+                  style={[styles.workButton, styles.startWorkButton]}
+                  onPress={handleStartWork}
+                  disabled={loadingAction}
+                >
+                  <Text style={styles.workButtonText}>
+                    {loadingAction ? 'Iniciando...' : 'Iniciar Trabajo'}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
+        </View>
+      );
+    } else {
+      content = (
+        <View style={styles.locationInfoContainer}>
+          {/* Renderizado del mapa para ambas plataformas */}
+          <View style={styles.mapContainer}>
             <MapView 
               style={styles.map}
+              provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : null}
               initialRegion={{
                 latitude: latitude,
                 longitude: longitude,
                 latitudeDelta: 0.0922,
                 longitudeDelta: 0.0421,
               }}
+              showsUserLocation={mapConfig.showsUserLocation}
+              showsMyLocationButton={mapConfig.showsMyLocationButton}
+              toolbarEnabled={Platform.OS === 'android' ? mapConfig.toolbarEnabled : undefined}
+              showsCompass={Platform.OS === 'ios' ? mapConfig.showsCompass : undefined}
               onMapReady={() => setMapReady(true)}
+              onError={handleMapError}
             >
               {mapReady && (
                 <Marker
@@ -231,46 +423,52 @@ const LocationComponent = ({ onLocationChange, showWorkControls = false }) => {
                 />
               )}
             </MapView>
-          ) : (
-            <View style={styles.map}>
-              <Text style={styles.locationText}>
-                Latitud: {latitude.toFixed(6)}, Longitud: {longitude.toFixed(6)}
-              </Text>
-            </View>
-          )}
-        </View>
-        
-        {showWorkControls && (
-          <View style={styles.workControlsContainer}>
-            {isWorking ? (
-              <>
-                <View style={styles.workTimeContainer}>
-                  <Text style={styles.workTimeLabel}>Tiempo de trabajo:</Text>
-                  <Text style={styles.workTimeValue}>{formatWorkTime()}</Text>
-                </View>
+          </View>
+          
+          {showWorkControls && (
+            <View style={styles.workControlsContainer}>
+              {isWorking ? (
+                <>
+                  <View style={styles.workTimeContainer}>
+                    <Text style={styles.workTimeLabel}>Tiempo de trabajo:</Text>
+                    <Text style={styles.workTimeValue}>{formatWorkTime()}</Text>
+                  </View>
+                  <TouchableOpacity 
+                    style={[styles.workButton, styles.endWorkButton]}
+                    onPress={handleEndWork}
+                    disabled={loadingAction}
+                  >
+                    <Text style={styles.workButtonText}>
+                      {loadingAction ? 'Finalizando...' : 'Finalizar Trabajo'}
+                    </Text>
+                  </TouchableOpacity>
+                </>
+              ) : (
                 <TouchableOpacity 
-                  style={[styles.workButton, styles.endWorkButton]}
-                  onPress={handleEndWork}
+                  style={[styles.workButton, styles.startWorkButton]}
+                  onPress={handleStartWork}
                   disabled={loadingAction}
                 >
                   <Text style={styles.workButtonText}>
-                    {loadingAction ? 'Finalizando...' : 'Finalizar Trabajo'}
+                    {loadingAction ? 'Iniciando...' : 'Iniciar Trabajo'}
                   </Text>
                 </TouchableOpacity>
-              </>
-            ) : (
-              <TouchableOpacity 
-                style={[styles.workButton, styles.startWorkButton]}
-                onPress={handleStartWork}
-                disabled={loadingAction}
-              >
-                <Text style={styles.workButtonText}>
-                  {loadingAction ? 'Iniciando...' : 'Iniciar Trabajo'}
-                </Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        )}
+              )}
+            </View>
+          )}
+        </View>
+      );
+    }
+  } else {
+    content = (
+      <View style={styles.messageContainer}>
+        <Text style={styles.messageText}>No se pudo obtener la ubicación.</Text>
+        <TouchableOpacity 
+          style={[styles.retryButton, {marginTop: 10}]} 
+          onPress={getLocation}
+        >
+          <Text style={styles.retryButtonText}>Reintentar</Text>
+        </TouchableOpacity>
       </View>
     );
   }

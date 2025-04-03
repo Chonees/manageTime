@@ -49,6 +49,100 @@ const UserManagementScreen = () => {
     (user.email && user.email.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
+  // Renderizar lista de usuarios
+  const renderUserList = () => {
+    if (loading) {
+      return (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#0066cc" />
+          <Text style={styles.loadingText}>Cargando usuarios...</Text>
+        </View>
+      );
+    }
+    
+    if (error) {
+      return (
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>Error: {error}</Text>
+          <TouchableOpacity style={styles.retryButton} onPress={loadUsers}>
+            <Text style={styles.retryButtonText}>Reintentar</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+    
+    if (users.length === 0) {
+      return (
+        <View style={styles.emptyContainer}>
+          <Text style={styles.emptyText}>No hay usuarios registrados</Text>
+        </View>
+      );
+    }
+    
+    return (
+      <FlatList
+        data={filteredUsers}
+        keyExtractor={(item) => item && item._id ? item._id.toString() : `user-${Math.random()}`}
+        renderItem={({ item }) => {
+          if (!item) return null;
+          
+          return (
+            <TouchableOpacity 
+              style={styles.userItem}
+              onPress={() => {
+                setSelectedUser(item);
+                setModalVisible(true);
+              }}
+            >
+              <View style={styles.userInfo}>
+                <Text style={styles.username}>{item.username}</Text>
+                <Text style={styles.email}>{item.email || 'Sin email'}</Text>
+                <View style={styles.userMeta}>
+                  <Text style={[
+                    styles.userStatus,
+                    { color: item.isActive ? '#2ecc71' : '#e74c3c' }
+                  ]}>
+                    {item.isActive ? 'Activo' : 'Inactivo'}
+                  </Text>
+                  <Text style={styles.userRole}>
+                    {item.isAdmin ? 'Administrador' : 'Usuario'}
+                  </Text>
+                </View>
+              </View>
+              
+              <View style={styles.userActions}>
+                <TouchableOpacity 
+                  style={[styles.actionButton, styles.statusButton]}
+                  onPress={() => toggleUserStatus(item._id, item.isActive)}
+                >
+                  <Text style={styles.buttonText}>
+                    {item.isActive ? 'Desactivar' : 'Activar'}
+                  </Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  style={[styles.actionButton, styles.roleButton]}
+                  onPress={() => toggleUserRole(item._id, item.isAdmin)}
+                >
+                  <Text style={styles.buttonText}>
+                    {item.isAdmin ? 'Normal' : 'Admin'}
+                  </Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  style={[styles.actionButton, styles.deleteButton]}
+                  onPress={() => confirmDeleteUser(item._id)}
+                >
+                  <Text style={styles.buttonText}>Eliminar</Text>
+                </TouchableOpacity>
+              </View>
+            </TouchableOpacity>
+          );
+        }}
+      />
+    );
+  };
+
   // Función para cambiar el estado de un usuario (activo/inactivo)
   const toggleUserStatus = async (userId, isActive) => {
     try {
@@ -57,7 +151,7 @@ const UserManagementScreen = () => {
       
       // Actualizar estado local
       setUsers(users.map(user => 
-        user.id === userId ? { ...user, isActive: !isActive } : user
+        user._id === userId ? { ...user, isActive: !isActive } : user
       ));
       
       Alert.alert('Éxito', `Usuario ${isActive ? 'desactivado' : 'activado'} correctamente`);
@@ -74,7 +168,7 @@ const UserManagementScreen = () => {
       
       // Actualizar estado local
       setUsers(users.map(user => 
-        user.id === userId ? { ...user, isAdmin: !isAdmin } : user
+        user._id === userId ? { ...user, isAdmin: !isAdmin } : user
       ));
       
       Alert.alert('Éxito', `Rol de usuario cambiado a ${isAdmin ? 'normal' : 'administrador'}`);
@@ -90,7 +184,7 @@ const UserManagementScreen = () => {
       // await api.deleteUser(userId);
       
       // Actualizar estado local
-      setUsers(users.filter(user => user.id !== userId));
+      setUsers(users.filter(user => user._id !== userId));
       
       Alert.alert('Éxito', 'Usuario eliminado correctamente');
     } catch (error) {
@@ -127,12 +221,12 @@ const UserManagementScreen = () => {
             
             <View style={styles.userDetailItem}>
               <Text style={styles.detailLabel}>ID:</Text>
-              <Text style={styles.detailValue}>{selectedUser.id}</Text>
+              <Text style={styles.detailValue}>{selectedUser._id || 'No disponible'}</Text>
             </View>
             
             <View style={styles.userDetailItem}>
               <Text style={styles.detailLabel}>Usuario:</Text>
-              <Text style={styles.detailValue}>{selectedUser.username}</Text>
+              <Text style={styles.detailValue}>{selectedUser.username || 'No disponible'}</Text>
             </View>
             
             <View style={styles.userDetailItem}>
@@ -173,8 +267,10 @@ const UserManagementScreen = () => {
               <TouchableOpacity 
                 style={[styles.modalButton, styles.statusButton]}
                 onPress={() => {
-                  toggleUserStatus(selectedUser.id, selectedUser.isActive);
-                  setModalVisible(false);
+                  if (selectedUser && selectedUser._id) {
+                    toggleUserStatus(selectedUser._id, selectedUser.isActive);
+                    setModalVisible(false);
+                  }
                 }}
               >
                 <Text style={styles.buttonText}>
@@ -185,8 +281,10 @@ const UserManagementScreen = () => {
               <TouchableOpacity 
                 style={[styles.modalButton, styles.roleButton]}
                 onPress={() => {
-                  toggleUserRole(selectedUser.id, selectedUser.isAdmin);
-                  setModalVisible(false);
+                  if (selectedUser && selectedUser._id) {
+                    toggleUserRole(selectedUser._id, selectedUser.isAdmin);
+                    setModalVisible(false);
+                  }
                 }}
               >
                 <Text style={styles.buttonText}>
@@ -213,101 +311,7 @@ const UserManagementScreen = () => {
       
       {error && <Text style={styles.errorText}>{error}</Text>}
       
-      {loading ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#4A90E2" />
-          <Text style={styles.loadingText}>Cargando usuarios...</Text>
-        </View>
-      ) : (
-        <>
-          <View style={styles.statsContainer}>
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>{users.length}</Text>
-              <Text style={styles.statLabel}>Total</Text>
-            </View>
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>
-                {users.filter(user => user.isActive).length}
-              </Text>
-              <Text style={styles.statLabel}>Activos</Text>
-            </View>
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>
-                {users.filter(user => user.isAdmin).length}
-              </Text>
-              <Text style={styles.statLabel}>Admins</Text>
-            </View>
-          </View>
-          
-          <FlatList
-            data={filteredUsers}
-            keyExtractor={(item) => item.id.toString()}
-            renderItem={({ item }) => (
-              <TouchableOpacity 
-                style={styles.userItem}
-                onPress={() => {
-                  setSelectedUser(item);
-                  setModalVisible(true);
-                }}
-              >
-                <View style={styles.userInfo}>
-                  <Text style={styles.username}>{item.username}</Text>
-                  <Text style={styles.userEmail}>{item.email || 'No email'}</Text>
-                </View>
-                
-                <View style={styles.userMeta}>
-                  <View style={[
-                    styles.userStatus,
-                    { backgroundColor: item.isActive ? '#2ecc71' : '#e74c3c' }
-                  ]}>
-                    <Text style={styles.statusText}>
-                      {item.isActive ? 'Activo' : 'Inactivo'}
-                    </Text>
-                  </View>
-                  
-                  <Text style={styles.userRole}>
-                    {item.isAdmin ? 'Admin' : 'Normal'}
-                  </Text>
-                </View>
-                
-                <View style={styles.userActions}>
-                  <TouchableOpacity 
-                    style={[styles.actionButton, styles.statusButton]}
-                    onPress={() => toggleUserStatus(item.id, item.isActive)}
-                  >
-                    <Text style={styles.buttonText}>
-                      {item.isActive ? 'Desactivar' : 'Activar'}
-                    </Text>
-                  </TouchableOpacity>
-                  
-                  <TouchableOpacity 
-                    style={[styles.actionButton, styles.roleButton]}
-                    onPress={() => toggleUserRole(item.id, item.isAdmin)}
-                  >
-                    <Text style={styles.buttonText}>
-                      {item.isAdmin ? 'Normal' : 'Admin'}
-                    </Text>
-                  </TouchableOpacity>
-                  
-                  <TouchableOpacity 
-                    style={[styles.actionButton, styles.deleteButton]}
-                    onPress={() => confirmDeleteUser(item.id)}
-                  >
-                    <Text style={styles.buttonText}>Eliminar</Text>
-                  </TouchableOpacity>
-                </View>
-              </TouchableOpacity>
-            )}
-            ListEmptyComponent={
-              <View style={styles.emptyContainer}>
-                <Text style={styles.emptyText}>
-                  {searchQuery ? 'No se encontraron usuarios que coincidan con la búsqueda' : 'No hay usuarios disponibles'}
-                </Text>
-              </View>
-            }
-          />
-        </>
-      )}
+      {renderUserList()}
       
       {renderUserDetailsModal()}
     </View>
@@ -389,7 +393,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#333',
   },
-  userEmail: {
+  email: {
     fontSize: 14,
     color: '#666',
     marginTop: 2,

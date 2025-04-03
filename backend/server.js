@@ -9,6 +9,7 @@ const authRoutes = require('./src/routes/auth.routes');
 const userRoutes = require('./src/routes/user.routes');
 const locationRoutes = require('./src/routes/location.routes');
 const taskRoutes = require('./src/routes/task.routes');
+const statsRoutes = require('./src/routes/stats.routes');
 
 // Inicializar app
 const app = express();
@@ -20,13 +21,34 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
   credentials: true,
-  exposedHeaders: ['Content-Length', 'X-Requested-With']
+  exposedHeaders: ['Content-Length', 'X-Requested-With'],
+  preflightContinue: false,
+  optionsSuccessStatus: 204
 }));
 app.use(express.json());
 app.use(morgan('dev'));
 
+// Middleware para mejorar compatibilidad con Android
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  
+  // Manejar solicitudes OPTIONS (preflight)
+  if (req.method === 'OPTIONS') {
+    return res.status(204).end();
+  }
+  
+  // Registrar información de la solicitud para depuración
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url} - Origen: ${req.headers.origin || 'desconocido'}`);
+  
+  next();
+});
+
 // Conectar a MongoDB
-mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/manageTime')
+mongoose.connect(process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/manageTime', {
+  family: 4 // Forzar IPv4
+})
   .then(() => console.log('Conectado a MongoDB'))
   .catch(err => console.error('Error al conectar a MongoDB:', err));
 
@@ -35,6 +57,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/locations', locationRoutes);
 app.use('/api/tasks', taskRoutes);
+app.use('/api/stats', statsRoutes);
 
 // Ruta de prueba para verificar que el servidor está funcionando
 app.get('/', (req, res) => {

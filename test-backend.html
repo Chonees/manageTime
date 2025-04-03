@@ -84,7 +84,7 @@
     
     <div class="card">
         <h2>Información del Servidor</h2>
-        <p>URL del Backend: <span id="backendUrl">http://192.168.0.148:5000</span></p>
+        <p>URL del Backend: <span id="backendUrl">http://localhost:5555</span></p>
         <button class="button" onclick="testConnection()">Probar Conexión</button>
     </div>
     
@@ -118,10 +118,17 @@
         <button class="button" onclick="register()">Registrar</button>
     </div>
     
+    <div class="card">
+        <h2>Verificar Colecciones</h2>
+        <button class="button" onclick="getUsers()">Ver Usuarios</button>
+        <button class="button" onclick="getLocations()">Ver Ubicaciones</button>
+        <button class="button" onclick="getTasks()">Ver Tareas</button>
+    </div>
+    
     <div id="results"></div>
     
     <script>
-        const backendUrl = 'http://192.168.0.148:5000';
+        const backendUrl = 'http://localhost:5555';
         
         function addResult(title, message, isSuccess = true) {
             const resultsDiv = document.getElementById('results');
@@ -186,9 +193,11 @@
                     localStorage.setItem('user', JSON.stringify(data.user));
                 } else {
                     addResult('Error de login', data, false);
+                    console.error('Error de login:', data);
                 }
             } catch (error) {
                 addResult('Error de login', error.message, false);
+                console.error('Error completo:', error);
             }
         }
         
@@ -222,6 +231,99 @@
                 }
             } catch (error) {
                 addResult('Error de registro', error.message, false);
+            }
+        }
+        
+        async function getUsers() {
+            try {
+                const token = localStorage.getItem('token');
+                
+                if (!token) {
+                    addResult('Error', 'Debes iniciar sesión primero', false);
+                    return;
+                }
+                
+                addResult('Obteniendo usuarios...', 'Enviando solicitud al servidor...');
+                
+                const response = await fetch(`${backendUrl}/api/users`, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    addResult('Usuarios obtenidos correctamente', data);
+                } else {
+                    addResult('Error al obtener usuarios', data, false);
+                }
+            } catch (error) {
+                addResult('Error al obtener usuarios', error.message, false);
+            }
+        }
+        
+        async function getLocations() {
+            try {
+                const token = localStorage.getItem('token');
+                
+                if (!token) {
+                    addResult('Error', 'Debes iniciar sesión primero', false);
+                    return;
+                }
+                
+                addResult('Obteniendo ubicaciones...', 'Enviando solicitud al servidor...');
+                
+                const response = await fetch(`${backendUrl}/api/locations`, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    addResult('Ubicaciones obtenidas correctamente', data);
+                } else {
+                    addResult('Error al obtener ubicaciones', data, false);
+                }
+            } catch (error) {
+                addResult('Error al obtener ubicaciones', error.message, false);
+            }
+        }
+        
+        async function getTasks() {
+            try {
+                const token = localStorage.getItem('token');
+                
+                if (!token) {
+                    addResult('Error', 'Debes iniciar sesión primero', false);
+                    return;
+                }
+                
+                addResult('Obteniendo tareas...', 'Enviando solicitud al servidor...');
+                
+                const response = await fetch(`${backendUrl}/api/tasks`, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    addResult('Tareas obtenidas correctamente', data);
+                } else {
+                    addResult('Error al obtener tareas', data, false);
+                }
+            } catch (error) {
+                addResult('Error al obtener tareas', error.message, false);
             }
         }
     </script>

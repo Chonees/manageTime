@@ -14,5 +14,6 @@ router.delete('/:id', taskController.deleteTask);
 
 // Rutas para administradores
 router.get('/all', isAdmin, taskController.getAllTasks);
+router.post('/assign', isAdmin, taskController.createAssignedTask); // Nueva ruta para asignar tareas
 
 module.exports = router;
