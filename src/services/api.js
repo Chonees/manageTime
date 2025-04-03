@@ -2,7 +2,7 @@
 // Asegúrate de que esta IP sea accesible desde tu dispositivo móvil
 // Si estás usando Expo en un dispositivo físico, necesitas usar la IP de tu computadora en la red local
 import { Platform } from 'react-native';
-import { getApiBaseUrl, getFetchOptions, getTimeout } from './platform-config';
+import { getApiBaseUrl, getFetchOptions, getTimeout, getPlatformConfig } from './platform-config';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export const API_URL = getApiBaseUrl();
@@ -27,6 +27,76 @@ export const handleResponse = async (response) => {
   const data = await response.json().catch(() => ({}));
   console.log('Datos recibidos:', JSON.stringify(data).substring(0, 100) + '...');
   return data;
+};
+
+// Función para realizar peticiones con reintentos automáticos
+export const fetchWithRetry = async (url, options, maxRetries = null) => {
+  // Obtener configuración según la plataforma
+  const config = getPlatformConfig(Platform.OS);
+  
+  // Usar maxRetries pasado como parámetro o el de la configuración
+  const retries = maxRetries || config.config.maxRetries || 2;
+  const retryDelay = config.config.retryDelay || 1000;
+  
+  console.log(`Configuración de red: timeout=${getTimeout()}ms, maxRetries=${retries}, retryDelay=${retryDelay}ms`);
+  console.log(`Realizando petición a: ${url}`);
+  
+  let lastError;
+  
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      // Si no es el primer intento, esperar antes de reintentar
+      if (attempt > 0) {
+        const delay = retryDelay * Math.pow(2, attempt - 1);
+        console.log(`Reintentando petición (${attempt}/${retries}) después de ${delay}ms...`);
+        // Esperar un tiempo exponencial entre reintentos (1s, 2s, 4s, etc.)
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+      
+      // Crear un nuevo AbortController para este intento
+      const controller = new AbortController();
+      
+      // Establecer un timeout para este intento
+      const timeoutId = setTimeout(() => {
+        console.log(`Timeout alcanzado (${getTimeout()}ms) en intento ${attempt+1}/${retries+1}`);
+        controller.abort();
+      }, getTimeout());
+      
+      console.log(`Intento ${attempt+1}/${retries+1} - Iniciando petición...`);
+      
+      // Combinar las opciones pasadas con la señal del AbortController
+      const fetchOptions = {
+        ...options,
+        signal: controller.signal
+      };
+      
+      // Realizar la petición
+      const response = await fetch(url, fetchOptions);
+      
+      // Limpiar el timeout si la petición se completó
+      clearTimeout(timeoutId);
+      
+      console.log(`Intento ${attempt+1}/${retries+1} - Respuesta recibida con status: ${response.status}`);
+      
+      // Devolver la respuesta si se completó correctamente
+      return response;
+    } catch (error) {
+      console.error(`Error en intento ${attempt+1}/${retries+1}:`, error);
+      lastError = error;
+      
+      // Si el error no es por timeout o es el último intento, no reintentar
+      if (error.name !== 'AbortError' || attempt >= retries) {
+        console.log(`No se reintentará: ${error.name !== 'AbortError' ? 'No es un error de timeout' : 'Se agotaron los reintentos'}`);
+        throw error;
+      }
+      
+      console.log(`Error de timeout, se reintentará...`);
+    }
+  }
+  
+  // Si llegamos aquí, es porque se agotaron los reintentos
+  console.error(`Se agotaron todos los reintentos (${retries+1} intentos)`);
+  throw new Error(lastError?.message || 'Tiempo de espera agotado después de varios intentos');
 };
 
 // Helper function to get auth header
@@ -85,24 +155,19 @@ export const login = async (username, password) => {
   console.log(`Intentando login con usuario: ${username}`);
   
   try {
-    // Creamos una promesa para el timeout
-    const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => {
-        reject(new Error('Tiempo de espera agotado. El servidor no responde.'));
-      }, getTimeout()); // Timeout según la plataforma
-    });
+    const url = `${getApiUrl()}/api/auth/login`;
+    console.log('URL de login:', url);
     
-    // Creamos la promesa de fetch con opciones básicas (sin usar createFetchOptions)
-    const fetchPromise = fetch(`${getApiUrl()}/api/auth/login`, {
+    const options = {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({ username, password })
-    });
+    };
     
-    // Esperamos a que se resuelva la primera promesa (fetch o timeout)
-    const response = await Promise.race([fetchPromise, timeoutPromise]);
+    // Usar la nueva función con reintentos
+    const response = await fetchWithRetry(url, options);
     
     // Si la respuesta no es exitosa, lanzamos un error
     if (!response.ok) {
@@ -330,7 +395,7 @@ export const startWork = async (coords) => {
     const headers = await getAuthHeader();
     headers['Content-Type'] = 'application/json';
     
-    const response = await fetch(`${getApiUrl()}/api/locations/start`, {
+    const response = await fetchWithRetry(`${getApiUrl()}/api/locations/start`, {
       method: 'POST',
       headers: headers,
       body: JSON.stringify(payload)
@@ -363,7 +428,7 @@ export const endWork = async (coords) => {
     const headers = await getAuthHeader();
     headers['Content-Type'] = 'application/json';
     
-    const response = await fetch(`${getApiUrl()}/api/locations/end`, {
+    const response = await fetchWithRetry(`${getApiUrl()}/api/locations/end`, {
       method: 'POST',
       headers: headers,
       body: JSON.stringify(payload)
@@ -402,39 +467,27 @@ export const getLocationHistory = async (userId) => {
     }
     
     // Establecemos un timeout para la solicitud
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), getTimeout());
+    const options = {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      }
+    };
     
-    try {
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        signal: controller.signal
-      });
-      
-      clearTimeout(timeoutId);
-      
-      // Si la respuesta no es exitosa, lanzamos un error
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || `Error ${response.status}: ${response.statusText}`);
-      }
-      
-      // Procesamos la respuesta
-      const data = await response.json();
-      console.log(`Se obtuvieron ${data.length} registros de ubicación`);
-      
-      return data;
-    } catch (error) {
-      clearTimeout(timeoutId);
-      if (error.name === 'AbortError') {
-        throw new Error('Tiempo de espera agotado al obtener historial de ubicaciones');
-      }
-      throw error;
+    const response = await fetchWithRetry(url, options);
+    
+    // Si la respuesta no es exitosa, lanzamos un error
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || `Error ${response.status}: ${response.statusText}`);
     }
+    
+    // Procesamos la respuesta
+    const data = await response.json();
+    console.log(`Se obtuvieron ${data.length} registros de ubicación`);
+    
+    return data;
   } catch (error) {
     console.error('Error al obtener historial de ubicaciones:', error);
     throw error;
@@ -460,39 +513,27 @@ export const getUsers = async () => {
     }
     
     // Establecemos un timeout para la solicitud
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), getTimeout());
+    const options = {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      }
+    };
     
-    try {
-      const response = await fetch(`${getApiUrl()}/api/users`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        signal: controller.signal
-      });
-      
-      clearTimeout(timeoutId);
-      
-      // Si la respuesta no es exitosa, lanzamos un error
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || `Error ${response.status}: ${response.statusText}`);
-      }
-      
-      // Procesamos la respuesta
-      const data = await response.json();
-      console.log(`Se obtuvieron ${data.length} usuarios`);
-      
-      return data;
-    } catch (error) {
-      clearTimeout(timeoutId);
-      if (error.name === 'AbortError') {
-        throw new Error('Tiempo de espera agotado al obtener usuarios');
-      }
-      throw error;
+    const response = await fetchWithRetry(`${getApiUrl()}/api/users`, options);
+    
+    // Si la respuesta no es exitosa, lanzamos un error
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || `Error ${response.status}: ${response.statusText}`);
     }
+    
+    // Procesamos la respuesta
+    const data = await response.json();
+    console.log(`Se obtuvieron ${data.length} usuarios`);
+    
+    return data;
   } catch (error) {
     console.error('Error al obtener usuarios:', error);
     throw error;
@@ -518,39 +559,27 @@ export const getUserTasks = async () => {
     }
     
     // Establecemos un timeout para la solicitud
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), getTimeout());
+    const options = {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      }
+    };
     
-    try {
-      const response = await fetch(`${getApiUrl()}/api/tasks/my-tasks`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        signal: controller.signal
-      });
-      
-      clearTimeout(timeoutId);
-      
-      // Si la respuesta no es exitosa, lanzamos un error
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || `Error ${response.status}: ${response.statusText}`);
-      }
-      
-      // Procesamos la respuesta
-      const data = await response.json();
-      console.log(`Se obtuvieron ${data.length} tareas del usuario`);
-      
-      return data;
-    } catch (error) {
-      clearTimeout(timeoutId);
-      if (error.name === 'AbortError') {
-        throw new Error('Tiempo de espera agotado al obtener tareas del usuario');
-      }
-      throw error;
+    const response = await fetchWithRetry(`${getApiUrl()}/api/tasks/my-tasks`, options);
+    
+    // Si la respuesta no es exitosa, lanzamos un error
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || `Error ${response.status}: ${response.statusText}`);
     }
+    
+    // Procesamos la respuesta
+    const data = await response.json();
+    console.log(`Se obtuvieron ${data.length} tareas del usuario`);
+    
+    return data;
   } catch (error) {
     console.error('Error al obtener tareas:', error);
     throw error;
@@ -585,59 +614,42 @@ export const saveTask = async (task) => {
     }
     
     // Establecemos un timeout para la solicitud
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), getTimeout());
-    
-    try {
-      // Preparar los datos a enviar - aseguramos que userId sea un string
-      const taskData = { 
+    const options = {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({
         ...task,
         userId: task.userId ? task.userId.toString() : undefined
-      };
-      
-      console.log('Enviando datos al servidor:', JSON.stringify(taskData));
-      
-      const response = await fetch(url, {
-        method,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(taskData),
-        signal: controller.signal
-      });
-      
-      clearTimeout(timeoutId);
-      
-      // Si la respuesta no es exitosa, lanzamos un error
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || `Error ${response.status}: ${response.statusText}`);
-      }
-      
-      // Procesamos la respuesta
-      const data = await response.json();
-      console.log('Tarea guardada correctamente:', data);
-      
-      // Aseguramos que la tarea tenga la propiedad completed
-      if (data) {
-        // Formateamos la respuesta para que sea consistente
-        return {
-          task: {
-            ...data,
-            completed: data.completed !== undefined ? data.completed : false
-          }
-        };
-      }
-      
-      return data;
-    } catch (error) {
-      clearTimeout(timeoutId);
-      if (error.name === 'AbortError') {
-        throw new Error('Tiempo de espera agotado al guardar la tarea');
-      }
-      throw error;
+      })
+    };
+    
+    const response = await fetchWithRetry(url, options);
+    
+    // Si la respuesta no es exitosa, lanzamos un error
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || `Error ${response.status}: ${response.statusText}`);
     }
+    
+    // Procesamos la respuesta
+    const data = await response.json();
+    console.log('Tarea guardada correctamente:', data);
+    
+    // Aseguramos que la tarea tenga la propiedad completed
+    if (data) {
+      // Formateamos la respuesta para que sea consistente
+      return {
+        task: {
+          ...data,
+          completed: data.completed !== undefined ? data.completed : false
+        }
+      };
+    }
+    
+    return data;
   } catch (error) {
     console.error('Error al guardar tarea:', error);
     throw error;
@@ -663,39 +675,27 @@ export const getTasks = async () => {
     }
     
     // Establecemos un timeout para la solicitud
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), getTimeout());
+    const options = {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      }
+    };
     
-    try {
-      const response = await fetch(`${getApiUrl()}/api/tasks/all`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        signal: controller.signal
-      });
-      
-      clearTimeout(timeoutId);
-      
-      // Si la respuesta no es exitosa, lanzamos un error
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || `Error ${response.status}: ${response.statusText}`);
-      }
-      
-      // Procesamos la respuesta
-      const data = await response.json();
-      console.log(`Se obtuvieron ${data.length} tareas`);
-      
-      return data;
-    } catch (error) {
-      clearTimeout(timeoutId);
-      if (error.name === 'AbortError') {
-        throw new Error('Tiempo de espera agotado al obtener tareas');
-      }
-      throw error;
+    const response = await fetchWithRetry(`${getApiUrl()}/api/tasks/all`, options);
+    
+    // Si la respuesta no es exitosa, lanzamos un error
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || `Error ${response.status}: ${response.statusText}`);
     }
+    
+    // Procesamos la respuesta
+    const data = await response.json();
+    console.log(`Se obtuvieron ${data.length} tareas`);
+    
+    return data;
   } catch (error) {
     console.error('Error al obtener todas las tareas:', error);
     throw error;
@@ -721,97 +721,147 @@ export const deleteTask = async (taskId) => {
     }
     
     // Establecemos un timeout para la solicitud
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), getTimeout());
+    const options = {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      }
+    };
     
-    try {
-      const response = await fetch(`${getApiUrl()}/api/tasks/${taskId}`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        signal: controller.signal
-      });
-      
-      clearTimeout(timeoutId);
-      
-      // Si la respuesta no es exitosa, lanzamos un error
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || `Error ${response.status}: ${response.statusText}`);
-      }
-      
-      // Procesamos la respuesta
-      const data = await response.json();
-      console.log('Tarea eliminada correctamente');
-      
-      return data;
-    } catch (error) {
-      clearTimeout(timeoutId);
-      if (error.name === 'AbortError') {
-        throw new Error('Tiempo de espera agotado al eliminar la tarea');
-      }
-      throw error;
+    const response = await fetchWithRetry(`${getApiUrl()}/api/tasks/${taskId}`, options);
+    
+    // Si la respuesta no es exitosa, lanzamos un error
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || `Error ${response.status}: ${response.statusText}`);
     }
+    
+    // Procesamos la respuesta
+    const data = await response.json();
+    console.log('Tarea eliminada correctamente');
+    
+    return data;
   } catch (error) {
     console.error('Error al eliminar tarea:', error);
     throw error;
   }
 };
 
-// Function to start work
+// Función para probar directamente la conexión con el backend sin usar fetchWithRetry
+export const directConnectionTest = async () => {
+  try {
+    console.log('Realizando prueba de conexión directa con:', getApiUrl());
+    
+    // Crear una promesa que se resolverá con el resultado de la petición
+    return new Promise((resolve, reject) => {
+      // Establecer un timeout largo para esta prueba
+      const timeout = setTimeout(() => {
+        console.error('Timeout en prueba directa después de 2 minutos');
+        reject(new Error('Timeout en prueba directa después de 2 minutos'));
+      }, 120000); // 2 minutos
+      
+      // Usar XMLHttpRequest que puede ser más estable en algunos dispositivos Android
+      const xhr = new XMLHttpRequest();
+      xhr.onreadystatechange = function() {
+        if (xhr.readyState === 4) {
+          clearTimeout(timeout);
+          
+          console.log('Respuesta XHR recibida, status:', xhr.status);
+          if (xhr.status >= 200 && xhr.status < 300) {
+            try {
+              const responseData = JSON.parse(xhr.responseText);
+              resolve({
+                success: true,
+                status: xhr.status,
+                message: 'Conexión directa exitosa',
+                data: responseData
+              });
+            } catch (e) {
+              resolve({
+                success: true,
+                status: xhr.status,
+                message: 'Conexión directa exitosa pero respuesta no es JSON válido',
+                data: { text: xhr.responseText }
+              });
+            }
+          } else {
+            reject(new Error(`Error en conexión directa: ${xhr.status} ${xhr.statusText}`));
+          }
+        }
+      };
+      
+      xhr.onerror = function(e) {
+        clearTimeout(timeout);
+        console.error('Error XHR:', e);
+        reject(new Error('Error de red en conexión directa'));
+      };
+      
+      xhr.open('GET', getApiUrl(), true);
+      xhr.setRequestHeader('Content-Type', 'application/json');
+      xhr.send();
+      
+      console.log('Petición XHR enviada');
+    });
+  } catch (error) {
+    console.error('Error en prueba de conexión directa:', error);
+    return {
+      success: false,
+      error: error.message || 'Error desconocido en prueba de conexión directa'
+    };
+  }
+};
+
+// Function to test connection
 export const testConnection = async () => {
   try {
     console.log('Probando conexión con:', getApiUrl());
     
-    // Creamos una promesa para el timeout
-    const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => {
-        reject(new Error('Tiempo de espera agotado. El servidor no responde.'));
-      }, getTimeout()); // Timeout según la plataforma
-    });
+    // Primero intentar con XMLHttpRequest directo
+    try {
+      console.log('Intentando conexión directa con XMLHttpRequest...');
+      const directResult = await directConnectionTest();
+      console.log('Resultado de conexión directa:', directResult);
+      return directResult;
+    } catch (directError) {
+      console.log('Conexión directa falló, intentando con fetchWithRetry:', directError);
+      // Si falla, intentar con fetchWithRetry
+    }
     
-    // Creamos la promesa de fetch
-    const fetchPromise = fetch(`${getApiUrl()}`, {
+    const url = `${getApiUrl()}`;
+    const options = {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json'
       }
-    }).then(async (response) => {
-      console.log('Respuesta recibida, status:', response.status);
-      
-      // Intentar leer el cuerpo de la respuesta
-      let responseBody;
-      try {
-        const text = await response.text();
-        console.log('Texto de respuesta:', text.substring(0, 150) + '...');
-        responseBody = text ? JSON.parse(text) : {};
-      } catch (e) {
-        console.error('Error al parsear respuesta JSON:', e);
-        return { 
-          success: response.ok, 
-          status: response.status,
-          message: `Conexión exitosa pero respuesta no es JSON válido: ${response.statusText}`
-        };
-      }
-      
-      return {
-        success: true,
-        status: response.status,
-        message: responseBody.message || 'Conexión exitosa',
-        data: responseBody
-      };
-    }).catch(error => {
-      console.error('Error en la solicitud fetch:', error);
-      return { 
-        success: false, 
-        error: error.message || 'Error de red al conectar con el servidor'
-      };
-    });
+    };
     
-    // Competimos entre el fetch y el timeout
-    return await Promise.race([fetchPromise, timeoutPromise]);
+    // Usar la nueva función con reintentos
+    const response = await fetchWithRetry(url, options, 3); // 3 reintentos para la prueba de conexión
+    
+    console.log('Respuesta recibida, status:', response.status);
+    
+    // Intentar leer el cuerpo de la respuesta
+    let responseBody;
+    try {
+      const text = await response.text();
+      console.log('Texto de respuesta:', text.substring(0, 150) + '...');
+      responseBody = text ? JSON.parse(text) : {};
+    } catch (e) {
+      console.error('Error al parsear respuesta JSON:', e);
+      return { 
+        success: response.ok, 
+        status: response.status,
+        message: `Conexión exitosa pero respuesta no es JSON válido: ${response.statusText}`
+      };
+    }
+    
+    return {
+      success: true,
+      status: response.status,
+      message: responseBody.message || 'Conexión exitosa',
+      data: responseBody
+    };
   } catch (error) {
     console.error('Error en testConnection:', error);
     return { 
@@ -826,63 +876,50 @@ export const testLogin = async (username, password) => {
   try {
     console.log(`Probando login con usuario: ${username}`);
     
-    // Creamos una promesa para el timeout
-    const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => {
-        reject(new Error('Tiempo de espera agotado. El servidor no responde.'));
-      }, getTimeout()); // Timeout según la plataforma
-    });
-    
-    // Creamos la promesa de fetch
-    const fetchPromise = fetch(`${getApiUrl()}/api/auth/login`, {
+    const url = `${getApiUrl()}/api/auth/login`;
+    const options = {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({ username, password })
-    }).then(async (response) => {
-      console.log('Respuesta recibida, status:', response.status);
-      
-      // Intentar leer el cuerpo de la respuesta
-      let responseBody;
-      try {
-        const text = await response.text();
-        console.log('Texto de respuesta:', text.substring(0, 150) + '...');
-        responseBody = text ? JSON.parse(text) : {};
-      } catch (e) {
-        console.error('Error al parsear respuesta JSON:', e);
-        return { 
-          success: false, 
-          status: response.status,
-          error: 'Error al procesar la respuesta del servidor'
-        };
-      }
-      
-      if (!response.ok) {
-        return { 
-          success: false, 
-          status: response.status,
-          error: responseBody.message || `Error ${response.status}: ${response.statusText}`
-        };
-      }
-      
-      return {
-        success: true,
-        status: response.status,
-        message: 'Login exitoso',
-        user: responseBody.user,
-        token: responseBody.token
-      };
-    }).catch(error => {
-      console.error('Error en la solicitud fetch:', error);
+    };
+    
+    // Usar la nueva función con reintentos
+    const response = await fetchWithRetry(url, options);
+    
+    console.log('Respuesta recibida, status:', response.status);
+    
+    // Intentar leer el cuerpo de la respuesta
+    let responseBody;
+    try {
+      const text = await response.text();
+      console.log('Texto de respuesta:', text.substring(0, 150) + '...');
+      responseBody = text ? JSON.parse(text) : {};
+    } catch (e) {
+      console.error('Error al parsear respuesta JSON:', e);
       return { 
         success: false, 
-        error: error.message || 'Error de red al conectar con el servidor'
+        status: response.status,
+        error: 'Error al procesar la respuesta del servidor'
       };
-    });
+    }
     
-    // Competimos entre el fetch y el timeout
-    return await Promise.race([fetchPromise, timeoutPromise]);
+    if (!response.ok) {
+      return { 
+        success: false, 
+        status: response.status,
+        error: responseBody.message || `Error ${response.status}: ${response.statusText}`
+      };
+    }
+    
+    return {
+      success: true,
+      status: response.status,
+      message: 'Login exitoso',
+      user: responseBody.user,
+      token: responseBody.token
+    };
   } catch (error) {
     console.error('Error en testLogin:', error);
     return { 
@@ -915,53 +952,36 @@ export const assignTask = async (taskData) => {
     }
     
     // Establecemos un timeout para la solicitud
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), getTimeout());
-    
-    try {
-      // Asegurarnos de que el userId sea un string
-      const data = { 
+    const options = {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({
         ...taskData,
         userId: taskData.userId.toString()
-      };
-      
-      console.log('Enviando datos al servidor para asignar tarea:', JSON.stringify(data));
-      
-      const response = await fetch(`${getApiUrl()}/api/tasks/assign`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(data),
-        signal: controller.signal
-      });
-      
-      clearTimeout(timeoutId);
-      
-      // Si la respuesta no es exitosa, lanzamos un error
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || `Error ${response.status}: ${response.statusText}`);
-      }
-      
-      // Procesamos la respuesta
-      const responseData = await response.json();
-      console.log('Tarea asignada correctamente:', responseData);
-      
-      return {
-        task: {
-          ...responseData,
-          completed: responseData.completed !== undefined ? responseData.completed : false
-        }
-      };
-    } catch (error) {
-      clearTimeout(timeoutId);
-      if (error.name === 'AbortError') {
-        throw new Error('Tiempo de espera agotado al asignar la tarea');
-      }
-      throw error;
+      })
+    };
+    
+    const response = await fetchWithRetry(`${getApiUrl()}/api/tasks/assign`, options);
+    
+    // Si la respuesta no es exitosa, lanzamos un error
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || `Error ${response.status}: ${response.statusText}`);
     }
+    
+    // Procesamos la respuesta
+    const responseData = await response.json();
+    console.log('Tarea asignada correctamente:', responseData);
+    
+    return {
+      task: {
+        ...responseData,
+        completed: responseData.completed !== undefined ? responseData.completed : false
+      }
+    };
   } catch (error) {
     console.error('Error al asignar tarea:', error);
     throw error;
@@ -985,37 +1005,25 @@ export const getAdminStats = async () => {
     }
     
     // Establecemos un timeout para la solicitud
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), getTimeout());
+    const options = {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      }
+    };
     
-    try {
-      const response = await fetch(`${getApiUrl()}/api/stats`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        signal: controller.signal
-      });
-      
-      clearTimeout(timeoutId);
-      
-      // Si la respuesta no es exitosa, lanzamos un error
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || `Error ${response.status}: ${response.statusText}`);
-      }
-      
-      // Procesamos la respuesta
-      const data = await response.json();
-      return data;
-    } catch (error) {
-      clearTimeout(timeoutId);
-      if (error.name === 'AbortError') {
-        throw new Error('Tiempo de espera agotado al obtener estadísticas');
-      }
-      throw error;
+    const response = await fetchWithRetry(`${getApiUrl()}/api/stats`, options);
+    
+    // Si la respuesta no es exitosa, lanzamos un error
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || `Error ${response.status}: ${response.statusText}`);
     }
+    
+    // Procesamos la respuesta
+    const data = await response.json();
+    return data;
   } catch (error) {
     console.error('Error al obtener estadísticas:', error);
     throw error;
@@ -1039,37 +1047,25 @@ export const getRecentActivity = async () => {
     }
     
     // Establecemos un timeout para la solicitud
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), getTimeout());
+    const options = {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      }
+    };
     
-    try {
-      const response = await fetch(`${getApiUrl()}/api/stats/recent-activity`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        signal: controller.signal
-      });
-      
-      clearTimeout(timeoutId);
-      
-      // Si la respuesta no es exitosa, lanzamos un error
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || `Error ${response.status}: ${response.statusText}`);
-      }
-      
-      // Procesamos la respuesta
-      const data = await response.json();
-      return data;
-    } catch (error) {
-      clearTimeout(timeoutId);
-      if (error.name === 'AbortError') {
-        throw new Error('Tiempo de espera agotado al obtener actividad reciente');
-      }
-      throw error;
+    const response = await fetchWithRetry(`${getApiUrl()}/api/stats/recent-activity`, options);
+    
+    // Si la respuesta no es exitosa, lanzamos un error
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || `Error ${response.status}: ${response.statusText}`);
     }
+    
+    // Procesamos la respuesta
+    const data = await response.json();
+    return data;
   } catch (error) {
     console.error('Error al obtener actividad reciente:', error);
     throw error;

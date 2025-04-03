@@ -61,7 +61,9 @@ const platformConfig = {
   // Configuración base
   config: {
     apiUrl: 'http://192.168.0.122:5555',
-    timeout: 15000, // 15 segundos
+    timeout: 60000, // 60 segundos
+    maxRetries: 3,  // Número máximo de reintentos
+    retryDelay: 1000, // Retraso base entre reintentos (ms)
   },
   
   // Configuración específica para Android
@@ -70,7 +72,8 @@ const platformConfig = {
     // Podemos necesitar ajustes específicos
     config: {
       // Aumentar el timeout para Android ya que puede ser más lento
-      timeout: 30000, // 30 segundos
+      timeout: 90000, // 90 segundos
+      maxRetries: 5,  // Más reintentos para Android
       
       // Opciones adicionales para fetch en Android
       fetchOptions: {
@@ -79,7 +82,11 @@ const platformConfig = {
         // Asegurarse de que las credenciales no se envían automáticamente
         credentials: 'omit',
         // Modo de solicitud (no-cors puede ayudar en algunos casos)
-        mode: 'cors'
+        mode: 'cors',
+        // Prioridad alta para las solicitudes
+        priority: 'high',
+        // No redirigir automáticamente
+        redirect: 'manual'
       }
     }
   },
