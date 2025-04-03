@@ -37,8 +37,9 @@ export const fetchWithRetry = async (url, options, maxRetries = null) => {
   // Usar maxRetries pasado como parámetro o el de la configuración
   const retries = maxRetries || config.config.maxRetries || 2;
   const retryDelay = config.config.retryDelay || 1000;
+  const timeout = getTimeout();
   
-  console.log(`Configuración de red: timeout=${getTimeout()}ms, maxRetries=${retries}, retryDelay=${retryDelay}ms`);
+  console.log(`Configuración de red: timeout=${timeout}ms, maxRetries=${retries}, retryDelay=${retryDelay}ms`);
   console.log(`Realizando petición a: ${url}`);
   
   let lastError;
@@ -58,9 +59,9 @@ export const fetchWithRetry = async (url, options, maxRetries = null) => {
       
       // Establecer un timeout para este intento
       const timeoutId = setTimeout(() => {
-        console.log(`Timeout alcanzado (${getTimeout()}ms) en intento ${attempt+1}/${retries+1}`);
+        console.log(`Timeout alcanzado (${timeout}ms) en intento ${attempt+1}/${retries+1}`);
         controller.abort();
-      }, getTimeout());
+      }, timeout);
       
       console.log(`Intento ${attempt+1}/${retries+1} - Iniciando petición...`);
       
@@ -158,36 +159,75 @@ export const login = async (username, password) => {
     const url = `${getApiUrl()}/api/auth/login`;
     console.log('URL de login:', url);
     
+    // Crear opciones específicas para el login
     const options = {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
       },
       body: JSON.stringify({ username, password })
     };
     
-    // Usar la nueva función con reintentos
-    const response = await fetchWithRetry(url, options);
+    console.log('Opciones de login:', JSON.stringify(options, null, 2));
     
-    // Si la respuesta no es exitosa, lanzamos un error
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.message || `Error ${response.status}: ${response.statusText}`);
-    }
+    // Usar la función directa para el login (más confiable)
+    const loginResult = await new Promise((resolve, reject) => {
+      // Usar XMLHttpRequest que puede ser más estable en algunos dispositivos Android
+      const xhr = new XMLHttpRequest();
+      
+      // Establecer un timeout largo para el login
+      const timeout = setTimeout(() => {
+        console.error('Timeout en login después de 2 minutos');
+        xhr.abort();
+        reject(new Error('Tiempo de espera agotado en login'));
+      }, 120000); // 2 minutos
+      
+      xhr.onreadystatechange = function() {
+        if (xhr.readyState === 4) {
+          clearTimeout(timeout);
+          
+          console.log('Respuesta XHR login recibida, status:', xhr.status);
+          if (xhr.status >= 200 && xhr.status < 300) {
+            try {
+              const responseData = JSON.parse(xhr.responseText);
+              resolve(responseData);
+            } catch (e) {
+              reject(new Error('Error al procesar respuesta de login'));
+            }
+          } else if (xhr.status === 404) {
+            reject(new Error('Usuario no encontrado'));
+          } else {
+            reject(new Error(`Error en login: ${xhr.status} ${xhr.statusText}`));
+          }
+        }
+      };
+      
+      xhr.onerror = function(e) {
+        clearTimeout(timeout);
+        console.error('Error XHR en login:', e);
+        reject(new Error('Error de red en login'));
+      };
+      
+      xhr.open('POST', url, true);
+      xhr.setRequestHeader('Content-Type', 'application/json');
+      xhr.setRequestHeader('Accept', 'application/json');
+      xhr.send(JSON.stringify({ username, password }));
+      
+      console.log('Petición XHR de login enviada');
+    });
     
-    // Procesamos la respuesta
-    const data = await response.json();
     console.log('Login exitoso, guardando token y datos de usuario');
     
     // Si hay token, lo guardamos en AsyncStorage
-    if (data.token) {
+    if (loginResult.token) {
       try {
-        await AsyncStorage.setItem('token', data.token);
+        await AsyncStorage.setItem('token', loginResult.token);
         console.log('Token guardado correctamente');
         
         // Si hay datos de usuario, los guardamos en AsyncStorage
-        if (data.user) {
-          await AsyncStorage.setItem('user', JSON.stringify(data.user));
+        if (loginResult.user) {
+          await AsyncStorage.setItem('user', JSON.stringify(loginResult.user));
           console.log('Datos de usuario guardados correctamente');
         }
       } catch (storageError) {
@@ -198,8 +238,8 @@ export const login = async (username, password) => {
     
     return {
       success: true,
-      user: data.user,
-      token: data.token
+      user: loginResult.user,
+      token: loginResult.token
     };
   } catch (error) {
     console.error('Error en login:', error);
