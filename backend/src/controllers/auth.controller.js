@@ -61,6 +61,8 @@ exports.login = async (req, res) => {
   try {
     const { username, password } = req.body;
     
+    console.log('Intento de login:', { username });
+    
     // Buscar usuario por nombre de usuario o email
     const user = await User.findOne({ 
       $or: [
@@ -70,16 +72,22 @@ exports.login = async (req, res) => {
     });
     
     if (!user) {
+      console.log('Usuario no encontrado:', username);
       return res.status(404).json({ message: 'Usuario no encontrado' });
     }
     
+    console.log('Usuario encontrado:', user.username);
+    
     // Verificar si la cuenta está activa
     if (!user.isActive) {
+      console.log('Cuenta desactivada:', user.username);
       return res.status(403).json({ message: 'Cuenta desactivada' });
     }
     
     // Verificar contraseña
     const isPasswordValid = await user.comparePassword(password);
+    
+    console.log('Contraseña válida:', isPasswordValid);
     
     if (!isPasswordValid) {
       return res.status(401).json({ message: 'Contraseña incorrecta' });
@@ -108,7 +116,7 @@ exports.login = async (req, res) => {
     });
   } catch (error) {
     console.error('Error en login:', error);
-    res.status(500).json({ message: 'Error al iniciar sesión' });
+    res.status(500).json({ message: 'Error al iniciar sesión', error: error.message });
   }
 };
 

@@ -33,12 +33,26 @@ const TaskScreen = ({ navigation }) => {
     setError(null);
 
     try {
+      console.log('Cargando tareas...');
       // Usar getUserTasks para usuarios normales y getTasks para administradores
       const tasksData = user?.isAdmin 
         ? await api.getTasks() 
         : await api.getUserTasks();
       
-      setTasks(tasksData);
+      console.log(`Se cargaron ${tasksData.length} tareas`);
+      
+      // Asegurarnos de que todas las tareas tengan la propiedad completed
+      const formattedTasks = tasksData.map(task => ({
+        ...task,
+        completed: task.completed !== undefined ? task.completed : false
+      }));
+      
+      setTasks(formattedTasks);
+      
+      // Si es administrador, también cargar usuarios
+      if (user?.isAdmin) {
+        await loadUsers();
+      }
     } catch (error) {
       console.error('Error al cargar tareas:', error);
       setError(error.message || 'Error al cargar tareas');
@@ -53,19 +67,19 @@ const TaskScreen = ({ navigation }) => {
     if (!user?.isAdmin) return;
     
     try {
+      console.log('Cargando usuarios...');
       const usersData = await api.getUsers();
+      console.log(`Se cargaron ${usersData.length} usuarios:`, usersData.map(u => ({ id: u._id, username: u.username })));
       setUsers(usersData);
     } catch (error) {
       console.error('Error al cargar usuarios:', error);
+      Alert.alert('Error', 'No se pudieron cargar los usuarios');
     }
   };
 
   // Cargar tareas y usuarios al montar el componente
   useEffect(() => {
     loadTasks();
-    if (user?.isAdmin) {
-      loadUsers();
-    }
   }, []);
 
   // Añadir nueva tarea
@@ -76,23 +90,55 @@ const TaskScreen = ({ navigation }) => {
     }
 
     try {
+      console.log('Creando tarea con los siguientes datos:');
+      
       const taskData = { 
         title: newTaskTitle,
-        description: newTaskDescription
+        description: newTaskDescription,
+        completed: false  
       };
       
-      // Si es admin y hay un usuario seleccionado, asignar la tarea a ese usuario
+      let result;
+      
+      // Si es admin y hay un usuario seleccionado, usar el endpoint específico para asignar tareas
       if (user?.isAdmin && selectedUserId) {
+        console.log(`Administrador asignando tarea al usuario con ID: ${selectedUserId}`);
         taskData.userId = selectedUserId;
+        
+        // Usar la nueva función específica para asignar tareas
+        result = await api.assignTask(taskData);
+        console.log('Respuesta del servidor (asignación):', JSON.stringify(result));
+      } else {
+        // Caso normal: crear tarea para el usuario actual
+        console.log('Creando tarea para el usuario actual');
+        result = await api.saveTask(taskData);
+        console.log('Respuesta del servidor (normal):', JSON.stringify(result));
       }
       
-      const result = await api.saveTask(taskData);
+      // Verificamos que result.task existe antes de añadirlo
+      if (result && result.task) {
+        // Aseguramos que la tarea tenga la propiedad completed
+        const newTask = {
+          ...result.task,
+          completed: result.task.completed !== undefined ? result.task.completed : false
+        };
+        setTasks([...tasks, newTask]);
+      } else if (result) {
+        // Si no hay result.task pero hay result, asumimos que el resultado es la tarea
+        const newTask = {
+          ...result,
+          completed: result.completed !== undefined ? result.completed : false
+        };
+        setTasks([...tasks, newTask]);
+      }
       
-      setTasks([...tasks, result.task]);
       setNewTaskTitle('');
       setNewTaskDescription('');
       setSelectedUserId(null);
       setShowAddForm(false);
+      
+      // Recargar las tareas para asegurarnos de tener los datos actualizados
+      loadTasks();
     } catch (error) {
       console.error('Error al añadir tarea:', error);
       Alert.alert('Error', error.message || 'Error al añadir tarea');
@@ -103,7 +149,7 @@ const TaskScreen = ({ navigation }) => {
   const deleteTask = async (taskId) => {
     try {
       await api.deleteTask(taskId);
-      setTasks(tasks.filter(task => task.id !== taskId));
+      setTasks(tasks.filter(task => task._id !== taskId));
     } catch (error) {
       console.error('Error al eliminar tarea:', error);
       Alert.alert('Error', error.message || 'Error al eliminar tarea');
@@ -124,36 +170,83 @@ const TaskScreen = ({ navigation }) => {
 
   // Alternar estado de completado
   const toggleComplete = (taskId) => {
-    setTasks(tasks.map(task => 
-      task.id === taskId ? { ...task, completed: !task.completed } : task
-    ));
+    setTasks(tasks.map(task => {
+      if (task._id === taskId) {
+        // Asegurarnos de que completed tenga un valor por defecto
+        const currentCompleted = task.completed !== undefined ? task.completed : false;
+        return { ...task, completed: !currentCompleted };
+      }
+      return task;
+    }));
   };
 
   // Seleccionar usuario para asignar tarea
   const selectUser = (userId) => {
-    setSelectedUserId(userId);
+    console.log(`Usuario seleccionado: ${userId}`);
+    console.log('Tipo de userId:', typeof userId);
+    
+    // Asegurarnos de que el userId sea un string
+    const userIdString = userId.toString();
+    console.log(`userId convertido a string: ${userIdString}`);
+    
+    setSelectedUserId(userIdString);
     setShowUserSelector(false);
   };
 
   // Renderizar cada tarea
   const renderTask = ({ item }) => {
+    // Verificar que item existe
+    if (!item) {
+      console.log('Error: Se intentó renderizar una tarea undefined');
+      return null;
+    }
+    
+    // Asegurarnos de que completed tenga un valor por defecto
+    const completed = item.completed !== undefined ? item.completed : false;
+    
     // Encontrar el nombre del usuario asignado si es administrador
     let assignedUserName = '';
-    if (user?.isAdmin && users.length > 0) {
-      const assignedUser = users.find(u => u.id === item.userId);
-      assignedUserName = assignedUser ? assignedUser.username : 'Usuario desconocido';
+    if (user?.isAdmin && users.length > 0 && item.userId) {
+      // Extraer el ID del usuario, que puede venir como string u objeto
+      let userIdToFind;
+      
+      if (typeof item.userId === 'object' && item.userId._id) {
+        // Si es un objeto con _id (usuario populado desde el backend)
+        userIdToFind = item.userId._id.toString();
+        console.log(`Tarea con usuario populado. ID a buscar: ${userIdToFind}`);
+        assignedUserName = item.userId.username || 'Usuario sin nombre';
+      } else {
+        // Si es un string o un ObjectId
+        userIdToFind = item.userId.toString();
+        console.log(`Buscando usuario con ID: ${userIdToFind}`);
+        
+        // Buscar en la lista de usuarios
+        const assignedUser = users.find(u => 
+          u._id === userIdToFind || 
+          u._id.toString() === userIdToFind
+        );
+        
+        if (assignedUser) {
+          assignedUserName = assignedUser.username;
+          console.log(`Usuario encontrado: ${assignedUserName}`);
+        } else {
+          assignedUserName = 'Usuario desconocido';
+          console.log(`No se encontró usuario con ID: ${userIdToFind}`);
+          console.log('Lista de usuarios disponibles:', JSON.stringify(users.map(u => ({ id: u._id, username: u.username }))));
+        }
+      }
     }
     
     return (
       <View style={styles.taskItem}>
         <TouchableOpacity 
           style={styles.taskCheckbox}
-          onPress={() => toggleComplete(item.id)}
+          onPress={() => toggleComplete(item._id)}
         >
           <Ionicons 
-            name={item.completed ? 'checkbox' : 'square-outline'} 
+            name={completed ? 'checkbox' : 'square-outline'} 
             size={24} 
-            color={item.completed ? '#4CAF50' : '#757575'} 
+            color={completed ? '#4CAF50' : '#757575'} 
           />
         </TouchableOpacity>
         
@@ -161,17 +254,17 @@ const TaskScreen = ({ navigation }) => {
           <Text 
             style={[
               styles.taskTitle, 
-              item.completed && styles.taskCompleted
+              completed && styles.taskCompleted
             ]}
           >
-            {item.title}
+            {item.title || 'Sin título'}
           </Text>
           
           {item.description ? (
             <Text 
               style={[
                 styles.taskDescription, 
-                item.completed && styles.taskCompleted
+                completed && styles.taskCompleted
               ]}
               numberOfLines={2}
             >
@@ -189,7 +282,7 @@ const TaskScreen = ({ navigation }) => {
         
         <TouchableOpacity 
           style={styles.deleteButton}
-          onPress={() => confirmDeleteTask(item.id)}
+          onPress={() => confirmDeleteTask(item._id)}
         >
           <Ionicons name="trash-outline" size={24} color="#F44336" />
         </TouchableOpacity>
@@ -212,9 +305,9 @@ const TaskScreen = ({ navigation }) => {
           <ScrollView style={styles.userList}>
             {users.map(user => (
               <TouchableOpacity
-                key={user.id}
+                key={user._id}
                 style={styles.userItem}
-                onPress={() => selectUser(user.id)}
+                onPress={() => selectUser(user._id)}
               >
                 <Text style={styles.userName}>{user.username}</Text>
                 <Text style={styles.userEmail}>{user.email}</Text>
@@ -269,7 +362,15 @@ const TaskScreen = ({ navigation }) => {
             >
               <Text style={styles.userSelectButtonText}>
                 {selectedUserId 
-                  ? `Asignar a: ${users.find(u => u.id === selectedUserId)?.username || 'Usuario'}`
+                  ? (() => {
+                      // Buscar el usuario por ID
+                      const selectedUser = users.find(u => 
+                        u._id === selectedUserId || 
+                        u._id.toString() === selectedUserId
+                      );
+                      
+                      return `Asignar a: ${selectedUser?.username || 'Usuario seleccionado'}`;
+                    })()
                   : 'Seleccionar Usuario'}
               </Text>
               <Ionicons name="chevron-down" size={20} color="#4A90E2" />
@@ -330,7 +431,7 @@ const TaskScreen = ({ navigation }) => {
           <FlatList
             data={tasks}
             renderItem={renderTask}
-            keyExtractor={(item) => item.id.toString()}
+            keyExtractor={(item) => item._id.toString()}
             style={styles.taskList}
             ListEmptyComponent={
               <View style={styles.emptyContainer}>

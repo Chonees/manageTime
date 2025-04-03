@@ -8,7 +8,9 @@ import {
   TouchableOpacity,
   Alert,
   ScrollView,
-  RefreshControl
+  RefreshControl,
+  Modal,
+  Button
 } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import * as api from '../services/api';
@@ -21,9 +23,13 @@ const LocationHistoryScreen = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedUserId, setSelectedUserId] = useState(null);
+  const [selectedUserName, setSelectedUserName] = useState(null);
   const [users, setUsers] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
   const [currentLocation, setCurrentLocation] = useState(null);
+  const [viewMode, setViewMode] = useState('map'); // 'map' o 'list'
+  const [dateFilter, setDateFilter] = useState(null);
+  const [filteredLocations, setFilteredLocations] = useState([]);
 
   // Cargar historial de ubicaciones
   const loadLocationHistory = async (userId = null) => {
@@ -110,90 +116,112 @@ const LocationHistoryScreen = () => {
           data={users}
           horizontal
           showsHorizontalScrollIndicator={false}
-          keyExtractor={(item) => item.id.toString()}
-          renderItem={({ item }) => (
-            <TouchableOpacity
-              style={[
-                styles.userItem,
-                selectedUserId === item.id && styles.selectedUserItem
-              ]}
-              onPress={() => {
-                setSelectedUserId(item.id);
-                loadLocationHistory(item.id);
-              }}
-            >
-              <Text 
+          keyExtractor={(item) => item && item._id ? item._id.toString() : `user-${Math.random()}`}
+          renderItem={({ item }) => {
+            if (!item) return null;
+            
+            return (
+              <TouchableOpacity
                 style={[
-                  styles.userItemText,
-                  selectedUserId === item.id && styles.selectedUserItemText
+                  styles.userItem,
+                  selectedUserId === item._id && styles.selectedUserItem
                 ]}
+                onPress={() => {
+                  setSelectedUserId(item._id);
+                  setSelectedUserName(item.username);
+                  loadLocationHistory(item._id);
+                  setFilteredLocations([]);
+                  setDateFilter(null);
+                }}
               >
-                {item.username}
-              </Text>
-            </TouchableOpacity>
-          )}
-          ListHeaderComponent={
-            <TouchableOpacity
-              style={[
-                styles.userItem,
-                selectedUserId === null && styles.selectedUserItem
-              ]}
-              onPress={() => {
-                setSelectedUserId(null);
-                loadLocationHistory();
-              }}
-            >
-              <Text 
-                style={[
-                  styles.userItemText,
-                  selectedUserId === null && styles.selectedUserItemText
-                ]}
-              >
-                Todos
-              </Text>
-            </TouchableOpacity>
-          }
+                <Text 
+                  style={[
+                    styles.userItemText,
+                    selectedUserId === item._id && styles.selectedUserItemText
+                  ]}
+                >
+                  {item.username || 'Usuario sin nombre'}
+                </Text>
+              </TouchableOpacity>
+            );
+          }}
         />
-      </View>
-    );
-  };
-
-  // Renderizar lista de ubicaciones
-  const renderLocationList = () => {
-    if (locationHistory.length === 0) {
-      return (
-        <View style={styles.emptyContainer}>
-          <Ionicons name="location-outline" size={50} color="#ccc" />
-          <Text style={styles.emptyText}>No hay registros de ubicación</Text>
-          <Text style={styles.emptySubtext}>
-            Los registros aparecerán aquí cuando inicies o finalices tu trabajo
+        
+        <TouchableOpacity
+          style={[
+            styles.userItem,
+            !selectedUserId && styles.selectedUserItem,
+            { marginTop: 10 }
+          ]}
+          onPress={() => {
+            setSelectedUserId(null);
+            setSelectedUserName(null);
+            loadLocationHistory();
+            setFilteredLocations([]);
+            setDateFilter(null);
+          }}
+        >
+          <Text 
+            style={[
+              styles.userItemText,
+              !selectedUserId && styles.selectedUserItemText
+            ]}
+          >
+            Mi historial
           </Text>
-        </View>
-      );
-    }
+        </TouchableOpacity>
 
-    return (
-      <FlatList
-        data={locationHistory.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))}
-        keyExtractor={(item, index) => `location-${item.id || index}`}
-        renderItem={({ item }) => (
-          <View style={styles.locationItem}>
-            <View style={[
-              styles.locationTypeIndicator,
-              { backgroundColor: item.type === 'start' ? '#2ecc71' : '#e74c3c' }
-            ]} />
-            <View style={styles.locationInfo}>
-              <Text style={styles.locationType}>
-                {item.type === 'start' ? 'Inicio de trabajo' : 'Fin de trabajo'}
-              </Text>
-              <Text style={styles.locationDate}>{formatDate(item.timestamp)}</Text>
-              <Text style={styles.locationCoords}>
-                Lat: {item.latitude.toFixed(6)}, Lng: {item.longitude.toFixed(6)}
-              </Text>
-            </View>
+        {selectedUserId && (
+          <View style={styles.actionButtonsContainer}>
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={() => {
+                // Buscar todas las ubicaciones del usuario seleccionado
+                setFilteredLocations([]);
+                setDateFilter(null);
+                Alert.alert('Información', `Mostrando todo el recorrido de ${selectedUserName || 'usuario seleccionado'}`);
+              }}
+            >
+              <Text style={styles.actionButtonText}>Ver todo el recorrido</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={() => {
+                const date = new Date();
+                const year = date.getFullYear();
+                const month = date.getMonth() + 1;
+                const day = date.getDate();
+                const filterDate = `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+                setDateFilter(filterDate);
+
+                const filtered = locationHistory.filter((location) => {
+                  const locationDate = new Date(location.timestamp);
+                  const filterDateObject = new Date(filterDate);
+                  return locationDate.toDateString() === filterDateObject.toDateString();
+                });
+                setFilteredLocations(filtered);
+                
+                if (filtered.length > 0) {
+                  const formattedDate = filterDate;
+                  const message = selectedUserName 
+                    ? `Mostrando el recorrido de ${selectedUserName} el día ${formattedDate}`
+                    : `Mostrando tu recorrido el día ${formattedDate}`;
+                  Alert.alert('Información', message);
+                } else {
+                  const formattedDate = filterDate;
+                  const message = selectedUserName 
+                    ? `No hay registros de ${selectedUserName} para el día ${formattedDate}`
+                    : `No hay registros para el día ${formattedDate}`;
+                  Alert.alert('Sin datos', message);
+                }
+              }}
+            >
+              <Text style={styles.actionButtonText}>Filtrar por fecha</Text>
+            </TouchableOpacity>
           </View>
         )}
-      />
+      </View>
     );
   };
 
@@ -203,17 +231,18 @@ const LocationHistoryScreen = () => {
       refreshControl={
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
       }
+      contentContainerStyle={styles.scrollContent}
     >
-      {/* Selector de usuarios (solo para administradores) */}
+      {/* Selector de usuario (solo para administradores) */}
       {renderUserSelector()}
       
-      {/* Mapa con historial de ubicaciones */}
+      {/* Mapa */}
       <View style={styles.mapContainer}>
         <View style={styles.mapHeader}>
-          <Text style={styles.mapTitle}>Historial de Ubicaciones</Text>
+          <Text style={styles.mapTitle}>Mapa de Ubicaciones</Text>
           <TouchableOpacity 
-            style={styles.refreshButton}
-            onPress={() => loadLocationHistory(selectedUserId)}
+            style={styles.refreshButton} 
+            onPress={onRefresh}
             disabled={loading}
           >
             <Ionicons name="refresh" size={20} color="#fff" />
@@ -227,9 +256,10 @@ const LocationHistoryScreen = () => {
           </View>
         ) : (
           <MapComponent 
-            locations={locationHistory}
+            locations={filteredLocations.length > 0 ? filteredLocations : locationHistory}
             currentLocation={currentLocation}
             isLoading={loading}
+            selectedUserName={selectedUserName}
           />
         )}
       </View>
@@ -246,7 +276,49 @@ const LocationHistoryScreen = () => {
             <Text style={styles.loadingText}>Cargando registros...</Text>
           </View>
         ) : (
-          renderLocationList()
+          <View style={styles.locationListContainer}>
+            {(filteredLocations.length > 0 ? filteredLocations : locationHistory).length > 0 ? (
+              (filteredLocations.length > 0 ? filteredLocations : locationHistory)
+                .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+                .slice(0, 10) // Limitamos a 10 registros para evitar problemas de rendimiento
+                .map((item, index) => (
+                  <View key={item._id || index} style={styles.locationItem}>
+                    <View 
+                      style={[
+                        styles.locationTypeIndicator, 
+                        { backgroundColor: item.type === 'start' ? '#4CAF50' : '#F44336' }
+                      ]} 
+                    />
+                    <View style={styles.locationInfo}>
+                      <Text style={styles.locationType}>
+                        {item.type === 'start' ? 'Inicio de trabajo' : 'Fin de trabajo'}
+                      </Text>
+                      <Text style={styles.locationDate}>{formatDate(item.timestamp)}</Text>
+                      <Text style={styles.locationCoords}>
+                        Lat: {item.latitude.toFixed(6)}, Lon: {item.longitude.toFixed(6)}
+                      </Text>
+                    </View>
+                  </View>
+                ))
+            ) : (
+              <View style={styles.emptyContainer}>
+                <Ionicons name="location-outline" size={48} color="#ccc" />
+                <Text style={styles.emptyText}>No hay registros</Text>
+                <Text style={styles.emptySubtext}>
+                  No se encontraron registros de ubicación para mostrar.
+                </Text>
+              </View>
+            )}
+            
+            {(filteredLocations.length > 0 ? filteredLocations : locationHistory).length > 10 && (
+              <TouchableOpacity 
+                style={styles.viewMoreButton}
+                onPress={() => Alert.alert('Información', 'Se muestran los 10 registros más recientes. Consulta el mapa para ver todos los registros.')}
+              >
+                <Text style={styles.viewMoreButtonText}>Ver más registros...</Text>
+              </TouchableOpacity>
+            )}
+          </View>
         )}
       </View>
     </ScrollView>
@@ -402,6 +474,45 @@ const styles = StyleSheet.create({
     color: '#999',
     textAlign: 'center',
     marginTop: 5,
+  },
+  actionButtonsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 10,
+  },
+  actionButton: {
+    backgroundColor: '#4A90E2',
+    padding: 10,
+    borderRadius: 8,
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    margin: 5,
+  },
+  actionButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  scrollContent: {
+    padding: 10,
+  },
+  locationListContainer: {
+    padding: 10,
+  },
+  viewMoreButton: {
+    backgroundColor: '#4A90E2',
+    padding: 10,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    margin: 10,
+  },
+  viewMoreButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold',
   },
 });
 

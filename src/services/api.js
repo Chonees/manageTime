@@ -1,29 +1,21 @@
 // API URL - Cambia esto a la URL de tu backend
 // Asegúrate de que esta IP sea accesible desde tu dispositivo móvil
 // Si estás usando Expo en un dispositivo físico, necesitas usar la IP de tu computadora en la red local
-export const API_URL = 'http://192.168.0.148:5000/api';
+import { Platform } from 'react-native';
+import { getApiBaseUrl, getFetchOptions, getTimeout } from './platform-config';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+export const API_URL = getApiBaseUrl();
 
 // URL alternativa para usar con Expo en modo de desarrollo
 // Esta URL se usa cuando se detecta que estamos en un entorno Expo
 export const getApiUrl = () => {
-  // Detectar si estamos en Expo
-  const isExpo = typeof global.expo !== 'undefined' || 
-                 typeof process.env.EXPO_PUBLIC_API_URL !== 'undefined' ||
-                 typeof global.__expo !== 'undefined';
-  
-  if (isExpo) {
-    console.log('Ejecutando en entorno Expo, usando URL alternativa');
-    // En Expo, usar 10.0.2.2 para Android emulador o la IP real para dispositivos físicos
-    return 'http://192.168.0.148:5000/api';
-  }
-  
-  return API_URL;
+  // Usar la configuración específica para cada plataforma
+  return getApiBaseUrl();
 };
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
-
 // Helper function to handle fetch errors
-const handleResponse = async (response) => {
+export const handleResponse = async (response) => {
   console.log(`Respuesta recibida con status: ${response.status}`);
   
   if (!response.ok) {
@@ -39,11 +31,53 @@ const handleResponse = async (response) => {
 
 // Helper function to get auth header
 export const getAuthHeader = async () => {
-  const token = await AsyncStorage.getItem('token');
-  return {
-    'Content-Type': 'application/json',
-    'Authorization': token ? `Bearer ${token}` : ''
-  };
+  try {
+    const token = await AsyncStorage.getItem('token');
+    return token ? { 'Authorization': `Bearer ${token}` } : {};
+  } catch (error) {
+    console.error('Error al obtener token de autenticación:', error);
+    return {};
+  }
+};
+
+// Función para crear opciones de fetch con autenticación
+export const createFetchOptions = async (method, body = null, customHeaders = {}) => {
+  try {
+    // Obtener opciones base según la plataforma
+    const baseOptions = getFetchOptions();
+    
+    // Obtener headers de autenticación
+    const authHeaders = await getAuthHeader();
+    
+    // Crear opciones de fetch
+    const options = {
+      ...baseOptions,
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeaders,
+        ...customHeaders
+      }
+    };
+    
+    // Añadir body si es necesario
+    if (body) {
+      options.body = JSON.stringify(body);
+    }
+    
+    return options;
+  } catch (error) {
+    console.error('Error al crear opciones de fetch:', error);
+    // Devolver opciones básicas en caso de error
+    return {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        ...customHeaders
+      },
+      ...(body ? { body: JSON.stringify(body) } : {})
+    };
+  }
 };
 
 // Login function
@@ -55,70 +89,58 @@ export const login = async (username, password) => {
     const timeoutPromise = new Promise((_, reject) => {
       setTimeout(() => {
         reject(new Error('Tiempo de espera agotado. El servidor no responde.'));
-      }, 15000); // 15 segundos de timeout
+      }, getTimeout()); // Timeout según la plataforma
     });
     
-    // Creamos la promesa de fetch
-    const fetchPromise = fetch(`${getApiUrl()}/auth/login`, {
+    // Creamos la promesa de fetch con opciones básicas (sin usar createFetchOptions)
+    const fetchPromise = fetch(`${getApiUrl()}/api/auth/login`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({ username, password })
-    }).then(async (response) => {
-      console.log('Respuesta recibida, status:', response.status);
-      
-      // Intentar leer el cuerpo de la respuesta independientemente del status
-      let responseBody;
-      try {
-        const text = await response.text();
-        console.log('Texto de respuesta:', text.substring(0, 150) + '...');
-        responseBody = text ? JSON.parse(text) : {};
-      } catch (e) {
-        console.error('Error al parsear respuesta JSON:', e);
-        return { 
-          success: false, 
-          error: 'Error al procesar la respuesta del servidor'
-        };
-      }
-      
-      if (!response.ok) {
-        console.log('Error en la respuesta:', responseBody);
-        return { 
-          success: false, 
-          error: responseBody.message || `Error ${response.status}: ${response.statusText}`
-        };
-      }
-      
-      console.log('Login exitoso, usuario:', responseBody.user?.username);
-      
-      // Guardar token y datos de usuario
-      if (responseBody.token && responseBody.user) {
-        await AsyncStorage.setItem('token', responseBody.token);
-        await AsyncStorage.setItem('user', JSON.stringify(responseBody.user));
-        return { success: true, user: responseBody.user, token: responseBody.token };
-      } else {
-        console.log('Datos de respuesta incompletos:', responseBody);
-        return { 
-          success: false, 
-          error: 'Respuesta del servidor incompleta'
-        };
-      }
-    }).catch(error => {
-      console.error('Error en la solicitud fetch:', error);
-      return { 
-        success: false, 
-        error: error.message || 'Error de red al conectar con el servidor'
-      };
     });
     
-    // Competimos entre el fetch y el timeout
-    return await Promise.race([fetchPromise, timeoutPromise]);
+    // Esperamos a que se resuelva la primera promesa (fetch o timeout)
+    const response = await Promise.race([fetchPromise, timeoutPromise]);
+    
+    // Si la respuesta no es exitosa, lanzamos un error
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || `Error ${response.status}: ${response.statusText}`);
+    }
+    
+    // Procesamos la respuesta
+    const data = await response.json();
+    console.log('Login exitoso, guardando token y datos de usuario');
+    
+    // Si hay token, lo guardamos en AsyncStorage
+    if (data.token) {
+      try {
+        await AsyncStorage.setItem('token', data.token);
+        console.log('Token guardado correctamente');
+        
+        // Si hay datos de usuario, los guardamos en AsyncStorage
+        if (data.user) {
+          await AsyncStorage.setItem('user', JSON.stringify(data.user));
+          console.log('Datos de usuario guardados correctamente');
+        }
+      } catch (storageError) {
+        console.error('Error al guardar en AsyncStorage:', storageError);
+        // Continuamos a pesar del error para devolver los datos al usuario
+      }
+    }
+    
+    return {
+      success: true,
+      user: data.user,
+      token: data.token
+    };
   } catch (error) {
     console.error('Error en login:', error);
-    return { 
-      success: false, 
-      error: error.message || 'Error al iniciar sesión. Intenta nuevamente.'
+    return {
+      success: false,
+      error: error.message || 'Error desconocido en el inicio de sesión'
     };
   }
 };
@@ -126,15 +148,16 @@ export const login = async (username, password) => {
 // Register function
 export const register = async (username, password, email) => {
   try {
-    console.log('Enviando solicitud de registro a:', `${getApiUrl()}/auth/register`);
+    console.log('Enviando solicitud de registro a:', `${getApiUrl()}/api/auth/register`);
     console.log('Datos:', { username, email, password: '********' });
     
     // Establecemos un timeout para la solicitud
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 segundos de timeout
+    const timeoutId = setTimeout(() => controller.abort(), getTimeout()); // Timeout según la plataforma
     
     try {
-      const response = await fetch(`${getApiUrl()}/auth/register`, {
+      // Usamos opciones básicas en lugar de createFetchOptions para evitar problemas
+      const response = await fetch(`${getApiUrl()}/api/auth/register`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -144,28 +167,33 @@ export const register = async (username, password, email) => {
       });
       
       clearTimeout(timeoutId);
-      console.log('Respuesta recibida, status:', response.status);
       
-      const data = await handleResponse(response);
-      console.log('Registro exitoso');
+      // Si la respuesta no es exitosa, lanzamos un error
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `Error ${response.status}: ${response.statusText}`);
+      }
       
-      return { success: true, ...data };
+      // Procesamos la respuesta
+      const data = await response.json();
+      console.log('Registro exitoso:', data.message || 'Usuario registrado correctamente');
+      
+      return {
+        success: true,
+        message: data.message || 'Usuario registrado correctamente'
+      };
     } catch (error) {
       clearTimeout(timeoutId);
       if (error.name === 'AbortError') {
-        console.log('La solicitud de registro ha excedido el tiempo de espera');
-        return { 
-          success: false, 
-          error: 'Tiempo de espera agotado. Verifica tu conexión a internet o intenta más tarde.' 
-        };
+        throw new Error('Tiempo de espera agotado. Verifica tu conexión a internet o intenta más tarde.');
       }
       throw error;
     }
   } catch (error) {
-    console.error('Error en registro:', error);
-    return { 
-      success: false, 
-      error: error.message || 'Error al registrar usuario. Intenta nuevamente.'
+    console.error('Error al registrar usuario:', error);
+    return {
+      success: false,
+      error: error.message || 'Error al registrar usuario'
     };
   }
 };
@@ -190,7 +218,7 @@ export const checkToken = async () => {
         
         // Intentamos verificar el token en segundo plano, pero no esperamos la respuesta
         // Esto evita que la aplicación se quede cargando si hay problemas de red
-        fetch(`${getApiUrl()}/auth/check-token`, {
+        fetch(`${getApiUrl()}/api/auth/check-token`, {
           method: 'GET',
           headers: await getAuthHeader()
         }).then(async (response) => {
@@ -211,14 +239,14 @@ export const checkToken = async () => {
     }
     
     // Si no tenemos datos del usuario en el almacenamiento, intentamos obtenerlos del servidor
-    console.log('Enviando solicitud a:', `${getApiUrl()}/auth/check-token`);
+    console.log('Enviando solicitud a:', `${getApiUrl()}/api/auth/check-token`);
     
     // Establecemos un timeout para la solicitud
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 segundos de timeout
+    const timeoutId = setTimeout(() => controller.abort(), getTimeout()); // Timeout según la plataforma
     
     try {
-      const response = await fetch(`${getApiUrl()}/auth/check-token`, {
+      const response = await fetch(`${getApiUrl()}/api/auth/check-token`, {
         method: 'GET',
         headers: await getAuthHeader(),
         signal: controller.signal
@@ -285,13 +313,27 @@ export const logout = async () => {
 // Function to start work
 export const startWork = async (coords) => {
   try {
-    const response = await fetch(`${getApiUrl()}/locations/start`, {
+    console.log('API startWork - Enviando coordenadas:', coords);
+    
+    if (!coords || typeof coords.latitude !== 'number' || typeof coords.longitude !== 'number') {
+      throw new Error('Coordenadas inválidas');
+    }
+    
+    // Asegurarnos de que las coordenadas sean strings para evitar problemas de serialización
+    const payload = {
+      latitude: String(coords.latitude),
+      longitude: String(coords.longitude)
+    };
+    
+    console.log('API startWork - Payload final:', payload);
+    
+    const headers = await getAuthHeader();
+    headers['Content-Type'] = 'application/json';
+    
+    const response = await fetch(`${getApiUrl()}/api/locations/start`, {
       method: 'POST',
-      headers: await getAuthHeader(),
-      body: JSON.stringify({
-        latitude: coords.latitude,
-        longitude: coords.longitude
-      })
+      headers: headers,
+      body: JSON.stringify(payload)
     });
     
     return await handleResponse(response);
@@ -304,13 +346,27 @@ export const startWork = async (coords) => {
 // Function to end work
 export const endWork = async (coords) => {
   try {
-    const response = await fetch(`${getApiUrl()}/locations/end`, {
+    console.log('API endWork - Enviando coordenadas:', coords);
+    
+    if (!coords || typeof coords.latitude !== 'number' || typeof coords.longitude !== 'number') {
+      throw new Error('Coordenadas inválidas');
+    }
+    
+    // Asegurarnos de que las coordenadas sean strings para evitar problemas de serialización
+    const payload = {
+      latitude: String(coords.latitude),
+      longitude: String(coords.longitude)
+    };
+    
+    console.log('API endWork - Payload final:', payload);
+    
+    const headers = await getAuthHeader();
+    headers['Content-Type'] = 'application/json';
+    
+    const response = await fetch(`${getApiUrl()}/api/locations/end`, {
       method: 'POST',
-      headers: await getAuthHeader(),
-      body: JSON.stringify({
-        latitude: coords.latitude,
-        longitude: coords.longitude
-      })
+      headers: headers,
+      body: JSON.stringify(payload)
     });
     
     return await handleResponse(response);
@@ -323,19 +379,62 @@ export const endWork = async (coords) => {
 // Function to get location history
 export const getLocationHistory = async (userId) => {
   try {
-    let url = `${getApiUrl()}/locations/my-history`;
+    let url = `${getApiUrl()}/api/locations/my-history`;
     
     // If admin is requesting a specific user's history
     if (userId) {
-      url = `${getApiUrl()}/locations/user/${userId}`;
+      url = `${getApiUrl()}/api/locations/user/${userId}`;
     }
     
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: await getAuthHeader()
-    });
+    console.log('Obteniendo historial de ubicaciones desde:', url);
     
-    return await handleResponse(response);
+    // Obtenemos el token de autenticación directamente
+    let token;
+    try {
+      token = await AsyncStorage.getItem('token');
+    } catch (storageError) {
+      console.error('Error al obtener token de AsyncStorage:', storageError);
+      throw new Error('No se pudo acceder al token de autenticación');
+    }
+    
+    if (!token) {
+      throw new Error('No hay token de autenticación disponible');
+    }
+    
+    // Establecemos un timeout para la solicitud
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), getTimeout());
+    
+    try {
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+      
+      // Si la respuesta no es exitosa, lanzamos un error
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `Error ${response.status}: ${response.statusText}`);
+      }
+      
+      // Procesamos la respuesta
+      const data = await response.json();
+      console.log(`Se obtuvieron ${data.length} registros de ubicación`);
+      
+      return data;
+    } catch (error) {
+      clearTimeout(timeoutId);
+      if (error.name === 'AbortError') {
+        throw new Error('Tiempo de espera agotado al obtener historial de ubicaciones');
+      }
+      throw error;
+    }
   } catch (error) {
     console.error('Error al obtener historial de ubicaciones:', error);
     throw error;
@@ -345,12 +444,55 @@ export const getLocationHistory = async (userId) => {
 // Function to get all users (admin only)
 export const getUsers = async () => {
   try {
-    const response = await fetch(`${getApiUrl()}/users`, {
-      method: 'GET',
-      headers: await getAuthHeader()
-    });
+    console.log('Obteniendo lista de usuarios desde:', `${getApiUrl()}/api/users`);
     
-    return await handleResponse(response);
+    // Obtenemos el token de autenticación directamente
+    let token;
+    try {
+      token = await AsyncStorage.getItem('token');
+    } catch (storageError) {
+      console.error('Error al obtener token de AsyncStorage:', storageError);
+      throw new Error('No se pudo acceder al token de autenticación');
+    }
+    
+    if (!token) {
+      throw new Error('No hay token de autenticación disponible');
+    }
+    
+    // Establecemos un timeout para la solicitud
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), getTimeout());
+    
+    try {
+      const response = await fetch(`${getApiUrl()}/api/users`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+      
+      // Si la respuesta no es exitosa, lanzamos un error
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `Error ${response.status}: ${response.statusText}`);
+      }
+      
+      // Procesamos la respuesta
+      const data = await response.json();
+      console.log(`Se obtuvieron ${data.length} usuarios`);
+      
+      return data;
+    } catch (error) {
+      clearTimeout(timeoutId);
+      if (error.name === 'AbortError') {
+        throw new Error('Tiempo de espera agotado al obtener usuarios');
+      }
+      throw error;
+    }
   } catch (error) {
     console.error('Error al obtener usuarios:', error);
     throw error;
@@ -360,12 +502,55 @@ export const getUsers = async () => {
 // Function to get current user tasks
 export const getUserTasks = async () => {
   try {
-    const response = await fetch(`${getApiUrl()}/tasks/my-tasks`, {
-      method: 'GET',
-      headers: await getAuthHeader()
-    });
+    console.log('Obteniendo tareas del usuario desde:', `${getApiUrl()}/api/tasks/my-tasks`);
     
-    return await handleResponse(response);
+    // Obtenemos el token de autenticación directamente
+    let token;
+    try {
+      token = await AsyncStorage.getItem('token');
+    } catch (storageError) {
+      console.error('Error al obtener token de AsyncStorage:', storageError);
+      throw new Error('No se pudo acceder al token de autenticación');
+    }
+    
+    if (!token) {
+      throw new Error('No hay token de autenticación disponible');
+    }
+    
+    // Establecemos un timeout para la solicitud
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), getTimeout());
+    
+    try {
+      const response = await fetch(`${getApiUrl()}/api/tasks/my-tasks`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+      
+      // Si la respuesta no es exitosa, lanzamos un error
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `Error ${response.status}: ${response.statusText}`);
+      }
+      
+      // Procesamos la respuesta
+      const data = await response.json();
+      console.log(`Se obtuvieron ${data.length} tareas del usuario`);
+      
+      return data;
+    } catch (error) {
+      clearTimeout(timeoutId);
+      if (error.name === 'AbortError') {
+        throw new Error('Tiempo de espera agotado al obtener tareas del usuario');
+      }
+      throw error;
+    }
   } catch (error) {
     console.error('Error al obtener tareas:', error);
     throw error;
@@ -375,17 +560,84 @@ export const getUserTasks = async () => {
 // Function to save a task
 export const saveTask = async (task) => {
   try {
+    console.log('Guardando tarea:', JSON.stringify(task));
+    
     // If task has an ID, it's an update, otherwise it's a new task
-    const method = task.id ? 'PUT' : 'POST';
-    const url = task.id ? `${getApiUrl()}/tasks/${task.id}` : `${getApiUrl()}/tasks`;
+    const method = task._id ? 'PUT' : 'POST';
+    const url = task._id ? `${getApiUrl()}/api/tasks/${task._id}` : `${getApiUrl()}/api/tasks`;
     
-    const response = await fetch(url, {
-      method,
-      headers: await getAuthHeader(),
-      body: JSON.stringify(task)
-    });
+    // Asegurarnos de que si hay userId, se envíe correctamente
+    if (task.userId) {
+      console.log(`La tarea será asignada al usuario con ID: ${task.userId}`);
+    }
     
-    return await handleResponse(response);
+    // Obtenemos el token de autenticación directamente
+    let token;
+    try {
+      token = await AsyncStorage.getItem('token');
+    } catch (storageError) {
+      console.error('Error al obtener token de AsyncStorage:', storageError);
+      throw new Error('No se pudo acceder al token de autenticación');
+    }
+    
+    if (!token) {
+      throw new Error('No hay token de autenticación disponible');
+    }
+    
+    // Establecemos un timeout para la solicitud
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), getTimeout());
+    
+    try {
+      // Preparar los datos a enviar - aseguramos que userId sea un string
+      const taskData = { 
+        ...task,
+        userId: task.userId ? task.userId.toString() : undefined
+      };
+      
+      console.log('Enviando datos al servidor:', JSON.stringify(taskData));
+      
+      const response = await fetch(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(taskData),
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+      
+      // Si la respuesta no es exitosa, lanzamos un error
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `Error ${response.status}: ${response.statusText}`);
+      }
+      
+      // Procesamos la respuesta
+      const data = await response.json();
+      console.log('Tarea guardada correctamente:', data);
+      
+      // Aseguramos que la tarea tenga la propiedad completed
+      if (data) {
+        // Formateamos la respuesta para que sea consistente
+        return {
+          task: {
+            ...data,
+            completed: data.completed !== undefined ? data.completed : false
+          }
+        };
+      }
+      
+      return data;
+    } catch (error) {
+      clearTimeout(timeoutId);
+      if (error.name === 'AbortError') {
+        throw new Error('Tiempo de espera agotado al guardar la tarea');
+      }
+      throw error;
+    }
   } catch (error) {
     console.error('Error al guardar tarea:', error);
     throw error;
@@ -395,12 +647,55 @@ export const saveTask = async (task) => {
 // Function to get all tasks (admin)
 export const getTasks = async () => {
   try {
-    const response = await fetch(`${getApiUrl()}/tasks/all`, {
-      method: 'GET',
-      headers: await getAuthHeader()
-    });
+    console.log('Obteniendo todas las tareas desde:', `${getApiUrl()}/api/tasks/all`);
     
-    return await handleResponse(response);
+    // Obtenemos el token de autenticación directamente
+    let token;
+    try {
+      token = await AsyncStorage.getItem('token');
+    } catch (storageError) {
+      console.error('Error al obtener token de AsyncStorage:', storageError);
+      throw new Error('No se pudo acceder al token de autenticación');
+    }
+    
+    if (!token) {
+      throw new Error('No hay token de autenticación disponible');
+    }
+    
+    // Establecemos un timeout para la solicitud
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), getTimeout());
+    
+    try {
+      const response = await fetch(`${getApiUrl()}/api/tasks/all`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+      
+      // Si la respuesta no es exitosa, lanzamos un error
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `Error ${response.status}: ${response.statusText}`);
+      }
+      
+      // Procesamos la respuesta
+      const data = await response.json();
+      console.log(`Se obtuvieron ${data.length} tareas`);
+      
+      return data;
+    } catch (error) {
+      clearTimeout(timeoutId);
+      if (error.name === 'AbortError') {
+        throw new Error('Tiempo de espera agotado al obtener tareas');
+      }
+      throw error;
+    }
   } catch (error) {
     console.error('Error al obtener todas las tareas:', error);
     throw error;
@@ -410,19 +705,62 @@ export const getTasks = async () => {
 // Function to delete a task
 export const deleteTask = async (taskId) => {
   try {
-    const response = await fetch(`${getApiUrl()}/tasks/${taskId}`, {
-      method: 'DELETE',
-      headers: await getAuthHeader()
-    });
+    console.log('Eliminando tarea:', taskId);
     
-    return await handleResponse(response);
+    // Obtenemos el token de autenticación directamente
+    let token;
+    try {
+      token = await AsyncStorage.getItem('token');
+    } catch (storageError) {
+      console.error('Error al obtener token de AsyncStorage:', storageError);
+      throw new Error('No se pudo acceder al token de autenticación');
+    }
+    
+    if (!token) {
+      throw new Error('No hay token de autenticación disponible');
+    }
+    
+    // Establecemos un timeout para la solicitud
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), getTimeout());
+    
+    try {
+      const response = await fetch(`${getApiUrl()}/api/tasks/${taskId}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+      
+      // Si la respuesta no es exitosa, lanzamos un error
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `Error ${response.status}: ${response.statusText}`);
+      }
+      
+      // Procesamos la respuesta
+      const data = await response.json();
+      console.log('Tarea eliminada correctamente');
+      
+      return data;
+    } catch (error) {
+      clearTimeout(timeoutId);
+      if (error.name === 'AbortError') {
+        throw new Error('Tiempo de espera agotado al eliminar la tarea');
+      }
+      throw error;
+    }
   } catch (error) {
     console.error('Error al eliminar tarea:', error);
     throw error;
   }
 };
 
-// Función para probar la conexión con el backend
+// Function to start work
 export const testConnection = async () => {
   try {
     console.log('Probando conexión con:', getApiUrl());
@@ -431,7 +769,7 @@ export const testConnection = async () => {
     const timeoutPromise = new Promise((_, reject) => {
       setTimeout(() => {
         reject(new Error('Tiempo de espera agotado. El servidor no responde.'));
-      }, 5000);
+      }, getTimeout()); // Timeout según la plataforma
     });
     
     // Creamos la promesa de fetch
@@ -492,11 +830,11 @@ export const testLogin = async (username, password) => {
     const timeoutPromise = new Promise((_, reject) => {
       setTimeout(() => {
         reject(new Error('Tiempo de espera agotado. El servidor no responde.'));
-      }, 10000);
+      }, getTimeout()); // Timeout según la plataforma
     });
     
     // Creamos la promesa de fetch
-    const fetchPromise = fetch(`${getApiUrl()}/auth/login`, {
+    const fetchPromise = fetch(`${getApiUrl()}/api/auth/login`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -551,5 +889,189 @@ export const testLogin = async (username, password) => {
       success: false, 
       error: error.message || 'Error al probar el login'
     };
+  }
+};
+
+// Function to assign a task to another user (admin only)
+export const assignTask = async (taskData) => {
+  try {
+    console.log('Asignando tarea a otro usuario:', JSON.stringify(taskData));
+    
+    if (!taskData.userId) {
+      throw new Error('Se requiere el ID del usuario para asignar la tarea');
+    }
+    
+    // Obtenemos el token de autenticación directamente
+    let token;
+    try {
+      token = await AsyncStorage.getItem('token');
+    } catch (storageError) {
+      console.error('Error al obtener token de AsyncStorage:', storageError);
+      throw new Error('No se pudo acceder al token de autenticación');
+    }
+    
+    if (!token) {
+      throw new Error('No hay token de autenticación disponible');
+    }
+    
+    // Establecemos un timeout para la solicitud
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), getTimeout());
+    
+    try {
+      // Asegurarnos de que el userId sea un string
+      const data = { 
+        ...taskData,
+        userId: taskData.userId.toString()
+      };
+      
+      console.log('Enviando datos al servidor para asignar tarea:', JSON.stringify(data));
+      
+      const response = await fetch(`${getApiUrl()}/api/tasks/assign`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(data),
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+      
+      // Si la respuesta no es exitosa, lanzamos un error
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `Error ${response.status}: ${response.statusText}`);
+      }
+      
+      // Procesamos la respuesta
+      const responseData = await response.json();
+      console.log('Tarea asignada correctamente:', responseData);
+      
+      return {
+        task: {
+          ...responseData,
+          completed: responseData.completed !== undefined ? responseData.completed : false
+        }
+      };
+    } catch (error) {
+      clearTimeout(timeoutId);
+      if (error.name === 'AbortError') {
+        throw new Error('Tiempo de espera agotado al asignar la tarea');
+      }
+      throw error;
+    }
+  } catch (error) {
+    console.error('Error al asignar tarea:', error);
+    throw error;
+  }
+};
+
+// Function to get admin statistics
+export const getAdminStats = async () => {
+  try {
+    // Obtenemos el token de autenticación
+    let token;
+    try {
+      token = await AsyncStorage.getItem('token');
+    } catch (storageError) {
+      console.error('Error al obtener token de AsyncStorage:', storageError);
+      throw new Error('No se pudo acceder al token de autenticación');
+    }
+    
+    if (!token) {
+      throw new Error('No hay token de autenticación disponible');
+    }
+    
+    // Establecemos un timeout para la solicitud
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), getTimeout());
+    
+    try {
+      const response = await fetch(`${getApiUrl()}/api/stats`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+      
+      // Si la respuesta no es exitosa, lanzamos un error
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `Error ${response.status}: ${response.statusText}`);
+      }
+      
+      // Procesamos la respuesta
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      clearTimeout(timeoutId);
+      if (error.name === 'AbortError') {
+        throw new Error('Tiempo de espera agotado al obtener estadísticas');
+      }
+      throw error;
+    }
+  } catch (error) {
+    console.error('Error al obtener estadísticas:', error);
+    throw error;
+  }
+};
+
+// Function to get recent activity
+export const getRecentActivity = async () => {
+  try {
+    // Obtenemos el token de autenticación
+    let token;
+    try {
+      token = await AsyncStorage.getItem('token');
+    } catch (storageError) {
+      console.error('Error al obtener token de AsyncStorage:', storageError);
+      throw new Error('No se pudo acceder al token de autenticación');
+    }
+    
+    if (!token) {
+      throw new Error('No hay token de autenticación disponible');
+    }
+    
+    // Establecemos un timeout para la solicitud
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), getTimeout());
+    
+    try {
+      const response = await fetch(`${getApiUrl()}/api/stats/recent-activity`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+      
+      // Si la respuesta no es exitosa, lanzamos un error
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `Error ${response.status}: ${response.statusText}`);
+      }
+      
+      // Procesamos la respuesta
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      clearTimeout(timeoutId);
+      if (error.name === 'AbortError') {
+        throw new Error('Tiempo de espera agotado al obtener actividad reciente');
+      }
+      throw error;
+    }
+  } catch (error) {
+    console.error('Error al obtener actividad reciente:', error);
+    throw error;
   }
 };

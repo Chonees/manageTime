@@ -15,10 +15,11 @@ import * as api from '../../services/api';
 const AdminDashboardScreen = ({ navigation }) => {
   const { user, logout } = useAuth();
   const [stats, setStats] = useState({
-    totalUsers: 0,
-    activeUsers: 0,
-    totalTasks: 0
+    users: { total: 0, active: 0 },
+    tasks: { total: 0, completed: 0, pending: 0, completionRate: 0 },
+    locations: { total: 0 }
   });
+  const [recentActivity, setRecentActivity] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
@@ -29,21 +30,16 @@ const AdminDashboardScreen = ({ navigation }) => {
     setError(null);
 
     try {
-      // Simulamos la carga de estadísticas
-      // En una implementación real, esto vendría de la API
-      const users = await api.getUsers();
+      // Obtener estadísticas reales desde la API
+      const statsData = await api.getAdminStats();
+      setStats(statsData);
       
-      // Calculamos estadísticas básicas
-      const activeUsers = users.filter(user => user.isActive).length;
-      
-      setStats({
-        totalUsers: users.length,
-        activeUsers: activeUsers,
-        totalTasks: Math.floor(Math.random() * 100) // Simulado
-      });
+      // Obtener actividad reciente
+      const activityData = await api.getRecentActivity();
+      setRecentActivity(activityData);
     } catch (error) {
-      setError(error.message || 'Error al cargar estadísticas');
-      console.error('Error loading stats:', error);
+      setError(error.message || 'Error al cargar datos');
+      console.error('Error loading data:', error);
     } finally {
       setLoading(false);
     }
@@ -69,6 +65,72 @@ const AdminDashboardScreen = ({ navigation }) => {
     } catch (error) {
       Alert.alert('Error', 'Error al cerrar sesión');
     }
+  };
+  
+  // Función para formatear la fecha y hora
+  const formatDateTime = (dateString) => {
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleString();
+    } catch (error) {
+      return 'Fecha desconocida';
+    }
+  };
+  
+  // Función para formatear el tiempo relativo
+  const formatRelativeTime = (dateString) => {
+    try {
+      const date = new Date(dateString);
+      const now = new Date();
+      const diff = now.getTime() - date.getTime();
+      const seconds = Math.floor(diff / 1000);
+      const minutes = Math.floor(seconds / 60);
+      const hours = Math.floor(minutes / 60);
+      const days = Math.floor(hours / 24);
+
+      if (days > 0) {
+        return `${days} días atrás`;
+      } else if (hours > 0) {
+        return `${hours} horas atrás`;
+      } else if (minutes > 0) {
+        return `${minutes} minutos atrás`;
+      } else {
+        return `${seconds} segundos atrás`;
+      }
+    } catch (error) {
+      return 'hace un tiempo';
+    }
+  };
+  
+  // Función para renderizar un elemento de actividad
+  const renderActivityItem = (activity, index) => {
+    let activityText = '';
+    
+    if (activity.type === 'task') {
+      if (activity.action === 'completed') {
+        activityText = `${activity.username} completó la tarea "${activity.title}"`;
+      } else {
+        activityText = `${activity.username} creó la tarea "${activity.title}"`;
+      }
+    } else if (activity.type === 'location') {
+      if (activity.action === 'started_working') {
+        activityText = `${activity.username} comenzó a trabajar`;
+      } else {
+        activityText = `${activity.username} finalizó su trabajo`;
+      }
+    }
+    
+    return (
+      <View key={`${activity.id}-${index}`} style={styles.activityItem}>
+        <View style={styles.activityDot} />
+        <View style={styles.activityContent}>
+          <Text style={styles.activityText}>{activityText}</Text>
+          <Text style={styles.activityTime}>
+            {formatRelativeTime(activity.timestamp)}
+          </Text>
+        </View>
+      </View>
+    );
   };
 
   return (
@@ -105,18 +167,33 @@ const AdminDashboardScreen = ({ navigation }) => {
         ) : (
           <View style={styles.statsGrid}>
             <View style={styles.statCard}>
-              <Text style={styles.statValue}>{stats.totalUsers}</Text>
+              <Text style={styles.statValue}>{stats.users.total}</Text>
               <Text style={styles.statLabel}>Usuarios Totales</Text>
             </View>
             
             <View style={styles.statCard}>
-              <Text style={styles.statValue}>{stats.activeUsers}</Text>
+              <Text style={styles.statValue}>{stats.users.active}</Text>
               <Text style={styles.statLabel}>Usuarios Activos</Text>
             </View>
             
             <View style={styles.statCard}>
-              <Text style={styles.statValue}>{stats.totalTasks}</Text>
+              <Text style={styles.statValue}>{stats.tasks.total}</Text>
               <Text style={styles.statLabel}>Tareas Totales</Text>
+            </View>
+            
+            <View style={styles.statCard}>
+              <Text style={styles.statValue}>{stats.tasks.completed}</Text>
+              <Text style={styles.statLabel}>Tareas Completadas</Text>
+            </View>
+            
+            <View style={styles.statCard}>
+              <Text style={styles.statValue}>{stats.tasks.pending}</Text>
+              <Text style={styles.statLabel}>Tareas Pendientes</Text>
+            </View>
+            
+            <View style={styles.statCard}>
+              <Text style={styles.statValue}>{stats.tasks.completionRate}%</Text>
+              <Text style={styles.statLabel}>Tasa de Completado</Text>
             </View>
           </View>
         )}
@@ -156,32 +233,12 @@ const AdminDashboardScreen = ({ navigation }) => {
         
         {loading ? (
           <ActivityIndicator size="small" color="#4A90E2" />
-        ) : (
+        ) : recentActivity.length > 0 ? (
           <View style={styles.activityList}>
-            <View style={styles.activityItem}>
-              <View style={styles.activityDot} />
-              <View style={styles.activityContent}>
-                <Text style={styles.activityText}>Juan inició sesión hace 10 minutos</Text>
-                <Text style={styles.activityTime}>10:30 AM</Text>
-              </View>
-            </View>
-            
-            <View style={styles.activityItem}>
-              <View style={styles.activityDot} />
-              <View style={styles.activityContent}>
-                <Text style={styles.activityText}>María comenzó a trabajar hace 30 minutos</Text>
-                <Text style={styles.activityTime}>10:10 AM</Text>
-              </View>
-            </View>
-            
-            <View style={styles.activityItem}>
-              <View style={styles.activityDot} />
-              <View style={styles.activityContent}>
-                <Text style={styles.activityText}>Pedro finalizó su trabajo hace 1 hora</Text>
-                <Text style={styles.activityTime}>9:45 AM</Text>
-              </View>
-            </View>
+            {recentActivity.map((activity, index) => renderActivityItem(activity, index))}
           </View>
+        ) : (
+          <Text style={styles.emptyText}>No hay actividad reciente para mostrar</Text>
         )}
       </View>
     </ScrollView>
@@ -199,6 +256,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 15,
     backgroundColor: '#4A90E2',
+    borderBottomWidth: 1,
+    borderBottomColor: '#3A80D2',
   },
   welcomeText: {
     fontSize: 20,
@@ -207,8 +266,8 @@ const styles = StyleSheet.create({
   },
   subHeaderText: {
     fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.8)',
-    marginTop: 5,
+    color: '#fff',
+    opacity: 0.8,
   },
   logoutButton: {
     padding: 8,
@@ -217,34 +276,28 @@ const styles = StyleSheet.create({
   },
   logoutButtonText: {
     color: '#fff',
-    fontSize: 14,
+    fontWeight: 'bold',
   },
   errorText: {
     color: '#e74c3c',
-    padding: 15,
+    padding: 10,
     textAlign: 'center',
-    backgroundColor: 'rgba(231, 76, 60, 0.1)',
+    backgroundColor: '#fce8e6',
+    margin: 10,
+    borderRadius: 5,
+  },
+  statsContainer: {
+    margin: 15,
   },
   sectionTitle: {
     fontSize: 18,
     fontWeight: 'bold',
     color: '#333',
-    marginBottom: 15,
-  },
-  statsContainer: {
-    padding: 15,
-    backgroundColor: '#fff',
-    margin: 15,
-    borderRadius: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    marginBottom: 10,
   },
   loadingContainer: {
-    padding: 20,
     alignItems: 'center',
+    padding: 20,
   },
   loadingText: {
     marginTop: 10,
@@ -252,72 +305,74 @@ const styles = StyleSheet.create({
   },
   statsGrid: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
   },
   statCard: {
-    flex: 1,
-    backgroundColor: '#f8f8f8',
-    padding: 15,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginHorizontal: 5,
-  },
-  statValue: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#4A90E2',
-  },
-  statLabel: {
-    fontSize: 12,
-    color: '#666',
-    marginTop: 5,
-    textAlign: 'center',
-  },
-  actionsContainer: {
-    padding: 15,
+    width: '48%',
     backgroundColor: '#fff',
-    margin: 15,
-    marginTop: 0,
     borderRadius: 8,
+    padding: 15,
+    marginBottom: 15,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+  },
+  statValue: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#4A90E2',
+    marginBottom: 5,
+  },
+  statLabel: {
+    fontSize: 14,
+    color: '#666',
+  },
+  actionsContainer: {
+    margin: 15,
   },
   actionButtonsContainer: {
     flexDirection: 'column',
   },
   actionButton: {
     backgroundColor: '#4A90E2',
-    padding: 15,
     borderRadius: 8,
+    padding: 15,
     marginBottom: 10,
-  },
-  actionButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-    textAlign: 'center',
-  },
-  recentActivityContainer: {
-    padding: 15,
-    backgroundColor: '#fff',
-    margin: 15,
-    marginTop: 0,
-    borderRadius: 8,
+    alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
   },
+  actionButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+  recentActivityContainer: {
+    margin: 15,
+    marginBottom: 30,
+  },
   activityList: {
-    marginTop: 10,
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    padding: 15,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   activityItem: {
     flexDirection: 'row',
     marginBottom: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+    paddingBottom: 15,
   },
   activityDot: {
     width: 10,
@@ -333,11 +388,18 @@ const styles = StyleSheet.create({
   activityText: {
     fontSize: 14,
     color: '#333',
+    marginBottom: 3,
   },
   activityTime: {
     fontSize: 12,
     color: '#999',
-    marginTop: 2,
+  },
+  emptyText: {
+    textAlign: 'center',
+    color: '#666',
+    padding: 15,
+    backgroundColor: '#fff',
+    borderRadius: 8,
   },
 });
 
