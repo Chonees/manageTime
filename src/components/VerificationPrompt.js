@@ -6,7 +6,6 @@ import {
   Modal, 
   TextInput, 
   TouchableOpacity, 
-  Alert,
   Vibration,
   Dimensions,
   Platform,
@@ -30,9 +29,7 @@ const VerificationPrompt = ({ isWorking, onVerificationFailed }) => {
   const [timeRemaining, setTimeRemaining] = useState(30);
   const [currentCode, setCurrentCode] = useState('');
   const [isListening, setIsListening] = useState(false);
-  const [speechError, setSpeechError] = useState(null);
   const [recognitionStatus, setRecognitionStatus] = useState('');
-  const [debugInfo, setDebugInfo] = useState('');
   const [recordingAttempts, setRecordingAttempts] = useState(0);
   const MAX_RECORDING_ATTEMPTS = 3;
   
@@ -58,7 +55,6 @@ const VerificationPrompt = ({ isWorking, onVerificationFailed }) => {
   // Función para agregar información de depuración
   const addDebugInfo = (info) => {
     console.log(`[VerificationPrompt] ${info}`);
-    setDebugInfo(prev => `${prev}\n${info}`);
   };
 
   // Limpiar timers cuando el componente se desmonta
@@ -274,16 +270,12 @@ const VerificationPrompt = ({ isWorking, onVerificationFailed }) => {
         return;
       }
       
-      // Limpiar errores anteriores
-      setSpeechError(null);
-      
       // Verificar permisos de audio
       const { status } = await Audio.requestPermissionsAsync();
       addDebugInfo(`Estado de permisos de audio: ${status}`);
       
       if (status !== 'granted') {
         addDebugInfo('Permisos de audio denegados');
-        setSpeechError('Se requieren permisos de audio para el reconocimiento de voz');
         return;
       }
       
@@ -344,30 +336,11 @@ const VerificationPrompt = ({ isWorking, onVerificationFailed }) => {
           recordingRef.current = null;
         }
         
-        // Mostrar error al usuario
-        setSpeechError(`No se pudo iniciar el reconocimiento de voz. Por favor, ingrese el código manualmente.`);
-        
-        // Mostrar alerta con el código para facilitar la entrada manual
-        Alert.alert(
-          "Código de verificación",
-          `Por favor, ingrese manualmente: ${currentCode}`,
-          [{ text: "OK" }]
-        );
-        
         return false;
       }
       
     } catch (error) {
       addDebugInfo(`Error general al iniciar reconocimiento de voz: ${error.message}`);
-      setSpeechError(`Error al iniciar reconocimiento de voz. Por favor, ingrese el código manualmente.`);
-      
-      // Mostrar alerta con el código para facilitar la entrada manual
-      Alert.alert(
-        "Código de verificación",
-        `Por favor, ingrese manualmente: ${currentCode}`,
-        [{ text: "OK" }]
-      );
-      
       return false;
     }
   };
@@ -445,13 +418,8 @@ const VerificationPrompt = ({ isWorking, onVerificationFailed }) => {
       // Detener la grabación y obtener el URI
       const audioUri = await stopListening();
       
-      // Si no hay URI, mostrar mensaje para entrada manual
+      // Si no hay URI, continuar sin mostrar alerta
       if (!audioUri) {
-        Alert.alert(
-          "Código de verificación",
-          `No se pudo procesar el audio. Por favor, ingrese manualmente: ${currentCode}`,
-          [{ text: "OK" }]
-        );
         return;
       }
       
@@ -460,11 +428,9 @@ const VerificationPrompt = ({ isWorking, onVerificationFailed }) => {
       try {
         // Llamada a Google Speech-to-Text - Procesamiento más rápido
         let recognizedText = await recognizeWithGoogleSpeech(audioUri, currentCode);
-        addDebugInfo(`Texto original reconocido: "${recognizedText}"`);
         
         // Convertir palabras numéricas a dígitos
         recognizedText = convertirPalabrasANumeros(recognizedText);
-        addDebugInfo(`Texto convertido: "${recognizedText}"`);
         
         // Verificación rápida: si el texto contiene el código actual
         if (recognizedText.includes(currentCode)) {
@@ -492,42 +458,19 @@ const VerificationPrompt = ({ isWorking, onVerificationFailed }) => {
             const digitosIndividuales = recognizedText.match(/\d/g);
             if (digitosIndividuales && digitosIndividuales.length >= 4) {
               const codigoUnido = digitosIndividuales.slice(0, 4).join('');
-              addDebugInfo(`Uniendo dígitos individuales: ${codigoUnido}`);
               verifyCode(codigoUnido);
               return;
             }
-            
-            Alert.alert(
-              "Código no reconocido",
-              `No se pudo reconocer el código. Por favor, ingrese manualmente: ${currentCode}`,
-              [{ text: "OK" }]
-            );
           }
-        } else {
-          Alert.alert(
-            "Código no reconocido",
-            `No se pudo reconocer el código. Por favor, ingrese manualmente: ${currentCode}`,
-            [{ text: "OK" }]
-          );
         }
       } catch (error) {
-        addDebugInfo(`Error de reconocimiento: ${error.message}`);
-        Alert.alert(
-          "Error de reconocimiento",
-          `No se pudo reconocer el audio. Por favor, ingrese manualmente: ${currentCode}`,
-          [{ text: "OK" }]
-        );
+        // Simplemente continuar sin mostrar error
       } finally {
         setRecognitionStatus('');
       }
       
     } catch (error) {
       setRecognitionStatus('');
-      Alert.alert(
-        "Error de procesamiento",
-        `Ocurrió un error al procesar el audio. Por favor, ingrese manualmente: ${currentCode}`,
-        [{ text: "OK" }]
-      );
     }
   };
 
@@ -622,7 +565,7 @@ const VerificationPrompt = ({ isWorking, onVerificationFailed }) => {
     if (codeToVerify === currentCode) {
       // Código correcto
       setModalVisible(false);
-      setTimeRemaining(30);
+      setTimeRemaining(60);
       
       // Detener todos los procesos
       cleanupResources();
@@ -634,9 +577,7 @@ const VerificationPrompt = ({ isWorking, onVerificationFailed }) => {
       
     } else {
       // Código incorrecto
-      Alert.alert('Código incorrecto', 'Por favor, intenta nuevamente.');
       setVerificationCode('');
-      setSpeechError(null);
       setRecognitionStatus('');
       
       // Vibrar para indicar error
@@ -672,53 +613,76 @@ const VerificationPrompt = ({ isWorking, onVerificationFailed }) => {
     }
   };
 
-  // Función para leer el código en voz alta
+  // Función para leer el código en voz alta usando Google Cloud Text-to-Speech
   const speakCode = async (code) => {
     try {
-      // Reiniciar el sistema de audio completamente antes de hablar
-      addDebugInfo('Reiniciando sistema de audio antes de hablar');
-      await ensureNoActiveRecordings();
+      // Formatear el código para que se lea dígito por dígito con pausas
+      const formattedCode = code.split('').join(', ');
+      const textToSpeak = `Código de verificación: ${formattedCode}`;
       
-      // Verificar si ya está hablando
-      const isSpeaking = await Speech.isSpeakingAsync();
-      if (isSpeaking) {
-        addDebugInfo('Ya hay una síntesis de voz en curso, deteniéndola...');
-        await Speech.stop();
-        
-        // Pequeña pausa para asegurar que se detenga completamente
-        await new Promise(resolve => setTimeout(resolve, 300));
+      console.log('Llamando a Google Cloud Text-to-Speech API');
+      
+      // Llamar a la API de Google Cloud Text-to-Speech
+      const response = await fetch('https://texttospeech.googleapis.com/v1/text:synthesize?key=AIzaSyDGqyJR4KZRJt9qRLmeGjdlgIBt_nb7Kqw', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          input: {
+            text: textToSpeak,
+          },
+          voice: {
+            languageCode: 'es-ES',
+            name: 'es-ES-Standard-A',
+            ssmlGender: 'FEMALE'
+          },
+          audioConfig: {
+            audioEncoding: 'MP3',
+            speakingRate: 0.85,
+            pitch: 0,
+            volumeGainDb: 3.0
+          }
+        }),
+      });
+      
+      // Procesar la respuesta
+      const data = await response.json();
+      
+      if (!data.audioContent) {
+        throw new Error('No se recibió contenido de audio de la API');
       }
       
-      // Formatear el código para que se lea dígito por dígito
-      const formattedCode = code.split('').join(' ');
-      addDebugInfo(`Iniciando lectura del código: ${code}`);
-      
-      // Leer el código en voz alta
-      await Speech.speak(`Por favor, diga el código ${formattedCode}`, {
-        language: 'es-ES',
-        pitch: 1.0,
-        rate: 1.0, // Velocidad normal para mayor rapidez
-        onStart: () => {
-          addDebugInfo('Comenzó la lectura del código');
-        },
-        onDone: () => {
-          addDebugInfo('Terminó la lectura del código');
-          
-          // Iniciar inmediatamente el reconocimiento de voz sin esperar
-          if (!isListening) {
-            startListening();
-          }
-        },
-        onError: (error) => {
-          addDebugInfo(`Error al leer código: ${error}`);
-          setSpeechError(`Error al leer código: ${error}`);
-        }
+      // Guardar el audio en un archivo temporal
+      const audioPath = `${FileSystem.cacheDirectory}speech_${Date.now()}.mp3`;
+      await FileSystem.writeAsStringAsync(audioPath, data.audioContent, {
+        encoding: FileSystem.EncodingType.Base64,
       });
+      
+      // Reproducir el audio
+      const { sound } = await Audio.Sound.createAsync(
+        { uri: audioPath },
+        { shouldPlay: true, volume: 1.0 }
+      );
+      
+      // Esperar a que termine la reproducción
+      await new Promise((resolve) => {
+        sound.setOnPlaybackStatusUpdate((status) => {
+          if (status.didJustFinish) {
+            resolve();
+          }
+        });
+      });
+      
+      // Liberar recursos
+      await sound.unloadAsync();
+      
+      // Iniciar reconocimiento de voz inmediatamente después de reproducir el audio
+      startListening();
       
       return true;
     } catch (error) {
-      addDebugInfo(`Error al iniciar síntesis de voz: ${error.message}`);
-      setSpeechError(`Error al iniciar síntesis de voz: ${error.message}`);
+      console.log(`Error al usar Text-to-Speech: ${error.message}`);
       return false;
     }
   };
@@ -735,9 +699,7 @@ const VerificationPrompt = ({ isWorking, onVerificationFailed }) => {
     stopVibration();
     
     // Limpiar estados anteriores
-    setSpeechError(null);
     setRecognitionStatus('');
-    setDebugInfo('');
     
     // Generar un nuevo código aleatorio
     const newCode = generateRandomCode();
@@ -753,13 +715,10 @@ const VerificationPrompt = ({ isWorking, onVerificationFailed }) => {
     startConstantVibration();
     
     // Reiniciar el sistema de audio completamente antes de iniciar
-    ensureNoActiveRecordings().then(() => {
-      // Leer el código en voz alta inmediatamente
-      speakCode(newCode);
-    });
+    ensureNoActiveRecordings();
     
     // Iniciar el temporizador de cuenta regresiva
-    setTimeRemaining(30);
+    setTimeRemaining(60);
     if (countdownTimerRef.current) {
       clearInterval(countdownTimerRef.current);
     }
@@ -792,21 +751,32 @@ const VerificationPrompt = ({ isWorking, onVerificationFailed }) => {
     }, 1000);
   };
 
+  // Efecto para leer el código en voz alta cuando se muestra el modal
+  useEffect(() => {
+    if (modalVisible && currentCode) {
+      // Pequeño retraso para asegurar que el modal esté completamente visible
+      setTimeout(() => {
+        speakCode(currentCode);
+      }, 500);
+    }
+  }, [modalVisible, currentCode]);
+
   // Renderizar el componente
   return (
     <Modal
-      animationType="slide"
+      animationType="fade"
       transparent={true}
       visible={modalVisible}
       onRequestClose={() => {
-        // No permitir cerrar con el botón de atrás
+        // No permitir cerrar el modal con el botón de atrás
       }}
     >
       <View style={styles.centeredView}>
         <View style={styles.modalView}>
           <Text style={styles.modalTitle}>Verificación de Presencia</Text>
+          
           <Text style={styles.modalText}>
-            Por favor, repita el código de verificación para confirmar que sigue trabajando.
+            Por favor, verifique su presencia ingresando el siguiente código:
           </Text>
           
           <View style={styles.codeContainer}>
@@ -823,7 +793,9 @@ const VerificationPrompt = ({ isWorking, onVerificationFailed }) => {
           {isListening ? (
             <View style={styles.listeningContainer}>
               <ActivityIndicator size="large" color="#4A90E2" />
-              <Text style={styles.listeningText}>{recognitionStatus}</Text>
+              <Text style={styles.listeningText}>
+                {recognitionStatus || "Escuchando..."}
+              </Text>
             </View>
           ) : (
             <TextInput
@@ -849,24 +821,6 @@ const VerificationPrompt = ({ isWorking, onVerificationFailed }) => {
               >
                 <Text style={styles.verifyButtonText}>Verificar</Text>
               </TouchableOpacity>
-              
-              <TouchableOpacity
-                style={styles.voiceButton}
-                onPress={startListening}
-              >
-                <Ionicons name="mic" size={24} color="#fff" />
-              </TouchableOpacity>
-            </View>
-          )}
-          
-          {speechError && (
-            <Text style={styles.errorText}>{speechError}</Text>
-          )}
-          
-          {__DEV__ && (
-            <View style={styles.debugContainer}>
-              <Text style={styles.debugTitle}>Información de depuración:</Text>
-              <Text style={styles.debugText}>{debugInfo}</Text>
             </View>
           )}
         </View>
@@ -931,10 +885,6 @@ const styles = StyleSheet.create({
     letterSpacing: 2,
     color: '#4A90E2',
   },
-  speakButton: {
-    marginLeft: 10,
-    padding: 5,
-  },
   input: {
     width: '100%',
     height: 50,
@@ -954,28 +904,20 @@ const styles = StyleSheet.create({
   buttonContainer: {
     flexDirection: 'row',
     width: '100%',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     alignItems: 'center',
   },
   verifyButton: {
     backgroundColor: '#4A90E2',
     borderRadius: 10,
     padding: 15,
-    flex: 0.7,
+    width: '100%',
     alignItems: 'center',
   },
   verifyButtonText: {
     color: 'white',
     fontWeight: 'bold',
     fontSize: 16,
-  },
-  voiceButton: {
-    backgroundColor: '#2ecc71',
-    borderRadius: 10,
-    padding: 15,
-    flex: 0.12,
-    alignItems: 'center',
-    marginLeft: 10,
   },
   listeningContainer: {
     width: '100%',
@@ -990,27 +932,10 @@ const styles = StyleSheet.create({
     color: '#4A90E2',
     fontWeight: 'bold',
   },
-  errorText: {
-    color: '#e74c3c',
-    marginTop: 10,
-    textAlign: 'center',
+  speakButton: {
+    marginLeft: 10,
+    padding: 5,
   },
-  debugContainer: {
-    marginTop: 15,
-    padding: 10,
-    backgroundColor: '#f9f9f9',
-    borderRadius: 5,
-    width: '100%',
-    maxHeight: 150,
-  },
-  debugTitle: {
-    fontWeight: 'bold',
-    marginBottom: 5,
-  },
-  debugText: {
-    fontSize: 10,
-    color: '#666',
-  }
 });
 
 export default VerificationPrompt;
