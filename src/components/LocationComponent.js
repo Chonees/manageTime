@@ -5,6 +5,7 @@ import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import { useAuth } from '../context/AuthContext';
 import * as api from '../services/api';
 import { mapConfig } from '../services/platform-config';
+import VerificationPrompt from './VerificationPrompt';
 
 const LocationComponent = ({ onLocationChange, showWorkControls = false }) => {
   const { user } = useAuth();
@@ -319,6 +320,19 @@ const LocationComponent = ({ onLocationChange, showWorkControls = false }) => {
     );
   };
 
+  // Manejar fallo de verificación
+  const handleVerificationFailed = () => {
+    Alert.alert(
+      'Verificación fallida',
+      'No has respondido a tiempo. Tu sesión de trabajo se finalizará automáticamente.',
+      [{ text: 'OK' }],
+      { cancelable: false }
+    );
+    
+    // Finalizar trabajo automáticamente
+    handleEndWork();
+  };
+
   // Render different content based on state
   let content;
   
@@ -492,6 +506,12 @@ const LocationComponent = ({ onLocationChange, showWorkControls = false }) => {
           </TouchableOpacity>
         )}
       </View>
+      
+      {/* Componente de verificación periódica */}
+      <VerificationPrompt 
+        isWorking={isWorking} 
+        onVerificationFailed={handleVerificationFailed} 
+      />
     </View>
   );
 };

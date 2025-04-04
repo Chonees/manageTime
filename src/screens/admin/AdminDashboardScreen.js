@@ -104,25 +104,43 @@ const AdminDashboardScreen = ({ navigation }) => {
   
   // Función para renderizar un elemento de actividad
   const renderActivityItem = (activity, index) => {
+    console.log("Renderizando actividad:", activity); // Depuración
+    
     let activityText = '';
+    let activityColor = '#4A90E2'; // Color predeterminado
     
     if (activity.type === 'task') {
       if (activity.action === 'completed') {
         activityText = `${activity.username} completó la tarea "${activity.title}"`;
+        activityColor = '#2ecc71'; // Verde para tareas completadas
       } else {
         activityText = `${activity.username} creó la tarea "${activity.title}"`;
+        activityColor = '#3498db'; // Azul para tareas creadas
       }
     } else if (activity.type === 'location') {
       if (activity.action === 'started_working') {
         activityText = `${activity.username} comenzó a trabajar`;
-      } else {
+        activityColor = '#2ecc71'; // Verde para inicio de trabajo
+      } else if (activity.action === 'stopped_working') {
         activityText = `${activity.username} finalizó su trabajo`;
+        activityColor = '#e74c3c'; // Rojo para fin de trabajo
+      } else if (activity.action === 'tracking') {
+        activityText = `${activity.username} actualizó su ubicación`;
+        activityColor = '#f39c12'; // Naranja para actualizaciones
       }
     }
     
+    // Si no hay texto de actividad (por ejemplo, si el tipo no coincide), mostrar información genérica
+    if (!activityText && activity.username) {
+      activityText = `Actividad de ${activity.username}: ${activity.action || 'acción desconocida'}`;
+    } else if (!activityText) {
+      activityText = 'Actividad desconocida';
+      console.warn("Actividad sin información:", activity);
+    }
+    
     return (
-      <View key={`${activity.id}-${index}`} style={styles.activityItem}>
-        <View style={styles.activityDot} />
+      <View key={`${activity.id || index}-${index}`} style={styles.activityItem}>
+        <View style={[styles.activityDot, { backgroundColor: activityColor }]} />
         <View style={styles.activityContent}>
           <Text style={styles.activityText}>{activityText}</Text>
           <Text style={styles.activityTime}>
