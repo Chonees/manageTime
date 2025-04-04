@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   View, 
   Text, 
@@ -10,7 +10,9 @@ import {
   ScrollView,
   RefreshControl,
   Modal,
-  Button
+  Button,
+  Platform,
+  TextInput
 } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import * as api from '../services/api';
@@ -30,15 +32,32 @@ const LocationHistoryScreen = () => {
   const [viewMode, setViewMode] = useState('map'); // 'map' o 'list'
   const [dateFilter, setDateFilter] = useState(null);
   const [filteredLocations, setFilteredLocations] = useState([]);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  
+  // Estado para el selector de fecha personalizado
+  const [selectedDay, setSelectedDay] = useState('');
+  const [selectedMonth, setSelectedMonth] = useState('');
+  const [selectedYear, setSelectedYear] = useState('');
+  
+  // Referencia para el intervalo de actualización automática
+  const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(user?.isAdmin || false);
 
   // Cargar historial de ubicaciones
-  const loadLocationHistory = async (userId = null) => {
+  const loadLocationHistory = useCallback(async (userId = null) => {
     setLoading(true);
     setError(null);
 
     try {
       const history = await api.getLocationHistory(userId);
+      console.log(`Cargadas ${history.length} ubicaciones`);
       setLocationHistory(history);
+      
+      // Si hay un filtro de fecha activo, aplicarlo inmediatamente
+      if (dateFilter) {
+        applyDateFilter(history, dateFilter);
+      } else {
+        setFilteredLocations(history);
+      }
     } catch (error) {
       console.error('Error al cargar el historial de ubicaciones:', error);
       setError(error.message || 'Error al cargar el historial de ubicaciones');
@@ -46,10 +65,10 @@ const LocationHistoryScreen = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [dateFilter]);
 
   // Cargar lista de usuarios (solo para administradores)
-  const loadUsers = async () => {
+  const loadUsers = useCallback(async () => {
     if (!user?.isAdmin) return;
     
     try {
@@ -58,7 +77,27 @@ const LocationHistoryScreen = () => {
     } catch (error) {
       console.error('Error al cargar usuarios:', error);
     }
-  };
+  }, [user]);
+
+  // Configurar actualización automática para administradores
+  useEffect(() => {
+    let intervalId = null;
+    
+    if (user?.isAdmin && autoRefreshEnabled) {
+      // Actualizar cada 30 segundos para administradores
+      intervalId = setInterval(() => {
+        console.log('Actualizando automáticamente datos para administrador...');
+        loadLocationHistory(selectedUserId);
+        loadUsers();
+      }, 30000); // 30 segundos
+    }
+    
+    return () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+    };
+  }, [user, autoRefreshEnabled, selectedUserId, loadLocationHistory, loadUsers]);
 
   // Cargar datos al montar el componente
   useEffect(() => {
@@ -66,7 +105,13 @@ const LocationHistoryScreen = () => {
     if (user?.isAdmin) {
       loadUsers();
     }
-  }, [user]);
+    
+    // Inicializar los valores del selector de fecha con la fecha actual
+    const today = new Date();
+    setSelectedDay(today.getDate().toString());
+    setSelectedMonth((today.getMonth() + 1).toString());
+    setSelectedYear(today.getFullYear().toString());
+  }, [user, loadLocationHistory, loadUsers]);
 
   // Función para manejar la actualización de ubicación actual
   const handleLocationChange = (location) => {
@@ -105,6 +150,77 @@ const LocationHistoryScreen = () => {
     return new Date(dateString).toLocaleDateString(undefined, options);
   };
 
+  // Función para formatear la fecha en formato corto (solo día/mes/año)
+  const formatShortDate = (date) => {
+    if (!date) return '';
+    const day = date.getDate().toString().padStart(2, '0');
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const year = date.getFullYear();
+    return `${day}/${month}/${year}`;
+  };
+
+  // Función para aplicar filtro de fecha
+  const applyDateFilter = (locations, date) => {
+    if (!date) {
+      setFilteredLocations(locations);
+      return;
+    }
+
+    // Crear fecha de inicio y fin del día seleccionado
+    const startDate = new Date(date);
+    startDate.setHours(0, 0, 0, 0);
+    
+    const endDate = new Date(date);
+    endDate.setHours(23, 59, 59, 999);
+
+    console.log(`Filtrando por fecha: ${startDate.toISOString()} hasta ${endDate.toISOString()}`);
+    
+    // Filtrar ubicaciones que estén dentro del rango de fecha
+    const filtered = locations.filter(location => {
+      if (!location.timestamp) return false;
+      
+      const locationDate = new Date(location.timestamp);
+      return locationDate >= startDate && locationDate <= endDate;
+    });
+    
+    console.log(`Ubicaciones filtradas: ${filtered.length} de ${locations.length}`);
+    setFilteredLocations(filtered);
+  };
+
+  // Aplicar la fecha seleccionada en el selector personalizado
+  const applyCustomDateFilter = () => {
+    // Validar que los valores ingresados sean números válidos
+    const day = parseInt(selectedDay, 10);
+    const month = parseInt(selectedMonth, 10) - 1; // Los meses en JS son 0-11
+    const year = parseInt(selectedYear, 10);
+    
+    if (isNaN(day) || isNaN(month) || isNaN(year) || 
+        day < 1 || day > 31 || month < 0 || month > 11 || year < 2000 || year > 2100) {
+      Alert.alert('Error', 'Por favor ingresa una fecha válida');
+      return;
+    }
+    
+    // Crear objeto Date con los valores seleccionados
+    const selectedDate = new Date(year, month, day);
+    
+    // Verificar que la fecha sea válida
+    if (selectedDate.getDate() !== day) {
+      Alert.alert('Error', 'La fecha ingresada no es válida');
+      return;
+    }
+    
+    console.log(`Fecha seleccionada: ${selectedDate.toISOString()}`);
+    setDateFilter(selectedDate);
+    applyDateFilter(locationHistory, selectedDate);
+    setShowDatePicker(false);
+  };
+
+  // Limpiar filtro de fecha
+  const clearDateFilter = () => {
+    setDateFilter(null);
+    setFilteredLocations(locationHistory);
+  };
+
   // Renderizar selector de usuarios (solo para administradores)
   const renderUserSelector = () => {
     if (!user?.isAdmin) return null;
@@ -130,8 +246,6 @@ const LocationHistoryScreen = () => {
                   setSelectedUserId(item._id);
                   setSelectedUserName(item.username);
                   loadLocationHistory(item._id);
-                  setFilteredLocations([]);
-                  setDateFilter(null);
                 }}
               >
                 <Text 
@@ -140,187 +254,283 @@ const LocationHistoryScreen = () => {
                     selectedUserId === item._id && styles.selectedUserItemText
                   ]}
                 >
-                  {item.username || 'Usuario sin nombre'}
+                  {item.username}
                 </Text>
               </TouchableOpacity>
             );
           }}
         />
-        
-        <TouchableOpacity
-          style={[
-            styles.userItem,
-            !selectedUserId && styles.selectedUserItem,
-            { marginTop: 10 }
-          ]}
-          onPress={() => {
-            setSelectedUserId(null);
-            setSelectedUserName(null);
-            loadLocationHistory();
-            setFilteredLocations([]);
-            setDateFilter(null);
-          }}
-        >
-          <Text 
-            style={[
-              styles.userItemText,
-              !selectedUserId && styles.selectedUserItemText
-            ]}
-          >
-            Mi historial
-          </Text>
-        </TouchableOpacity>
-
-        {selectedUserId && (
-          <View style={styles.actionButtonsContainer}>
-            <TouchableOpacity
-              style={styles.actionButton}
-              onPress={() => {
-                // Buscar todas las ubicaciones del usuario seleccionado
-                setFilteredLocations([]);
-                setDateFilter(null);
-                Alert.alert('Información', `Mostrando todo el recorrido de ${selectedUserName || 'usuario seleccionado'}`);
-              }}
-            >
-              <Text style={styles.actionButtonText}>Ver todo el recorrido</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity
-              style={styles.actionButton}
-              onPress={() => {
-                const date = new Date();
-                const year = date.getFullYear();
-                const month = date.getMonth() + 1;
-                const day = date.getDate();
-                const filterDate = `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
-                setDateFilter(filterDate);
-
-                const filtered = locationHistory.filter((location) => {
-                  const locationDate = new Date(location.timestamp);
-                  const filterDateObject = new Date(filterDate);
-                  return locationDate.toDateString() === filterDateObject.toDateString();
-                });
-                setFilteredLocations(filtered);
-                
-                if (filtered.length > 0) {
-                  const formattedDate = filterDate;
-                  const message = selectedUserName 
-                    ? `Mostrando el recorrido de ${selectedUserName} el día ${formattedDate}`
-                    : `Mostrando tu recorrido el día ${formattedDate}`;
-                  Alert.alert('Información', message);
-                } else {
-                  const formattedDate = filterDate;
-                  const message = selectedUserName 
-                    ? `No hay registros de ${selectedUserName} para el día ${formattedDate}`
-                    : `No hay registros para el día ${formattedDate}`;
-                  Alert.alert('Sin datos', message);
-                }
-              }}
-            >
-              <Text style={styles.actionButtonText}>Filtrar por fecha</Text>
-            </TouchableOpacity>
-          </View>
-        )}
       </View>
     );
   };
+
+  // Renderizar selector de fecha personalizado
+  const renderCustomDatePicker = () => {
+    return (
+      <Modal
+        transparent={true}
+        animationType="slide"
+        visible={showDatePicker}
+        onRequestClose={() => setShowDatePicker(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Seleccionar fecha</Text>
+            
+            <View style={styles.dateInputContainer}>
+              <View style={styles.dateInputGroup}>
+                <Text style={styles.dateInputLabel}>Día</Text>
+                <TextInput
+                  style={styles.dateInput}
+                  value={selectedDay}
+                  onChangeText={setSelectedDay}
+                  keyboardType="number-pad"
+                  maxLength={2}
+                  placeholder="DD"
+                />
+              </View>
+              
+              <View style={styles.dateInputGroup}>
+                <Text style={styles.dateInputLabel}>Mes</Text>
+                <TextInput
+                  style={styles.dateInput}
+                  value={selectedMonth}
+                  onChangeText={setSelectedMonth}
+                  keyboardType="number-pad"
+                  maxLength={2}
+                  placeholder="MM"
+                />
+              </View>
+              
+              <View style={styles.dateInputGroup}>
+                <Text style={styles.dateInputLabel}>Año</Text>
+                <TextInput
+                  style={styles.dateInput}
+                  value={selectedYear}
+                  onChangeText={setSelectedYear}
+                  keyboardType="number-pad"
+                  maxLength={4}
+                  placeholder="YYYY"
+                />
+              </View>
+            </View>
+            
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={() => setShowDatePicker(false)}
+              >
+                <Text style={styles.modalButtonText}>Cancelar</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[styles.modalButton, styles.confirmButton]}
+                onPress={applyCustomDateFilter}
+              >
+                <Text style={styles.modalButtonText}>Aplicar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    );
+  };
+
+  // Renderizar filtro de fecha
+  const renderDateFilter = () => {
+    return (
+      <View style={styles.dateFilterContainer}>
+        <TouchableOpacity 
+          style={styles.filterButton}
+          onPress={() => setShowDatePicker(true)}
+        >
+          <Text style={styles.filterButtonText}>Filtrar por fecha</Text>
+        </TouchableOpacity>
+        
+        {dateFilter && (
+          <>
+            <View style={styles.activeDateFilter}>
+              <Text style={styles.dateFilterText}>
+                Fecha: {formatShortDate(dateFilter)}
+              </Text>
+            </View>
+            
+            <TouchableOpacity 
+              style={styles.clearFilterButton}
+              onPress={clearDateFilter}
+            >
+              <Text style={styles.filterButtonText}>Limpiar filtro</Text>
+            </TouchableOpacity>
+          </>
+        )}
+        
+        {renderCustomDatePicker()}
+      </View>
+    );
+  };
+
+  // Determinar qué ubicaciones mostrar (filtradas o todas)
+  const locationsToDisplay = dateFilter ? filteredLocations : locationHistory;
 
   return (
     <ScrollView 
       style={styles.container}
       refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+        />
       }
-      contentContainerStyle={styles.scrollContent}
     >
-      {/* Selector de usuario (solo para administradores) */}
       {renderUserSelector()}
+      {renderDateFilter()}
       
-      {/* Mapa */}
       <View style={styles.mapContainer}>
-        <View style={styles.mapHeader}>
-          <Text style={styles.mapTitle}>Mapa de Ubicaciones</Text>
-          <TouchableOpacity 
-            style={styles.refreshButton} 
-            onPress={onRefresh}
-            disabled={loading}
-          >
-            <Ionicons name="refresh" size={20} color="#fff" />
-          </TouchableOpacity>
+        <View style={[
+          styles.mapHeader,
+          user?.isAdmin ? styles.mapHeaderAdmin : styles.mapHeaderUser
+        ]}>
+          <Text style={styles.mapTitle}>
+            Mapa de {selectedUserName ? selectedUserName : 'ubicaciones'}
+          </Text>
+          {user?.isAdmin && (
+            <View style={styles.adminControls}>
+              <TouchableOpacity 
+                style={styles.refreshButton}
+                onPress={onRefresh}
+              >
+                <Ionicons name="refresh" size={24} color="#fff" />
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={[
+                  styles.autoRefreshButton, 
+                  autoRefreshEnabled ? styles.autoRefreshEnabled : styles.autoRefreshDisabled
+                ]}
+                onPress={() => setAutoRefreshEnabled(!autoRefreshEnabled)}
+              >
+                <Ionicons 
+                  name={autoRefreshEnabled ? "sync-circle" : "sync-circle-outline"} 
+                  size={24} 
+                  color="#fff" 
+                />
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
         
         {loading ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color="#4A90E2" />
-            <Text style={styles.loadingText}>Cargando historial...</Text>
+            <Text style={styles.loadingText}>Cargando ubicaciones...</Text>
           </View>
-        ) : (
+        ) : locationsToDisplay.length > 0 ? (
           <MapComponent 
-            locations={filteredLocations.length > 0 ? filteredLocations : locationHistory}
+            locations={locationsToDisplay}
             currentLocation={currentLocation}
             isLoading={loading}
             selectedUserName={selectedUserName}
           />
+        ) : (
+          <View style={styles.emptyMapContainer}>
+            <Ionicons name="location-outline" size={48} color="#ccc" />
+            <Text style={styles.emptyText}>No hay ubicaciones</Text>
+            {dateFilter && (
+              <Text style={styles.emptySubtext}>
+                No se encontraron registros para la fecha seleccionada
+              </Text>
+            )}
+          </View>
         )}
       </View>
       
-      {/* Lista de ubicaciones */}
-      <View style={styles.listContainer}>
-        <View style={styles.listHeader}>
-          <Text style={styles.listTitle}>Registros de Ubicación</Text>
-        </View>
+      <View style={styles.actionButtonsContainer}>
+        <TouchableOpacity 
+          style={[
+            styles.actionButton,
+            viewMode === 'map' && styles.activeActionButton
+          ]}
+          onPress={() => setViewMode('map')}
+        >
+          <Text style={styles.actionButtonText}>Ver Mapa</Text>
+        </TouchableOpacity>
         
-        {loading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="small" color="#4A90E2" />
-            <Text style={styles.loadingText}>Cargando registros...</Text>
-          </View>
-        ) : (
-          <View style={styles.locationListContainer}>
-            {(filteredLocations.length > 0 ? filteredLocations : locationHistory).length > 0 ? (
-              (filteredLocations.length > 0 ? filteredLocations : locationHistory)
-                .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
-                .slice(0, 10) // Limitamos a 10 registros para evitar problemas de rendimiento
-                .map((item, index) => (
-                  <View key={item._id || index} style={styles.locationItem}>
-                    <View 
-                      style={[
-                        styles.locationTypeIndicator, 
-                        { backgroundColor: item.type === 'start' ? '#4CAF50' : '#F44336' }
-                      ]} 
-                    />
-                    <View style={styles.locationInfo}>
-                      <Text style={styles.locationType}>
-                        {item.type === 'start' ? 'Inicio de trabajo' : 'Fin de trabajo'}
-                      </Text>
-                      <Text style={styles.locationDate}>{formatDate(item.timestamp)}</Text>
-                      <Text style={styles.locationCoords}>
-                        Lat: {item.latitude.toFixed(6)}, Lon: {item.longitude.toFixed(6)}
-                      </Text>
-                    </View>
-                  </View>
-                ))
-            ) : (
-              <View style={styles.emptyContainer}>
-                <Ionicons name="location-outline" size={48} color="#ccc" />
-                <Text style={styles.emptyText}>No hay registros</Text>
-                <Text style={styles.emptySubtext}>
-                  No se encontraron registros de ubicación para mostrar.
-                </Text>
-              </View>
-            )}
-            
-            {(filteredLocations.length > 0 ? filteredLocations : locationHistory).length > 10 && (
-              <TouchableOpacity 
-                style={styles.viewMoreButton}
-                onPress={() => Alert.alert('Información', 'Se muestran los 10 registros más recientes. Consulta el mapa para ver todos los registros.')}
-              >
-                <Text style={styles.viewMoreButtonText}>Ver más registros...</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        )}
+        <TouchableOpacity 
+          style={[
+            styles.actionButton,
+            viewMode === 'list' && styles.activeActionButton
+          ]}
+          onPress={() => setViewMode('list')}
+        >
+          <Text style={styles.actionButtonText}>Ver Lista</Text>
+        </TouchableOpacity>
       </View>
+      
+      {viewMode === 'list' && (
+        <View style={styles.listContainer}>
+          <View style={styles.listHeader}>
+            <Text style={styles.listTitle}>
+              Historial de ubicaciones
+            </Text>
+          </View>
+          
+          {loading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color="#4A90E2" />
+              <Text style={styles.loadingText}>Cargando ubicaciones...</Text>
+            </View>
+          ) : locationsToDisplay.length > 0 ? (
+            <FlatList
+              data={locationsToDisplay.slice(0, 20)}
+              keyExtractor={(item, index) => `location-${index}`}
+              renderItem={({ item }) => (
+                <View style={styles.locationItem}>
+                  <View 
+                    style={[
+                      styles.locationTypeIndicator,
+                      { 
+                        backgroundColor: 
+                          item.type === 'start' ? '#4CAF50' : 
+                          item.type === 'end' ? '#F44336' : 
+                          '#2196F3'
+                      }
+                    ]}
+                  />
+                  <View style={styles.locationInfo}>
+                    <Text style={styles.locationType}>
+                      {item.type === 'start' ? 'Inicio de trabajo' : 
+                       item.type === 'end' ? 'Fin de trabajo' : 
+                       'Seguimiento'}
+                    </Text>
+                    <Text style={styles.locationDate}>
+                      {formatDate(item.timestamp)}
+                    </Text>
+                    <Text style={styles.locationCoords}>
+                      Lat: {item.latitude.toFixed(6)}, Lon: {item.longitude.toFixed(6)}
+                    </Text>
+                  </View>
+                </View>
+              )}
+            />
+          ) : (
+            <View style={styles.emptyContainer}>
+              <Ionicons name="location-outline" size={48} color="#ccc" />
+              <Text style={styles.emptyText}>No hay ubicaciones</Text>
+              {dateFilter && (
+                <Text style={styles.emptySubtext}>
+                  No se encontraron registros para la fecha seleccionada
+                </Text>
+              )}
+            </View>
+          )}
+          
+          {locationsToDisplay.length > 20 && (
+            <TouchableOpacity style={styles.viewMoreButton}>
+              <Text style={styles.viewMoreButtonText}>Ver más registros...</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
     </ScrollView>
   );
 };
@@ -360,6 +570,49 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: 'bold',
   },
+  dateFilterContainer: {
+    backgroundColor: '#fff',
+    padding: 15,
+    marginBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#ddd',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  filterButton: {
+    backgroundColor: '#4A90E2',
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+    borderRadius: 8,
+    marginRight: 10,
+    marginBottom: 5,
+  },
+  clearFilterButton: {
+    backgroundColor: '#F44336',
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+    borderRadius: 8,
+    marginBottom: 5,
+  },
+  filterButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+  },
+  activeDateFilter: {
+    backgroundColor: '#e0e0e0',
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+    borderRadius: 8,
+    marginVertical: 10,
+    alignSelf: 'stretch',
+  },
+  dateFilterText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
   mapContainer: {
     backgroundColor: '#fff',
     borderRadius: 8,
@@ -375,8 +628,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#4A90E2',
     padding: 15,
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+  },
+  mapHeaderAdmin: {
+    justifyContent: 'space-between',
+  },
+  mapHeaderUser: {
+    justifyContent: 'center',
   },
   mapTitle: {
     color: '#fff',
@@ -390,6 +648,24 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
     justifyContent: 'center',
     alignItems: 'center',
+    marginRight: 10,
+  },
+  adminControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  autoRefreshButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  autoRefreshEnabled: {
+    backgroundColor: 'rgba(76, 175, 80, 0.6)',
+  },
+  autoRefreshDisabled: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
   },
   loadingContainer: {
     padding: 30,
@@ -490,6 +766,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     margin: 5,
   },
+  activeActionButton: {
+    backgroundColor: '#2c6cb0',
+  },
   actionButtonText: {
     color: '#fff',
     fontSize: 14,
@@ -512,6 +791,79 @@ const styles = StyleSheet.create({
   viewMoreButtonText: {
     color: '#fff',
     fontSize: 14,
+    fontWeight: 'bold',
+  },
+  modalContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  modalContent: {
+    width: '80%',
+    backgroundColor: 'white',
+    borderRadius: 10,
+    padding: 20,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 20,
+  },
+  dateInputContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
+    marginBottom: 20,
+  },
+  dateInputGroup: {
+    alignItems: 'center',
+    width: '30%',
+  },
+  dateInputLabel: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 5,
+  },
+  dateInput: {
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 5,
+    padding: 10,
+    width: '100%',
+    textAlign: 'center',
+    fontSize: 16,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
+    marginTop: 20,
+  },
+  modalButton: {
+    padding: 10,
+    borderRadius: 5,
+    width: '45%',
+    alignItems: 'center',
+  },
+  cancelButton: {
+    backgroundColor: '#ccc',
+  },
+  confirmButton: {
+    backgroundColor: '#4A90E2',
+  },
+  modalButtonText: {
+    color: '#fff',
     fontWeight: 'bold',
   },
 });

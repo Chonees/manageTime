@@ -480,15 +480,17 @@ const LocationComponent = ({ onLocationChange, showWorkControls = false }) => {
           <Text style={styles.cardTitle}>Mi Ubicación</Text>
         </View>
         {content}
-        <TouchableOpacity 
-          style={styles.refreshButton} 
-          onPress={getLocation}
-          disabled={loading}
-        >
-          <Text style={styles.refreshButtonText}>
-            {loading ? 'Actualizando...' : 'Actualizar Ubicación'}
-          </Text>
-        </TouchableOpacity>
+        {user?.isAdmin && (
+          <TouchableOpacity 
+            style={styles.refreshButton} 
+            onPress={getLocation}
+            disabled={loading}
+          >
+            <Text style={styles.refreshButtonText}>
+              {loading ? 'Actualizando...' : 'Actualizar Ubicación'}
+            </Text>
+          </TouchableOpacity>
+        )}
       </View>
     </View>
   );
