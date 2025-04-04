@@ -57,13 +57,13 @@ exports.getRecentActivity = async (req, res) => {
     // Obtener las últimas tareas creadas o completadas
     const recentTasks = await Task.find()
       .sort({ updatedAt: -1 })
-      .limit(5)
+      .limit(10)
       .populate('userId', 'username');
     
     // Obtener los últimos registros de ubicación
     const recentLocations = await Location.find()
       .sort({ timestamp: -1 })
-      .limit(5)
+      .limit(10)
       .populate('userId', 'username');
     
     // Combinar y ordenar por fecha
@@ -74,26 +74,29 @@ exports.getRecentActivity = async (req, res) => {
         username: task.userId ? task.userId.username : 'Usuario desconocido',
         title: task.title,
         timestamp: task.updatedAt,
-        id: task._id
+        id: task._id.toString()
       })),
       ...recentLocations.map(location => ({
         type: 'location',
-        action: location.isWorking ? 'started_working' : 'stopped_working',
+        action: location.type === 'start' ? 'started_working' : 'stopped_working',
         username: location.userId ? location.userId.username : 'Usuario desconocido',
         coordinates: {
           latitude: location.latitude,
           longitude: location.longitude
         },
         timestamp: location.timestamp,
-        id: location._id
+        id: location._id.toString()
       }))
     ];
     
     // Ordenar por fecha (más reciente primero)
     activities.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
     
-    // Limitar a 10 actividades
-    const recentActivities = activities.slice(0, 10);
+    // Limitar a 15 actividades
+    const recentActivities = activities.slice(0, 15);
+    
+    // Registrar la respuesta para depuración
+    console.log('Enviando actividades recientes:', JSON.stringify(recentActivities, null, 2));
     
     res.status(200).json(recentActivities);
   } catch (error) {
