@@ -247,22 +247,6 @@ const MapComponent = ({ locations, currentLocation, isLoading, selectedUserName 
           />
         )}
       </MapView>
-      
-      {/* Leyenda de sesiones */}
-      {workSessions.length > 0 && (
-        <View style={styles.legendContainer}>
-          <Text style={styles.legendTitle}>Sesiones de trabajo:</Text>
-          {workSessions.map((session, index) => (
-            <View key={`legend-${index}`} style={styles.legendItem}>
-              <View style={[styles.legendColor, { backgroundColor: getSessionColor(index) }]} />
-              <Text style={styles.legendText}>
-                {formatDate(session.startTime)} 
-                {session.endTime ? ` - ${calculateDuration(session.startTime, session.endTime)}` : ' (En progreso)'}
-              </Text>
-            </View>
-          ))}
-        </View>
-      )}
     </View>
   );
 };
@@ -337,35 +321,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     color: '#666',
     marginTop: 20,
-  },
-  legendContainer: {
-    position: 'absolute',
-    bottom: 10,
-    left: 10,
-    right: 10,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    borderRadius: 8,
-    padding: 10,
-    maxHeight: 150,
-  },
-  legendTitle: {
-    fontWeight: 'bold',
-    marginBottom: 5,
-  },
-  legendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 5,
-  },
-  legendColor: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    marginRight: 8,
-  },
-  legendText: {
-    fontSize: 12,
-    flex: 1,
   }
 });
 
