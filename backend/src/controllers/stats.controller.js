@@ -1,6 +1,7 @@
 const User = require('../models/user.model');
 const Task = require('../models/task.model');
 const Location = require('../models/location.model');
+const Activity = require('../models/activity.model');
 
 // Obtener estadísticas generales
 exports.getStats = async (req, res) => {
@@ -66,6 +67,13 @@ exports.getRecentActivity = async (req, res) => {
       .limit(10)
       .populate('userId', 'username');
     
+    // Obtener las últimas actividades del nuevo sistema
+    const recentActivitiesFromDb = await Activity.find()
+      .sort({ createdAt: -1 })
+      .limit(10)
+      .populate('userId', 'username')
+      .populate('taskId', 'title');
+      
     // Combinar y ordenar por fecha
     const activities = [
       ...recentTasks.map(task => ({
@@ -86,7 +94,27 @@ exports.getRecentActivity = async (req, res) => {
         },
         timestamp: location.timestamp,
         id: location._id.toString()
-      }))
+      })),
+      // Agregar actividades del nuevo sistema
+      ...recentActivitiesFromDb.map(activity => {
+        // Mapear tipo de actividad a acción
+        let action = 'updated';
+        if (activity.type === 'task_create') action = 'created';
+        if (activity.type === 'task_complete') action = 'completed';
+        if (activity.type === 'task_delete') action = 'deleted';
+        if (activity.type === 'location_enter') action = 'entered_location';
+        if (activity.type === 'location_exit') action = 'exited_location';
+        
+        return {
+          type: activity.type.startsWith('task_') ? 'task' : 'location',
+          action,
+          username: activity.userId ? activity.userId.username : 'Usuario desconocido',
+          title: activity.taskId ? activity.taskId.title : (activity.metadata?.title || ''),
+          message: activity.message,
+          timestamp: activity.createdAt,
+          id: activity._id.toString()
+        };
+      })
     ];
     
     // Ordenar por fecha (más reciente primero)

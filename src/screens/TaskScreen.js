@@ -14,6 +14,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
 import * as api from '../services/api';
+import LocationRadiusSelector from '../components/LocationRadiusSelector';
 
 const TaskScreen = ({ navigation }) => {
   const { user } = useAuth();
@@ -26,6 +27,10 @@ const TaskScreen = ({ navigation }) => {
   const [error, setError] = useState(null);
   const [showAddForm, setShowAddForm] = useState(false);
   const [showUserSelector, setShowUserSelector] = useState(false);
+  const [showLocationSelector, setShowLocationSelector] = useState(false);
+  const [taskLocation, setTaskLocation] = useState(null);
+  const [taskRadius, setTaskRadius] = useState(1.0);
+  const [taskLocationName, setTaskLocationName] = useState('');
 
   // Cargar tareas
   const loadTasks = async () => {
@@ -98,6 +103,14 @@ const TaskScreen = ({ navigation }) => {
         completed: false  
       };
       
+      // Añadir información de ubicación si está configurada
+      if (taskLocation) {
+        taskData.location = taskLocation;
+        taskData.radius = taskRadius;
+        taskData.locationName = taskLocationName;
+        console.log(`Añadiendo ubicación: ${taskLocation.coordinates}, radio: ${taskRadius}km, lugar: ${taskLocationName || 'Sin nombre'}`);
+      }
+      
       let result;
       
       // Si es admin y hay un usuario seleccionado, usar el endpoint específico para asignar tareas
@@ -117,31 +130,26 @@ const TaskScreen = ({ navigation }) => {
       
       // Verificamos que result.task existe antes de añadirlo
       if (result && result.task) {
-        // Aseguramos que la tarea tenga la propiedad completed
-        const newTask = {
-          ...result.task,
-          completed: result.task.completed !== undefined ? result.task.completed : false
-        };
-        setTasks([...tasks, newTask]);
-      } else if (result) {
-        // Si no hay result.task pero hay result, asumimos que el resultado es la tarea
-        const newTask = {
-          ...result,
-          completed: result.completed !== undefined ? result.completed : false
-        };
-        setTasks([...tasks, newTask]);
+        // Añadimos la nueva tarea a la lista actual
+        setTasks(currentTasks => [result.task, ...currentTasks]);
+        
+        // Resetear formulario
+        setNewTaskTitle('');
+        setNewTaskDescription('');
+        setSelectedUserId(null);
+        setTaskLocation(null);
+        setTaskRadius(1.0);
+        setTaskLocationName('');
+        setShowAddForm(false);
+        
+        console.log('Tarea añadida correctamente a la interfaz de usuario');
+      } else {
+        console.error('Respuesta incompleta del servidor:', result);
+        Alert.alert('Error', 'No se pudo crear la tarea');
       }
-      
-      setNewTaskTitle('');
-      setNewTaskDescription('');
-      setSelectedUserId(null);
-      setShowAddForm(false);
-      
-      // Recargar las tareas para asegurarnos de tener los datos actualizados
-      loadTasks();
     } catch (error) {
-      console.error('Error al añadir tarea:', error);
-      Alert.alert('Error', error.message || 'Error al añadir tarea');
+      console.error('Error al crear tarea:', error);
+      Alert.alert('Error', error.message || 'No se pudo crear la tarea');
     }
   };
 
@@ -326,82 +334,92 @@ const TaskScreen = ({ navigation }) => {
     </Modal>
   );
 
+  // Función para manejar la selección de ubicación y radio
+  const handleLocationSelected = (locationData) => {
+    setTaskLocation(locationData.location);
+    setTaskRadius(locationData.radius);
+    setTaskLocationName(locationData.locationName);
+    console.log(`Ubicación seleccionada: ${JSON.stringify(locationData.location.coordinates)}, radio: ${locationData.radius}km, lugar: ${locationData.locationName}`);
+  };
+
+  // Renderizar el formulario para añadir tareas
+  const renderAddTaskForm = () => {
+    return (
+      <View style={styles.formContainer}>
+        <Text style={styles.formTitle}>Añadir Nueva Tarea</Text>
+        
+        <TextInput
+          style={styles.input}
+          placeholder="Título de la tarea"
+          value={newTaskTitle}
+          onChangeText={setNewTaskTitle}
+        />
+        
+        <TextInput
+          style={[styles.input, styles.textArea]}
+          placeholder="Descripción (opcional)"
+          value={newTaskDescription}
+          onChangeText={setNewTaskDescription}
+          multiline={true}
+          numberOfLines={3}
+        />
+        
+        {/* Botón para abrir selector de ubicación y radio */}
+        <TouchableOpacity 
+          style={styles.locationButton}
+          onPress={() => setShowLocationSelector(true)}
+        >
+          <Ionicons name="location" size={20} color="#4A90E2" />
+          <Text style={styles.locationButtonText}>
+            {taskLocation 
+              ? `${taskLocationName || 'Ubicación seleccionada'} (${taskRadius} km)` 
+              : 'Añadir ubicación y radio'}
+          </Text>
+        </TouchableOpacity>
+        
+        {user?.isAdmin && (
+          <TouchableOpacity 
+            style={styles.userSelectButton}
+            onPress={() => setShowUserSelector(true)}
+          >
+            <Text style={styles.userSelectButtonText}>
+              {selectedUserId 
+                ? users.find(u => u._id === selectedUserId)?.username || 'Usuario seleccionado'
+                : 'Asignar a un usuario'}
+            </Text>
+            <Ionicons name="chevron-forward" size={16} color="#4A90E2" />
+          </TouchableOpacity>
+        )}
+        
+        <View style={styles.formButtons}>
+          <TouchableOpacity 
+            style={[styles.formButton, styles.cancelButton]}
+            onPress={() => {
+              setShowAddForm(false);
+              setNewTaskTitle('');
+              setNewTaskDescription('');
+              setSelectedUserId(null);
+              setTaskLocation(null);
+              setTaskRadius(1.0);
+              setTaskLocationName('');
+            }}
+          >
+            <Text style={styles.cancelButtonText}>Cancelar</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={[styles.formButton, styles.saveButton]}
+            onPress={addTask}
+          >
+            <Text style={styles.saveButtonText}>Guardar</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  };
+
   return (
     <View style={styles.container}>
-      {!showAddForm ? (
-        <TouchableOpacity 
-          style={styles.addTaskButton}
-          onPress={() => setShowAddForm(true)}
-        >
-          <Ionicons name="add-circle" size={24} color="#fff" />
-          <Text style={styles.addTaskButtonText}>Añadir Nueva Tarea</Text>
-        </TouchableOpacity>
-      ) : (
-        <View style={styles.formContainer}>
-          <TextInput
-            style={styles.input}
-            placeholder="Título de la tarea"
-            value={newTaskTitle}
-            onChangeText={setNewTaskTitle}
-          />
-          
-          <TextInput
-            style={[styles.input, styles.textArea]}
-            placeholder="Descripción (opcional)"
-            value={newTaskDescription}
-            onChangeText={setNewTaskDescription}
-            multiline
-            numberOfLines={3}
-          />
-          
-          {/* Botón para seleccionar usuario si es administrador */}
-          {user?.isAdmin && (
-            <TouchableOpacity
-              style={styles.userSelectButton}
-              onPress={() => setShowUserSelector(true)}
-            >
-              <Text style={styles.userSelectButtonText}>
-                {selectedUserId 
-                  ? (() => {
-                      // Buscar el usuario por ID
-                      const selectedUser = users.find(u => 
-                        u._id === selectedUserId || 
-                        u._id.toString() === selectedUserId
-                      );
-                      
-                      return `Asignar a: ${selectedUser?.username || 'Usuario seleccionado'}`;
-                    })()
-                  : 'Seleccionar Usuario'}
-              </Text>
-              <Ionicons name="chevron-down" size={20} color="#4A90E2" />
-            </TouchableOpacity>
-          )}
-          
-          <View style={styles.formButtons}>
-            <TouchableOpacity 
-              style={[styles.formButton, styles.cancelButton]}
-              onPress={() => {
-                setShowAddForm(false);
-                setNewTaskTitle('');
-                setNewTaskDescription('');
-                setSelectedUserId(null);
-              }}
-            >
-              <Text style={styles.cancelButtonText}>Cancelar</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={[styles.formButton, styles.saveButton]}
-              onPress={addTask}
-            >
-              <Text style={styles.saveButtonText}>Guardar</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      )}
-      
-      {error && <Text style={styles.errorText}>{error}</Text>}
-      
       {loading ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#4A90E2" />
@@ -416,37 +434,64 @@ const TaskScreen = ({ navigation }) => {
             </View>
             <View style={styles.statItem}>
               <Text style={styles.statValue}>
-                {tasks.filter(task => !task.completed).length}
-              </Text>
-              <Text style={styles.statLabel}>Pendientes</Text>
-            </View>
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>
                 {tasks.filter(task => task.completed).length}
               </Text>
               <Text style={styles.statLabel}>Completadas</Text>
             </View>
+            <View style={[styles.statItem, { borderRightWidth: 0 }]}>
+              <Text style={styles.statValue}>
+                {tasks.filter(task => !task.completed).length}
+              </Text>
+              <Text style={styles.statLabel}>Pendientes</Text>
+            </View>
           </View>
           
-          <FlatList
-            data={tasks}
-            renderItem={renderTask}
-            keyExtractor={(item) => item._id.toString()}
-            style={styles.taskList}
-            ListEmptyComponent={
-              <View style={styles.emptyContainer}>
-                <Text style={styles.emptyText}>No hay tareas disponibles</Text>
-                <Text style={styles.emptySubtext}>
-                  Añade una nueva tarea usando el botón de arriba
-                </Text>
-              </View>
-            }
-          />
+          {!showAddForm && (
+            <TouchableOpacity 
+              style={styles.addTaskButton}
+              onPress={() => setShowAddForm(true)}
+            >
+              <Ionicons name="add-circle-outline" size={20} color="#fff" />
+              <Text style={styles.addTaskButtonText}>Añadir Tarea</Text>
+            </TouchableOpacity>
+          )}
+          
+          {showAddForm && renderAddTaskForm()}
+          
+          {error && <Text style={styles.errorText}>{error}</Text>}
+          
+          {tasks.length > 0 ? (
+            <FlatList
+              data={tasks}
+              renderItem={renderTask}
+              keyExtractor={(item) => item._id}
+              style={styles.taskList}
+            />
+          ) : (
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyText}>No hay tareas disponibles</Text>
+              <Text style={styles.emptySubtext}>
+                Las tareas que añadas aparecerán aquí
+              </Text>
+            </View>
+          )}
         </>
       )}
       
-      {/* Modal para seleccionar usuario */}
       {renderUserSelector()}
+      
+      {/* Selector de ubicación y radio */}
+      <LocationRadiusSelector
+        visible={showLocationSelector}
+        onClose={() => setShowLocationSelector(false)}
+        onSave={handleLocationSelected}
+        initialLocation={taskLocation ? {
+          latitude: taskLocation.coordinates[1],
+          longitude: taskLocation.coordinates[0]
+        } : null}
+        initialRadius={taskRadius}
+        initialLocationName={taskLocationName}
+      />
     </View>
   );
 };
@@ -454,8 +499,8 @@ const TaskScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
     padding: 15,
+    backgroundColor: '#f8f9fa',
   },
   formContainer: {
     backgroundColor: '#fff',
@@ -467,6 +512,12 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+  },
+  formTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 15,
+    color: '#333',
   },
   input: {
     backgroundColor: '#f9f9f9',
@@ -493,6 +544,20 @@ const styles = StyleSheet.create({
   },
   userSelectButtonText: {
     color: '#4A90E2',
+  },
+  locationButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f9f9f9',
+    borderRadius: 5,
+    padding: 12,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#ddd',
+  },
+  locationButtonText: {
+    color: '#4A90E2',
+    marginLeft: 10,
   },
   formButtons: {
     flexDirection: 'row',

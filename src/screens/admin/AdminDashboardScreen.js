@@ -220,11 +220,10 @@ const AdminDashboardScreen = ({ navigation }) => {
       {/* Acciones rápidas */}
       <View style={styles.actionsContainer}>
         <Text style={styles.sectionTitle}>Acciones Rápidas</Text>
-        
         <View style={styles.actionButtonsContainer}>
           <TouchableOpacity 
             style={styles.actionButton}
-            onPress={() => navigation.navigate('UserManagement')}
+            onPress={() => navigation.navigate('Users')}
           >
             <Text style={styles.actionButtonText}>Gestionar Usuarios</Text>
           </TouchableOpacity>
@@ -241,6 +240,13 @@ const AdminDashboardScreen = ({ navigation }) => {
             onPress={() => navigation.navigate('LocationHistory')}
           >
             <Text style={styles.actionButtonText}>Ver Historial de Ubicaciones</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={[styles.actionButton, { backgroundColor: '#9c27b0' }]}
+            onPress={() => navigation.navigate('AdminActivities')}
+          >
+            <Text style={styles.actionButtonText}>Ver Todas las Actividades</Text>
           </TouchableOpacity>
         </View>
       </View>

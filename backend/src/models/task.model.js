@@ -23,6 +23,28 @@ const taskSchema = new mongoose.Schema({
   createdAt: {
     type: Date,
     default: Date.now
+  },
+  location: {
+    type: {
+      type: String,
+      enum: ['Point'],
+      default: 'Point'
+    },
+    coordinates: {
+      type: [Number],
+      default: [0, 0]
+    }
+  },
+  radius: {
+    type: Number,
+    default: 1.0, // Radio en kilómetros
+    min: 0.1,
+    max: 50
+  },
+  locationName: {
+    type: String,
+    trim: true,
+    default: ''
   }
 }, {
   timestamps: true,
@@ -40,6 +62,9 @@ const taskSchema = new mongoose.Schema({
     }
   }
 });
+
+// Añadir índice geoespacial para permitir búsquedas por ubicación
+taskSchema.index({ location: '2dsphere' });
 
 const Task = mongoose.model('Task', taskSchema);
 

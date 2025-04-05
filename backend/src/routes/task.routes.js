@@ -9,6 +9,7 @@ router.use(verifyToken);
 // Rutas para tareas del usuario
 router.post('/', taskController.createTask);
 router.get('/my-tasks', taskController.getMyTasks);
+router.get('/nearby', taskController.getNearbyTasks); // Nueva ruta para buscar tareas cercanas
 router.put('/:id', taskController.updateTask);
 router.delete('/:id', taskController.deleteTask);
 
