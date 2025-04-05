@@ -629,18 +629,7 @@ export const getUserTasks = async () => {
 // Function to save a task
 export const saveTask = async (task) => {
   try {
-    console.log('Guardando tarea:', JSON.stringify(task));
-    
-    // If task has an ID, it's an update, otherwise it's a new task
-    const method = task._id ? 'PUT' : 'POST';
-    const url = task._id ? `${getApiUrl()}/api/tasks/${task._id}` : `${getApiUrl()}/api/tasks`;
-    
-    // Asegurarnos de que si hay userId, se envíe correctamente
-    if (task.userId) {
-      console.log(`La tarea será asignada al usuario con ID: ${task.userId}`);
-    }
-    
-    // Obtenemos el token de autenticación directamente
+    // Obtenemos el token de autenticación
     let token;
     try {
       token = await AsyncStorage.getItem('token');
@@ -655,18 +644,15 @@ export const saveTask = async (task) => {
     
     // Establecemos un timeout para la solicitud
     const options = {
-      method,
+      method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`
       },
-      body: JSON.stringify({
-        ...task,
-        userId: task.userId ? task.userId.toString() : undefined
-      })
+      body: JSON.stringify(task)
     };
     
-    const response = await fetchWithRetry(url, options);
+    const response = await fetchWithRetry(`${getApiUrl()}/api/tasks`, options);
     
     // Si la respuesta no es exitosa, lanzamos un error
     if (!response.ok) {
@@ -675,21 +661,19 @@ export const saveTask = async (task) => {
     }
     
     // Procesamos la respuesta
-    const data = await response.json();
-    console.log('Tarea guardada correctamente:', data);
+    const responseData = await response.json();
+    console.log('Tarea guardada correctamente:', responseData);
     
-    // Aseguramos que la tarea tenga la propiedad completed
-    if (data) {
-      // Formateamos la respuesta para que sea consistente
-      return {
-        task: {
-          ...data,
-          completed: data.completed !== undefined ? data.completed : false
-        }
-      };
-    }
-    
-    return data;
+    return {
+      task: {
+        ...responseData,
+        completed: responseData.completed !== undefined ? responseData.completed : false,
+        // Asegurar que se devuelvan los datos de ubicación si existen
+        location: responseData.location || null,
+        radius: responseData.radius || null,
+        locationName: responseData.locationName || ''
+      }
+    };
   } catch (error) {
     console.error('Error al guardar tarea:', error);
     throw error;
@@ -1019,7 +1003,11 @@ export const assignTask = async (taskData) => {
     return {
       task: {
         ...responseData,
-        completed: responseData.completed !== undefined ? responseData.completed : false
+        completed: responseData.completed !== undefined ? responseData.completed : false,
+        // Asegurar que se devuelvan los datos de ubicación si existen
+        location: responseData.location || null,
+        radius: responseData.radius || null,
+        locationName: responseData.locationName || ''
       }
     };
   } catch (error) {
@@ -1108,6 +1096,132 @@ export const getRecentActivity = async () => {
     return data;
   } catch (error) {
     console.error('Error al obtener actividad reciente:', error);
+    throw error;
+  }
+};
+
+// Function to get nearby tasks based on location
+export const getNearbyTasks = async (longitude, latitude, maxDistance = 10000) => {
+  try {
+    // Obtenemos el token de autenticación
+    let token;
+    try {
+      token = await AsyncStorage.getItem('token');
+    } catch (storageError) {
+      console.error('Error al obtener token de AsyncStorage:', storageError);
+      throw new Error('No se pudo acceder al token de autenticación');
+    }
+    
+    if (!token) {
+      throw new Error('No hay token de autenticación disponible');
+    }
+    
+    // Construir la URL con los parámetros de consulta
+    const url = `${getApiUrl()}/api/tasks/nearby?longitude=${longitude}&latitude=${latitude}&maxDistance=${maxDistance}`;
+    
+    // Establecemos un timeout para la solicitud
+    const options = {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      }
+    };
+    
+    const response = await fetchWithRetry(url, options);
+    
+    // Si la respuesta no es exitosa, lanzamos un error
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || `Error ${response.status}: ${response.statusText}`);
+    }
+    
+    // Procesamos la respuesta
+    const responseData = await response.json();
+    console.log(`Se encontraron ${responseData.length} tareas cercanas`);
+    
+    // Aseguramos que todas las tareas tengan la propiedad completed definida
+    const tasks = responseData.map(task => ({
+      ...task,
+      completed: task.completed !== undefined ? task.completed : false
+    }));
+    
+    return tasks;
+  } catch (error) {
+    console.error('Error al obtener tareas cercanas:', error);
+    throw error;
+  }
+};
+
+/**
+ * Guarda una actividad en el sistema
+ * @param {Object} activityData Datos de la actividad
+ * @returns {Promise<Object>} Respuesta de la API
+ */
+export const saveActivity = async (activityData) => {
+  try {
+    // Obtener el token directamente, no el objeto de cabecera
+    const token = await AsyncStorage.getItem('token');
+    
+    const response = await fetch(`${API_URL}/api/activities`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify(activityData)
+    });
+
+    if (!response.ok) {
+      throw new Error(`Error al guardar actividad: ${response.status}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('Error en saveActivity:', error);
+    throw error;
+  }
+};
+
+/**
+ * Obtener todas las actividades de todos los usuarios (solo para administradores)
+ * @param {Object} options - Opciones de paginación: { limit, page }
+ * @returns {Promise<Object>} Respuesta de la API con actividades y datos de paginación
+ */
+export const getAdminActivities = async (options = {}) => {
+  try {
+    const token = await AsyncStorage.getItem('token');
+    
+    if (!token) {
+      throw new Error('No hay token de autenticación disponible');
+    }
+    
+    // Construir la URL con parámetros de paginación
+    const limit = options.limit || 20;
+    const page = options.page || 1;
+    const url = `${API_URL}/api/activities/admin/all?limit=${limit}&page=${page}`;
+    
+    // Utilizar fetchWithRetry para manejar posibles problemas de conexión
+    const response = await fetchWithRetry(url, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    
+    if (!response.ok) {
+      // Si es un error 403, significa que no es administrador
+      if (response.status === 403) {
+        throw new Error('No tienes permisos de administrador para ver estas actividades');
+      }
+      throw new Error(`Error al obtener actividades: ${response.status}`);
+    }
+    
+    // Devolver los datos con actividades y paginación
+    return await response.json();
+  } catch (error) {
+    console.error('Error en getAdminActivities:', error);
     throw error;
   }
 };

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { ActivityIndicator, View, StyleSheet, Text } from 'react-native';
+import { startLocationMonitoring, stopLocationMonitoring } from '../services/location-service';
 
 // Pantallas de autenticación
 import LoginScreen from '../screens/auth/LoginScreen';
@@ -16,6 +17,7 @@ import LocationHistoryScreen from '../screens/LocationHistoryScreen';
 // Pantallas de administrador
 import AdminDashboardScreen from '../screens/admin/AdminDashboardScreen';
 import UserManagementScreen from '../screens/admin/UserManagementScreen';
+import AdminActivitiesScreen from '../screens/admin/AdminActivitiesScreen';
 
 // Contexto de autenticación
 import { useAuth } from '../context/AuthContext';
@@ -118,12 +120,37 @@ const AdminNavigator = () => (
       component={LocationHistoryScreen} 
       options={{ title: 'Historial de Ubicaciones' }}
     />
+    <Stack.Screen 
+      name="AdminActivities" 
+      component={AdminActivitiesScreen} 
+      options={{ title: 'Actividades de Administrador' }}
+    />
   </Stack.Navigator>
 );
 
 // Navegador principal que decide qué mostrar según el estado de autenticación
 const AppNavigator = () => {
   const { user, loading } = useAuth();
+
+  // Configurar el monitoreo de ubicación basado en la autenticación
+  useEffect(() => {
+    const setupLocationMonitoring = async () => {
+      if (user) {
+        console.log('Usuario autenticado, iniciando monitoreo de ubicación');
+        await startLocationMonitoring();
+      } else {
+        console.log('Usuario no autenticado, deteniendo monitoreo de ubicación');
+        stopLocationMonitoring();
+      }
+    };
+    
+    setupLocationMonitoring();
+    
+    // Limpiar al desmontar
+    return () => {
+      stopLocationMonitoring();
+    };
+  }, [user]);
 
   if (loading) {
     return (
