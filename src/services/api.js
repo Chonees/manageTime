@@ -441,6 +441,18 @@ export const startWork = async (coords) => {
       body: JSON.stringify(payload)
     });
     
+    // Iniciar el seguimiento de ruta si está disponible
+    try {
+      const locationService = require('./location-service');
+      if (locationService && typeof locationService.startRouteTracking === 'function') {
+        await locationService.startRouteTracking();
+        console.log('Seguimiento de ruta iniciado con éxito');
+      }
+    } catch (trackingError) {
+      console.warn('No se pudo iniciar el seguimiento de ruta:', trackingError);
+      // No interrumpimos el flujo principal si falla el seguimiento
+    }
+    
     return await handleResponse(response);
   } catch (error) {
     console.error('Error al iniciar trabajo:', error);
@@ -455,6 +467,18 @@ export const endWork = async (coords) => {
     
     if (!coords || typeof coords.latitude !== 'number' || typeof coords.longitude !== 'number') {
       throw new Error('Coordenadas inválidas');
+    }
+    
+    // Detener el seguimiento de ruta si está disponible
+    try {
+      const locationService = require('./location-service');
+      if (locationService && typeof locationService.stopRouteTracking === 'function') {
+        locationService.stopRouteTracking();
+        console.log('Seguimiento de ruta detenido con éxito');
+      }
+    } catch (trackingError) {
+      console.warn('No se pudo detener el seguimiento de ruta:', trackingError);
+      // No interrumpimos el flujo principal si falla
     }
     
     // Asegurarnos de que las coordenadas sean strings para evitar problemas de serialización
@@ -477,6 +501,42 @@ export const endWork = async (coords) => {
     return await handleResponse(response);
   } catch (error) {
     console.error('Error al finalizar trabajo:', error);
+    throw error;
+  }
+};
+
+// Function to save location (tracking point)
+export const saveLocation = async (coords) => {
+  try {
+    console.log('API saveLocation - Enviando coordenadas de seguimiento:', coords);
+    
+    if (!coords || typeof coords.latitude !== 'number' || typeof coords.longitude !== 'number') {
+      throw new Error('Coordenadas inválidas para seguimiento');
+    }
+    
+    // Asegurarnos de que las coordenadas sean strings para evitar problemas de serialización
+    const payload = {
+      latitude: String(coords.latitude),
+      longitude: String(coords.longitude),
+      type: coords.type || 'tracking' // Tipo por defecto: tracking
+    };
+    
+    console.log('API saveLocation - Payload final:', payload);
+    
+    const headers = await getAuthHeader();
+    headers['Content-Type'] = 'application/json';
+    
+    // Usar la ruta existente /api/locations/start en lugar de /api/locations/tracking
+    // ya que el backend en Heroku puede no tener implementada la ruta de tracking
+    const response = await fetchWithRetry(`${getApiUrl()}/api/locations/start`, {
+      method: 'POST',
+      headers: headers,
+      body: JSON.stringify(payload)
+    });
+    
+    return await handleResponse(response);
+  } catch (error) {
+    console.error('Error al guardar punto de seguimiento:', error);
     throw error;
   }
 };

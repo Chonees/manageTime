@@ -1,6 +1,6 @@
 import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
-import { getUserTasks, saveActivity } from './api';
+import { getUserTasks, saveActivity, saveLocation } from './api';
 
 // Estado para manejar las tareas que actualmente estamos dentro de su radio
 let tasksInRange = {};
@@ -155,6 +155,9 @@ export const checkTasksProximity = async () => {
 
 // Iniciar el monitoreo de ubicación
 export let locationMonitoringInterval = null;
+// Variable para el seguimiento de ruta
+export let routeTrackingInterval = null;
+export let isTracking = false;
 
 export const startLocationMonitoring = async () => {
   // Solicitar permisos de ubicación
@@ -187,8 +190,82 @@ export const stopLocationMonitoring = () => {
     console.log('Monitoreo de ubicación detenido');
   }
   
+  // Detener también el seguimiento de ruta si está activo
+  stopRouteTracking();
+  
   // Resetear el estado
   tasksInRange = {};
   
   return true;
+};
+
+// Iniciar el seguimiento de ruta (tracking de ubicación continuo)
+export const startRouteTracking = async () => {
+  if (isTracking) return true; // Ya está en seguimiento
+  
+  try {
+    // Solicitar permisos de ubicación de alta precisión
+    const { status } = await Location.requestForegroundPermissionsAsync();
+    if (status !== 'granted') {
+      console.log('No se otorgaron permisos de ubicación para seguimiento');
+      return false;
+    }
+    
+    console.log('Iniciando seguimiento de ruta...');
+    isTracking = true;
+    
+    // Iniciar el seguimiento periódico (cada 10 segundos)
+    routeTrackingInterval = setInterval(async () => {
+      try {
+        // Obtener ubicación actual
+        const location = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.High
+        });
+        
+        // Guardar punto de seguimiento en la API
+        await saveTrackingPoint(location.coords);
+        console.log('Punto de seguimiento guardado:', location.coords);
+      } catch (error) {
+        console.error('Error al guardar punto de seguimiento:', error);
+      }
+    }, 10000); // Cada 10 segundos (antes era 60000 - 1 minuto)
+    
+    // Guardar el primer punto inmediatamente
+    const initialLocation = await Location.getCurrentPositionAsync({
+      accuracy: Location.Accuracy.High
+    });
+    await saveTrackingPoint(initialLocation.coords);
+    
+    return true;
+  } catch (error) {
+    console.error('Error al iniciar seguimiento de ruta:', error);
+    return false;
+  }
+};
+
+// Detener el seguimiento de ruta
+export const stopRouteTracking = () => {
+  if (routeTrackingInterval) {
+    clearInterval(routeTrackingInterval);
+    routeTrackingInterval = null;
+    isTracking = false;
+    console.log('Seguimiento de ruta detenido');
+  }
+  return true;
+};
+
+// Guardar un punto de seguimiento en la API
+const saveTrackingPoint = async (coords) => {
+  try {
+    // Llamar a la API para guardar el punto de seguimiento
+    await saveLocation({
+      latitude: coords.latitude,
+      longitude: coords.longitude,
+      type: 'tracking' // Tipo específico para puntos de seguimiento
+    });
+    return true;
+  } catch (error) {
+    console.error('Error al guardar punto de seguimiento:', error);
+    return false;
+  }
 };

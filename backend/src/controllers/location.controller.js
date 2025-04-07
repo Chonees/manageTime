@@ -3,7 +3,7 @@ const Location = require('../models/location.model');
 // Iniciar trabajo (registrar ubicación de inicio)
 exports.startWork = async (req, res) => {
   try {
-    const { latitude, longitude } = req.body;
+    const { latitude, longitude, type } = req.body;
     
     if (!latitude || !longitude) {
       return res.status(400).json({ 
@@ -12,9 +12,10 @@ exports.startWork = async (req, res) => {
     }
     
     // Crear nuevo registro de ubicación
+    // Si se especifica un tipo (como 'tracking'), usarlo; de lo contrario, usar 'start'
     const location = new Location({
       userId: req.user._id,
-      type: 'start',
+      type: type || 'start',
       latitude,
       longitude
     });
@@ -22,14 +23,19 @@ exports.startWork = async (req, res) => {
     // Guardar en la base de datos
     await location.save();
     
+    // Mensaje personalizado según el tipo
+    const message = type === 'tracking' 
+      ? 'Punto de seguimiento guardado correctamente'
+      : 'Trabajo iniciado correctamente';
+    
     res.status(201).json({ 
       success: true, 
-      message: 'Trabajo iniciado correctamente',
+      message: message,
       location
     });
   } catch (error) {
-    console.error('Error al iniciar trabajo:', error);
-    res.status(500).json({ message: 'Error al iniciar trabajo' });
+    console.error('Error al iniciar trabajo o guardar punto:', error);
+    res.status(500).json({ message: 'Error al iniciar trabajo o guardar punto' });
   }
 };
 
@@ -91,5 +97,38 @@ exports.getUserLocationHistory = async (req, res) => {
   } catch (error) {
     console.error('Error al obtener historial de ubicaciones del usuario:', error);
     res.status(500).json({ message: 'Error al obtener historial de ubicaciones del usuario' });
+  }
+};
+
+// Guardar punto de seguimiento durante el trabajo
+exports.saveTrackingPoint = async (req, res) => {
+  try {
+    const { latitude, longitude, type } = req.body;
+    
+    if (!latitude || !longitude) {
+      return res.status(400).json({ 
+        message: 'Se requieren las coordenadas de ubicación' 
+      });
+    }
+    
+    // Crear nuevo registro de punto de seguimiento
+    const location = new Location({
+      userId: req.user._id,
+      type: type || 'tracking', // Por defecto es 'tracking'
+      latitude,
+      longitude
+    });
+    
+    // Guardar en la base de datos
+    await location.save();
+    
+    res.status(201).json({ 
+      success: true, 
+      message: 'Punto de seguimiento guardado correctamente',
+      location
+    });
+  } catch (error) {
+    console.error('Error al guardar punto de seguimiento:', error);
+    res.status(500).json({ message: 'Error al guardar punto de seguimiento' });
   }
 };
