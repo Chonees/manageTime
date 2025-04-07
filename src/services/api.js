@@ -1154,6 +1154,70 @@ export const getNearbyTasks = async (longitude, latitude, maxDistance = 10000) =
 };
 
 /**
+ * Actualiza una tarea existente
+ * @param {string} taskId - ID de la tarea a actualizar
+ * @param {Object} taskData - Datos a actualizar (title, description, completed, etc.)
+ * @returns {Promise<Object>} - Tarea actualizada
+ */
+export const updateTask = async (taskId, taskData) => {
+  try {
+    console.log(`Actualizando tarea ${taskId} con datos:`, JSON.stringify(taskData));
+    
+    // Obtener el token de autenticación
+    const token = await AsyncStorage.getItem('token');
+    
+    if (!token) {
+      throw new Error('No hay token de autenticación disponible');
+    }
+    
+    const url = `${getApiUrl()}/api/tasks/${taskId}`;
+    console.log(`Enviando petición PUT a ${url}`);
+    
+    // Crear opciones de la petición con mayor detalle de logs
+    const options = {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify(taskData)
+    };
+    
+    console.log(`Configurando opciones de la petición: ${JSON.stringify({
+      method: options.method,
+      headers: { ...options.headers, Authorization: 'Bearer ***' }
+    })}`);
+    
+    // Obtener configuración de la plataforma
+    const config = getPlatformConfig(Platform.OS);
+    console.log(`Usando configuración de red para ${Platform.OS}: timeout=${getTimeout()}ms, maxRetries=${config.config.maxRetries}`);
+    
+    // Realizar la petición con reintentos automáticos
+    console.log(`Iniciando petición para actualizar tarea ${taskId}`);
+    const response = await fetchWithRetry(url, options);
+    
+    // Manejar la respuesta
+    if (!response.ok) {
+      console.error(`Error al actualizar tarea: Status ${response.status}`);
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || `Error ${response.status}: ${response.statusText}`);
+    }
+    
+    // Procesar la respuesta
+    const updatedTask = await response.json();
+    console.log(`Tarea ${taskId} actualizada correctamente:`, JSON.stringify(updatedTask).substring(0, 100) + '...');
+    
+    return updatedTask;
+  } catch (error) {
+    console.error('Error detallado al actualizar tarea:', error.message);
+    console.error('Stack:', error.stack);
+    
+    // Registrar el error y relanzarlo para que el llamador lo maneje
+    throw new Error(`Error al actualizar tarea: ${error.message}`);
+  }
+};
+
+/**
  * Guarda una actividad en el sistema
  * @param {Object} activityData Datos de la actividad
  * @returns {Promise<Object>} Respuesta de la API

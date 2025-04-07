@@ -15,11 +15,10 @@ import * as api from '../../services/api';
 const AdminDashboardScreen = ({ navigation }) => {
   const { user, logout } = useAuth();
   const [stats, setStats] = useState({
-    users: { total: 0, active: 0 },
+    users: { total: 0 },
     tasks: { total: 0, completed: 0, pending: 0, completionRate: 0 },
     locations: { total: 0 }
   });
-  const [recentActivity, setRecentActivity] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
@@ -33,10 +32,6 @@ const AdminDashboardScreen = ({ navigation }) => {
       // Obtener estadísticas reales desde la API
       const statsData = await api.getAdminStats();
       setStats(statsData);
-      
-      // Obtener actividad reciente
-      const activityData = await api.getRecentActivity();
-      setRecentActivity(activityData);
     } catch (error) {
       setError(error.message || 'Error al cargar datos');
       console.error('Error loading data:', error);
@@ -101,55 +96,6 @@ const AdminDashboardScreen = ({ navigation }) => {
       return 'hace un tiempo';
     }
   };
-  
-  // Función para renderizar un elemento de actividad
-  const renderActivityItem = (activity, index) => {
-    console.log("Renderizando actividad:", activity); // Depuración
-    
-    let activityText = '';
-    let activityColor = '#4A90E2'; // Color predeterminado
-    
-    if (activity.type === 'task') {
-      if (activity.action === 'completed') {
-        activityText = `${activity.username} completó la tarea "${activity.title}"`;
-        activityColor = '#2ecc71'; // Verde para tareas completadas
-      } else {
-        activityText = `${activity.username} creó la tarea "${activity.title}"`;
-        activityColor = '#3498db'; // Azul para tareas creadas
-      }
-    } else if (activity.type === 'location') {
-      if (activity.action === 'started_working') {
-        activityText = `${activity.username} comenzó a trabajar`;
-        activityColor = '#2ecc71'; // Verde para inicio de trabajo
-      } else if (activity.action === 'stopped_working') {
-        activityText = `${activity.username} finalizó su trabajo`;
-        activityColor = '#e74c3c'; // Rojo para fin de trabajo
-      } else if (activity.action === 'tracking') {
-        activityText = `${activity.username} actualizó su ubicación`;
-        activityColor = '#f39c12'; // Naranja para actualizaciones
-      }
-    }
-    
-    // Si no hay texto de actividad (por ejemplo, si el tipo no coincide), mostrar información genérica
-    if (!activityText && activity.username) {
-      activityText = `Actividad de ${activity.username}: ${activity.action || 'acción desconocida'}`;
-    } else if (!activityText) {
-      activityText = 'Actividad desconocida';
-      console.warn("Actividad sin información:", activity);
-    }
-    
-    return (
-      <View key={`${activity.id || index}-${index}`} style={styles.activityItem}>
-        <View style={[styles.activityDot, { backgroundColor: activityColor }]} />
-        <View style={styles.activityContent}>
-          <Text style={styles.activityText}>{activityText}</Text>
-          <Text style={styles.activityTime}>
-            {formatRelativeTime(activity.timestamp)}
-          </Text>
-        </View>
-      </View>
-    );
-  };
 
   return (
     <ScrollView 
@@ -187,11 +133,6 @@ const AdminDashboardScreen = ({ navigation }) => {
             <View style={styles.statCard}>
               <Text style={styles.statValue}>{stats.users.total}</Text>
               <Text style={styles.statLabel}>Usuarios Totales</Text>
-            </View>
-            
-            <View style={styles.statCard}>
-              <Text style={styles.statValue}>{stats.users.active}</Text>
-              <Text style={styles.statLabel}>Usuarios Activos</Text>
             </View>
             
             <View style={styles.statCard}>
@@ -249,21 +190,6 @@ const AdminDashboardScreen = ({ navigation }) => {
             <Text style={styles.actionButtonText}>Ver Todas las Actividades</Text>
           </TouchableOpacity>
         </View>
-      </View>
-
-      {/* Actividad reciente */}
-      <View style={styles.recentActivityContainer}>
-        <Text style={styles.sectionTitle}>Actividad Reciente</Text>
-        
-        {loading ? (
-          <ActivityIndicator size="small" color="#4A90E2" />
-        ) : recentActivity.length > 0 ? (
-          <View style={styles.activityList}>
-            {recentActivity.map((activity, index) => renderActivityItem(activity, index))}
-          </View>
-        ) : (
-          <Text style={styles.emptyText}>No hay actividad reciente para mostrar</Text>
-        )}
       </View>
     </ScrollView>
   );
@@ -376,54 +302,6 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: 'bold',
     fontSize: 16,
-  },
-  recentActivityContainer: {
-    margin: 15,
-    marginBottom: 30,
-  },
-  activityList: {
-    backgroundColor: '#fff',
-    borderRadius: 8,
-    padding: 15,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  activityItem: {
-    flexDirection: 'row',
-    marginBottom: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-    paddingBottom: 15,
-  },
-  activityDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#4A90E2',
-    marginTop: 5,
-    marginRight: 10,
-  },
-  activityContent: {
-    flex: 1,
-  },
-  activityText: {
-    fontSize: 14,
-    color: '#333',
-    marginBottom: 3,
-  },
-  activityTime: {
-    fontSize: 12,
-    color: '#999',
-  },
-  emptyText: {
-    textAlign: 'center',
-    color: '#666',
-    padding: 15,
-    backgroundColor: '#fff',
-    borderRadius: 8,
   },
 });
 

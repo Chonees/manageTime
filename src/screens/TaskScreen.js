@@ -177,15 +177,70 @@ const TaskScreen = ({ navigation }) => {
   };
 
   // Alternar estado de completado
-  const toggleComplete = (taskId) => {
-    setTasks(tasks.map(task => {
-      if (task._id === taskId) {
-        // Asegurarnos de que completed tenga un valor por defecto
-        const currentCompleted = task.completed !== undefined ? task.completed : false;
-        return { ...task, completed: !currentCompleted };
+  const toggleComplete = async (taskId) => {
+    try {
+      // Encontrar la tarea que se va a actualizar
+      const taskToUpdate = tasks.find(task => task._id === taskId);
+      if (!taskToUpdate) {
+        console.error(`No se encontró la tarea con ID: ${taskId}`);
+        return;
       }
-      return task;
-    }));
+      
+      // Obtener el estado actual y el nuevo estado
+      const currentCompleted = taskToUpdate.completed !== undefined ? taskToUpdate.completed : false;
+      const newCompletedStatus = !currentCompleted;
+      
+      console.log(`Cambiando estado de tarea ${taskId} a ${newCompletedStatus ? 'completada' : 'pendiente'}`);
+      
+      // Actualizar optimistamente en la UI primero
+      setTasks(tasks.map(task => {
+        if (task._id === taskId) {
+          return { ...task, completed: newCompletedStatus };
+        }
+        return task;
+      }));
+      
+      // Mostrar indicador de guardado
+      const toastMessage = newCompletedStatus ? 'Marcando tarea como completada...' : 'Marcando tarea como pendiente...';
+      Alert.alert('Actualizando', toastMessage, [], { cancelable: true });
+      
+      try {
+        // Enviar la actualización al backend con un timeout explícito
+        console.log('Enviando actualización al servidor...');
+        const result = await api.updateTask(taskId, { completed: newCompletedStatus });
+        console.log('Respuesta recibida del servidor:', result);
+        
+        // También registrar la actividad manualmente para mayor seguridad
+        if (newCompletedStatus) {
+          try {
+            await api.saveActivity({
+              type: 'task_complete',
+              taskId: taskId,
+              message: `Tarea "${taskToUpdate.title}" completada`,
+              metadata: { title: taskToUpdate.title }
+            });
+            console.log('Actividad de completado registrada manualmente');
+          } catch (activityError) {
+            console.error('Error al registrar actividad manualmente:', activityError);
+          }
+        }
+        
+        // Opcional: recargar las tareas para asegurarse que todo está sincronizado
+        await loadTasks();
+        
+        console.log(`Tarea ${taskId} actualizada correctamente`);
+      } catch (error) {
+        console.error('Error al cambiar estado de tarea:', error);
+        Alert.alert('Error', `No se pudo actualizar el estado de la tarea: ${error.message}`);
+        
+        // Revertir el cambio en la UI si hubo error
+        await loadTasks();
+      }
+    } catch (error) {
+      console.error('Error general en toggleComplete:', error);
+      Alert.alert('Error', 'Ocurrió un problema al procesar la tarea');
+      await loadTasks();
+    }
   };
 
   // Seleccionar usuario para asignar tarea
