@@ -164,7 +164,7 @@ const AdminDashboardScreen = ({ navigation }) => {
         <View style={styles.actionButtonsContainer}>
           <TouchableOpacity 
             style={styles.actionButton}
-            onPress={() => navigation.navigate('Users')}
+            onPress={() => navigation.navigate('UserManagement')}
           >
             <Text style={styles.actionButtonText}>Gestionar Usuarios</Text>
           </TouchableOpacity>

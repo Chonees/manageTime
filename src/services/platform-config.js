@@ -60,10 +60,13 @@ const platformConfig = {
   
   // Configuración base
   config: {
-    apiUrl: 'https://managetime-backend.herokuapp.com',
-    timeout: 60000, // 60 segundos
-    maxRetries: 3,  // Número máximo de reintentos
-    retryDelay: 1000, // Retraso base entre reintentos (ms),
+    // URL de Heroku (producción)
+    apiUrl: 'https://managetime-backend-48f256c2dfe5.herokuapp.com', 
+    
+    // Configuración optimizada para redes móviles
+    timeout: 90000, // 90 segundos
+    maxRetries: 5,  // Aumentar reintentos para redes móviles
+    retryDelay: 2000, // Retraso base entre reintentos (ms)
   },
   
   // Configuración específica para Android
