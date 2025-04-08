@@ -15,12 +15,126 @@ import {
   TextInput
 } from 'react-native';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
+import LanguageToggle from '../components/LanguageToggle';
 import * as api from '../services/api';
 import MapComponent from '../components/MapComponent';
 import { Ionicons } from '@expo/vector-icons';
 
+// Helper functions
+const formatDate = (dateString) => {
+  const options = { 
+    year: 'numeric', 
+    month: 'short', 
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  };
+  return new Date(dateString).toLocaleDateString(undefined, options);
+};
+
+const formatShortDate = (date) => {
+  if (!date) return '';
+  const day = date.getDate().toString().padStart(2, '0');
+  const month = (date.getMonth() + 1).toString().padStart(2, '0');
+  const year = date.getFullYear();
+  return `${day}/${month}/${year}`;
+};
+
+// LocationHistoryView Component
+const LocationHistoryView = ({ 
+  viewMode, 
+  locations, 
+  currentLocation, 
+  loading, 
+  selectedUserName,
+  onRefresh,
+  refreshing
+}) => {
+  const { t } = useLanguage();
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#4A90E2" />
+        <Text style={styles.loadingText}>{t('loadingLocations')}</Text>
+      </View>
+    );
+  }
+
+  if (viewMode === 'map') {
+    return (
+      <View style={styles.mapContainer}>
+        <View style={[
+          styles.mapHeader,
+          selectedUserName ? styles.mapHeaderAdmin : styles.mapHeaderUser
+        ]}>
+          <Text style={styles.mapTitle}>
+            {t('locationMap')} {selectedUserName || t('locations')}
+          </Text>
+        </View>
+        <MapComponent 
+          locations={locations}
+          currentLocation={currentLocation}
+          isLoading={loading}
+          selectedUserName={selectedUserName}
+        />
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.listContainer}>
+      <View style={styles.listHeader}>
+        <Text style={styles.listTitle}>
+          {t('locationHistory')}
+        </Text>
+      </View>
+      <FlatList
+        data={locations}
+        keyExtractor={(item, index) => `location-${index}`}
+        renderItem={({ item }) => (
+          <View style={styles.locationItem}>
+            <View 
+              style={[
+                styles.locationTypeIndicator,
+                { 
+                  backgroundColor: 
+                    item.type === 'start' ? '#4CAF50' : 
+                    item.type === 'end' ? '#F44336' : 
+                    '#2196F3'
+                }
+              ]}
+            />
+            <View style={styles.locationInfo}>
+              <Text style={styles.locationType}>
+                {item.type === 'start' ? t('enterLocation') : 
+                 item.type === 'end' ? t('exitLocation') : 
+                 t('locationDetails')}
+              </Text>
+              <Text style={styles.locationDate}>
+                {formatDate(item.timestamp)}
+              </Text>
+              <Text style={styles.locationCoords}>
+                {t('latitude')}: {item.latitude.toFixed(6)}, {t('longitude')}: {item.longitude.toFixed(6)}
+              </Text>
+            </View>
+          </View>
+        )}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+          />
+        }
+      />
+    </View>
+  );
+};
+
 const LocationHistoryScreen = () => {
   const { user } = useAuth();
+  const { t } = useLanguage();
   const [locationHistory, setLocationHistory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -29,7 +143,7 @@ const LocationHistoryScreen = () => {
   const [users, setUsers] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
   const [currentLocation, setCurrentLocation] = useState(null);
-  const [viewMode, setViewMode] = useState('map'); // 'map' o 'list'
+  const [viewMode, setViewMode] = useState('map');
   const [dateFilter, setDateFilter] = useState(null);
   const [filteredLocations, setFilteredLocations] = useState([]);
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -138,27 +252,6 @@ const LocationHistoryScreen = () => {
     }
   };
 
-  // Función para formatear la fecha
-  const formatDate = (dateString) => {
-    const options = { 
-      year: 'numeric', 
-      month: 'short', 
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    };
-    return new Date(dateString).toLocaleDateString(undefined, options);
-  };
-
-  // Función para formatear la fecha en formato corto (solo día/mes/año)
-  const formatShortDate = (date) => {
-    if (!date) return '';
-    const day = date.getDate().toString().padStart(2, '0');
-    const month = (date.getMonth() + 1).toString().padStart(2, '0');
-    const year = date.getFullYear();
-    return `${day}/${month}/${year}`;
-  };
-
   // Función para aplicar filtro de fecha
   const applyDateFilter = (locations, date) => {
     if (!date) {
@@ -227,7 +320,7 @@ const LocationHistoryScreen = () => {
     
     return (
       <View style={styles.userSelectorContainer}>
-        <Text style={styles.selectorLabel}>Seleccionar Usuario:</Text>
+        <Text style={styles.selectorLabel}>{t('selectUser')}:</Text>
         <FlatList
           data={users}
           horizontal
@@ -248,14 +341,7 @@ const LocationHistoryScreen = () => {
                   loadLocationHistory(item._id);
                 }}
               >
-                <Text 
-                  style={[
-                    styles.userItemText,
-                    selectedUserId === item._id && styles.selectedUserItemText
-                  ]}
-                >
-                  {item.username}
-                </Text>
+                <Text style={styles.userName}>{item.username}</Text>
               </TouchableOpacity>
             );
           }}
@@ -265,273 +351,189 @@ const LocationHistoryScreen = () => {
   };
 
   // Renderizar selector de fecha personalizado
-  const renderCustomDatePicker = () => {
-    return (
-      <Modal
-        transparent={true}
-        animationType="slide"
-        visible={showDatePicker}
-        onRequestClose={() => setShowDatePicker(false)}
-      >
-        <View style={styles.modalContainer}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Seleccionar fecha</Text>
-            
-            <View style={styles.dateInputContainer}>
-              <View style={styles.dateInputGroup}>
-                <Text style={styles.dateInputLabel}>Día</Text>
-                <TextInput
-                  style={styles.dateInput}
-                  value={selectedDay}
-                  onChangeText={setSelectedDay}
-                  keyboardType="number-pad"
-                  maxLength={2}
-                  placeholder="DD"
-                />
-              </View>
-              
-              <View style={styles.dateInputGroup}>
-                <Text style={styles.dateInputLabel}>Mes</Text>
-                <TextInput
-                  style={styles.dateInput}
-                  value={selectedMonth}
-                  onChangeText={setSelectedMonth}
-                  keyboardType="number-pad"
-                  maxLength={2}
-                  placeholder="MM"
-                />
-              </View>
-              
-              <View style={styles.dateInputGroup}>
-                <Text style={styles.dateInputLabel}>Año</Text>
-                <TextInput
-                  style={styles.dateInput}
-                  value={selectedYear}
-                  onChangeText={setSelectedYear}
-                  keyboardType="number-pad"
-                  maxLength={4}
-                  placeholder="YYYY"
-                />
-              </View>
+  const renderCustomDatePicker = () => (
+    <Modal
+      visible={showDatePicker}
+      transparent={true}
+      animationType="slide"
+      onRequestClose={() => setShowDatePicker(false)}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContent}>
+          <Text style={styles.modalTitle}>{t('selectDate')}</Text>
+          
+          <View style={styles.dateInputContainer}>
+            <View style={styles.dateInputGroup}>
+              <Text style={styles.dateInputLabel}>{t('day')}</Text>
+              <TextInput
+                style={styles.dateInput}
+                value={selectedDay}
+                onChangeText={setSelectedDay}
+                keyboardType="number-pad"
+                maxLength={2}
+                placeholder="DD"
+              />
             </View>
             
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.cancelButton]}
-                onPress={() => setShowDatePicker(false)}
-              >
-                <Text style={styles.modalButtonText}>Cancelar</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity
-                style={[styles.modalButton, styles.confirmButton]}
-                onPress={applyCustomDateFilter}
-              >
-                <Text style={styles.modalButtonText}>Aplicar</Text>
-              </TouchableOpacity>
+            <View style={styles.dateInputGroup}>
+              <Text style={styles.dateInputLabel}>{t('month')}</Text>
+              <TextInput
+                style={styles.dateInput}
+                value={selectedMonth}
+                onChangeText={setSelectedMonth}
+                keyboardType="number-pad"
+                maxLength={2}
+                placeholder="MM"
+              />
+            </View>
+            
+            <View style={styles.dateInputGroup}>
+              <Text style={styles.dateInputLabel}>{t('year')}</Text>
+              <TextInput
+                style={styles.dateInput}
+                value={selectedYear}
+                onChangeText={setSelectedYear}
+                keyboardType="number-pad"
+                maxLength={4}
+                placeholder="YYYY"
+              />
             </View>
           </View>
+          
+          <View style={styles.modalButtons}>
+            <TouchableOpacity
+              style={[styles.modalButton, styles.cancelButton]}
+              onPress={() => setShowDatePicker(false)}
+            >
+              <Text style={styles.cancelButtonText}>{t('cancel')}</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={[styles.modalButton, styles.applyButton]}
+              onPress={applyCustomDateFilter}
+            >
+              <Text style={styles.applyButtonText}>{t('apply')}</Text>
+            </TouchableOpacity>
+          </View>
         </View>
-      </Modal>
-    );
-  };
+      </View>
+    </Modal>
+  );
 
   // Renderizar filtro de fecha
-  const renderDateFilter = () => {
-    return (
-      <View style={styles.dateFilterContainer}>
-        <TouchableOpacity 
-          style={styles.filterButton}
-          onPress={() => setShowDatePicker(true)}
+  const renderDateFilter = () => (
+    <View style={styles.filterContainer}>
+      <View style={styles.viewToggle}>
+        <TouchableOpacity
+          style={[styles.toggleButton, viewMode === 'map' && styles.activeToggle]}
+          onPress={() => setViewMode('map')}
         >
-          <Text style={styles.filterButtonText}>Filtrar por fecha</Text>
+          <Text style={[styles.toggleText, viewMode === 'map' && styles.activeToggleText]}>
+            {t('mapView')}
+          </Text>
         </TouchableOpacity>
-        
-        {dateFilter && (
-          <>
-            <View style={styles.activeDateFilter}>
-              <Text style={styles.dateFilterText}>
-                Fecha: {formatShortDate(dateFilter)}
-              </Text>
-            </View>
-            
-            <TouchableOpacity 
-              style={styles.clearFilterButton}
-              onPress={clearDateFilter}
-            >
-              <Text style={styles.filterButtonText}>Limpiar filtro</Text>
-            </TouchableOpacity>
-          </>
-        )}
-        
-        {renderCustomDatePicker()}
+        <TouchableOpacity
+          style={[styles.toggleButton, viewMode === 'list' && styles.activeToggle]}
+          onPress={() => setViewMode('list')}
+        >
+          <Text style={[styles.toggleText, viewMode === 'list' && styles.activeToggleText]}>
+            {t('listView')}
+          </Text>
+        </TouchableOpacity>
       </View>
-    );
-  };
+      
+      <TouchableOpacity
+        style={styles.dateFilterButton}
+        onPress={() => setShowDatePicker(true)}
+      >
+        <Text style={styles.dateFilterButtonText}>
+          {dateFilter ? formatShortDate(dateFilter) : t('selectDate')}
+        </Text>
+      </TouchableOpacity>
+      
+      {dateFilter && (
+        <TouchableOpacity
+          style={styles.clearFilterButton}
+          onPress={clearDateFilter}
+        >
+          <Text style={styles.clearFilterText}>{t('clearFilter')}</Text>
+        </TouchableOpacity>
+      )}
+      
+      {user?.isAdmin && (
+        <TouchableOpacity
+          style={[styles.autoRefreshButton, autoRefreshEnabled && styles.autoRefreshEnabled]}
+          onPress={() => setAutoRefreshEnabled(!autoRefreshEnabled)}
+        >
+          <Text style={styles.autoRefreshText}>
+            {autoRefreshEnabled ? t('autoRefreshOn') : t('autoRefreshOff')}
+          </Text>
+        </TouchableOpacity>
+      )}
+    </View>
+  );
 
   // Determinar qué ubicaciones mostrar (filtradas o todas)
   const locationsToDisplay = dateFilter ? filteredLocations : locationHistory;
 
   return (
-    <ScrollView 
-      style={styles.container}
-      refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={onRefresh}
-        />
-      }
-    >
-      {renderUserSelector()}
-      {renderDateFilter()}
-      
-      <View style={styles.mapContainer}>
-        <View style={[
-          styles.mapHeader,
-          user?.isAdmin ? styles.mapHeaderAdmin : styles.mapHeaderUser
-        ]}>
-          <Text style={styles.mapTitle}>
-            Mapa de {selectedUserName ? selectedUserName : 'ubicaciones'}
-          </Text>
-          {user?.isAdmin && (
-            <View style={styles.adminControls}>
-              <TouchableOpacity 
-                style={styles.refreshButton}
-                onPress={onRefresh}
-              >
-                <Ionicons name="refresh" size={24} color="#fff" />
-              </TouchableOpacity>
-              
-              <TouchableOpacity 
-                style={[
-                  styles.autoRefreshButton, 
-                  autoRefreshEnabled ? styles.autoRefreshEnabled : styles.autoRefreshDisabled
-                ]}
-                onPress={() => setAutoRefreshEnabled(!autoRefreshEnabled)}
-              >
-                <Ionicons 
-                  name={autoRefreshEnabled ? "sync-circle" : "sync-circle-outline"} 
-                  size={24} 
-                  color="#fff" 
-                />
-              </TouchableOpacity>
-            </View>
-          )}
+    <View style={styles.container}>
+      <View style={styles.header}>
+        <Text style={styles.title}>{t('locationHistory')}</Text>
+      </View>
+
+      <View style={styles.filterContainer}>
+        <View style={styles.viewToggle}>
+          <TouchableOpacity
+            style={[styles.toggleButton, viewMode === 'map' && styles.activeToggle]}
+            onPress={() => setViewMode('map')}
+          >
+            <Text style={[styles.toggleText, viewMode === 'map' && styles.activeToggleText]}>
+              {t('mapView')}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.toggleButton, viewMode === 'list' && styles.activeToggle]}
+            onPress={() => setViewMode('list')}
+          >
+            <Text style={[styles.toggleText, viewMode === 'list' && styles.activeToggleText]}>
+              {t('listView')}
+            </Text>
+          </TouchableOpacity>
         </View>
         
-        {loading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#4A90E2" />
-            <Text style={styles.loadingText}>Cargando ubicaciones...</Text>
-          </View>
-        ) : locationsToDisplay.length > 0 ? (
-          <MapComponent 
-            locations={locationsToDisplay}
-            currentLocation={currentLocation}
-            isLoading={loading}
-            selectedUserName={selectedUserName}
-          />
-        ) : (
-          <View style={styles.emptyMapContainer}>
-            <Ionicons name="location-outline" size={48} color="#ccc" />
-            <Text style={styles.emptyText}>No hay ubicaciones</Text>
-            {dateFilter && (
-              <Text style={styles.emptySubtext}>
-                No se encontraron registros para la fecha seleccionada
-              </Text>
-            )}
-          </View>
+        <TouchableOpacity
+          style={styles.dateFilterButton}
+          onPress={() => setShowDatePicker(true)}
+        >
+          <Text style={styles.dateFilterButtonText}>
+            {dateFilter ? formatShortDate(dateFilter) : t('selectDate')}
+          </Text>
+        </TouchableOpacity>
+        
+        {dateFilter && (
+          <TouchableOpacity
+            style={styles.clearFilterButton}
+            onPress={clearDateFilter}
+          >
+            <Text style={styles.clearFilterText}>{t('clearFilter')}</Text>
+          </TouchableOpacity>
         )}
       </View>
-      
-      <View style={styles.actionButtonsContainer}>
-        <TouchableOpacity 
-          style={[
-            styles.actionButton,
-            viewMode === 'map' && styles.activeActionButton
-          ]}
-          onPress={() => setViewMode('map')}
-        >
-          <Text style={styles.actionButtonText}>Ver Mapa</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity 
-          style={[
-            styles.actionButton,
-            viewMode === 'list' && styles.activeActionButton
-          ]}
-          onPress={() => setViewMode('list')}
-        >
-          <Text style={styles.actionButtonText}>Ver Lista</Text>
-        </TouchableOpacity>
-      </View>
-      
-      {viewMode === 'list' && (
-        <View style={styles.listContainer}>
-          <View style={styles.listHeader}>
-            <Text style={styles.listTitle}>
-              Historial de ubicaciones
-            </Text>
-          </View>
-          
-          {loading ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color="#4A90E2" />
-              <Text style={styles.loadingText}>Cargando ubicaciones...</Text>
-            </View>
-          ) : locationsToDisplay.length > 0 ? (
-            <FlatList
-              data={locationsToDisplay.slice(0, 20)}
-              keyExtractor={(item, index) => `location-${index}`}
-              renderItem={({ item }) => (
-                <View style={styles.locationItem}>
-                  <View 
-                    style={[
-                      styles.locationTypeIndicator,
-                      { 
-                        backgroundColor: 
-                          item.type === 'start' ? '#4CAF50' : 
-                          item.type === 'end' ? '#F44336' : 
-                          '#2196F3'
-                      }
-                    ]}
-                  />
-                  <View style={styles.locationInfo}>
-                    <Text style={styles.locationType}>
-                      {item.type === 'start' ? 'Inicio de trabajo' : 
-                       item.type === 'end' ? 'Fin de trabajo' : 
-                       'Seguimiento'}
-                    </Text>
-                    <Text style={styles.locationDate}>
-                      {formatDate(item.timestamp)}
-                    </Text>
-                    <Text style={styles.locationCoords}>
-                      Lat: {item.latitude.toFixed(6)}, Lon: {item.longitude.toFixed(6)}
-                    </Text>
-                  </View>
-                </View>
-              )}
-            />
-          ) : (
-            <View style={styles.emptyContainer}>
-              <Ionicons name="location-outline" size={48} color="#ccc" />
-              <Text style={styles.emptyText}>No hay ubicaciones</Text>
-              {dateFilter && (
-                <Text style={styles.emptySubtext}>
-                  No se encontraron registros para la fecha seleccionada
-                </Text>
-              )}
-            </View>
-          )}
-          
-          {locationsToDisplay.length > 20 && (
-            <TouchableOpacity style={styles.viewMoreButton}>
-              <Text style={styles.viewMoreButtonText}>Ver más registros...</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      )}
-    </ScrollView>
+
+      {renderUserSelector()}
+      {renderCustomDatePicker()}
+
+      <LocationHistoryView
+        viewMode={viewMode}
+        locations={dateFilter ? filteredLocations : locationHistory}
+        currentLocation={currentLocation}
+        loading={loading}
+        selectedUserName={selectedUserName}
+        onRefresh={onRefresh}
+        refreshing={refreshing}
+      />
+    </View>
   );
 };
 
@@ -539,6 +541,16 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f5f5f5',
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 10,
+  },
+  title: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
   },
   userSelectorContainer: {
     backgroundColor: '#fff',
@@ -563,12 +575,8 @@ const styles = StyleSheet.create({
   selectedUserItem: {
     backgroundColor: '#4A90E2',
   },
-  userItemText: {
+  userName: {
     color: '#333',
-  },
-  selectedUserItemText: {
-    color: '#fff',
-    fontWeight: 'bold',
   },
   dateFilterContainer: {
     backgroundColor: '#fff',
@@ -793,7 +801,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: 'bold',
   },
-  modalContainer: {
+  modalOverlay: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
@@ -850,19 +858,67 @@ const styles = StyleSheet.create({
     width: '100%',
     marginTop: 20,
   },
-  modalButton: {
-    padding: 10,
-    borderRadius: 5,
-    width: '45%',
-    alignItems: 'center',
-  },
   cancelButton: {
     backgroundColor: '#ccc',
   },
-  confirmButton: {
+  applyButton: {
     backgroundColor: '#4A90E2',
   },
-  modalButtonText: {
+  cancelButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+  },
+  applyButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+  },
+  filterContainer: {
+    backgroundColor: '#fff',
+    padding: 15,
+    marginBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#ddd',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  viewToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  toggleButton: {
+    padding: 10,
+    borderRadius: 8,
+    marginRight: 10,
+    backgroundColor: '#E3F2FD',
+  },
+  activeToggle: {
+    backgroundColor: '#4A90E2',
+  },
+  toggleText: {
+    color: '#1976D2',
+    fontWeight: 'bold',
+  },
+  activeToggleText: {
+    color: '#fff',
+    fontWeight: 'bold',
+  },
+  dateFilterButton: {
+    backgroundColor: '#4A90E2',
+    padding: 10,
+    borderRadius: 8,
+    marginRight: 10,
+  },
+  dateFilterButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+  },
+  clearFilterText: {
+    color: '#fff',
+    fontWeight: 'bold',
+  },
+  autoRefreshText: {
     color: '#fff',
     fontWeight: 'bold',
   },

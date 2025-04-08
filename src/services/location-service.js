@@ -1,9 +1,29 @@
 import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
 import { getUserTasks, saveActivity } from './api';
+import { Alert } from 'react-native';
+import { translations } from '../context/LanguageContext';
 
 // Estado para manejar las tareas que actualmente estamos dentro de su radio
 let tasksInRange = {};
+let currentLanguage = 'es'; // Default language
+
+// Set the current language
+export const setLanguage = (lang) => {
+  currentLanguage = lang;
+};
+
+// Get translation
+const t = (key, params = {}) => {
+  let translation = translations[currentLanguage][key] || key;
+  
+  // Replace parameters in the translation string
+  Object.entries(params).forEach(([param, value]) => {
+    translation = translation.replace(`{{${param}}}`, value);
+  });
+  
+  return translation;
+};
 
 // Calcular la distancia entre dos puntos utilizando la fórmula de Haversine
 const calculateDistance = (lat1, lon1, lat2, lon2) => {
@@ -27,7 +47,7 @@ const toRad = (value) => {
 export const configureNotifications = async () => {
   const { status } = await Notifications.requestPermissionsAsync();
   if (status !== 'granted') {
-    console.log('No se otorgaron permisos de notificación');
+    console.log(t('noNotificationPermission'));
     return false;
   }
 
@@ -53,7 +73,7 @@ const sendNotification = async (title, body) => {
       trigger: null, // Inmediatamente
     });
   } catch (error) {
-    console.error('Error al enviar notificación:', error);
+    console.error(t('errorSendingNotification'), error);
   }
 };
 
@@ -64,41 +84,46 @@ const createActivity = async (taskId, action) => {
       type: action === 'enter' ? 'location_enter' : 'location_exit',
       taskId,
       message: action === 'enter' 
-        ? 'Has entrado en el área de una tarea' 
-        : 'Has salido del área de una tarea',
+        ? t('enteredLocation', { location: taskId })
+        : t('exitedLocation', { location: taskId }),
       metadata: {
         timestamp: new Date().toISOString(),
         action
       }
     };
     
-    console.log(`Registrando actividad: ${action} para tarea ${taskId}`);
-    
-    // Ahora que tenemos la ruta en el backend, volvemos a activar la llamada
+    console.log(t('registeringActivity', { action, taskId }));
     await saveActivity(activityData);
-    console.log(`Actividad guardada: ${action} para tarea ${taskId}`);
+    console.log(t('activitySaved', { action, taskId }));
   } catch (error) {
-    console.error('Error al crear actividad:', error);
+    console.error(t('errorCreatingActivity'), error);
   }
 };
 
 // Comprobar si el usuario está dentro del radio de las tareas
 export const checkTasksProximity = async () => {
   try {
-    console.log('Verificando proximidad a tareas...');
+    console.log(t('checkingTaskProximity'));
+    
+    // Verificar si los servicios de ubicación están habilitados
+    const isLocationEnabled = await Location.hasServicesEnabledAsync();
+    if (!isLocationEnabled) {
+      throw new Error(t('locationServicesDisabled'));
+    }
     
     // Obtener la ubicación actual
     const { coords } = await Location.getCurrentPositionAsync({
       accuracy: Location.Accuracy.Balanced,
+      timeout: 10000, // 10 segundos de timeout
     });
     
     const { latitude, longitude } = coords;
-    console.log(`Ubicación actual: ${latitude}, ${longitude}`);
+    console.log(t('currentLocation', { latitude, longitude }));
     
     // Obtener las tareas del usuario
     const response = await getUserTasks();
     const tasks = response || [];
-    console.log(`Se encontraron ${tasks.length} tareas para verificar`);
+    console.log(t('tasksFound', { count: tasks.length }));
     
     // Para cada tarea con ubicación, comprobar si estamos dentro del radio
     for (const task of tasks) {
@@ -108,7 +133,11 @@ export const checkTasksProximity = async () => {
         const taskLng = task.location.coordinates[0]; // Longitud
         const taskRadius = task.radius; // Radio en km
         
-        console.log(`Comprobando tarea ${task.title}: ubicación [${taskLng}, ${taskLat}], radio ${taskRadius}km`);
+        console.log(t('checkingTask', { 
+          title: task.title,
+          location: `[${taskLng}, ${taskLat}]`,
+          radius: taskRadius 
+        }));
         
         // Calcular la distancia a la tarea
         const distance = calculateDistance(
@@ -118,27 +147,27 @@ export const checkTasksProximity = async () => {
           taskLng
         );
         
-        console.log(`Distancia a la tarea: ${distance.toFixed(3)}km`);
+        console.log(t('distanceToTask', { distance: distance.toFixed(3) }));
         
         const isInRange = distance <= taskRadius;
         const wasInRange = tasksInRange[task.id] || false;
         
         // Si entramos en el radio
         if (isInRange && !wasInRange) {
-          console.log(`Entraste en el radio de la tarea: ${task.title}`);
+          console.log(t('enteredTaskRadius', { title: task.title }));
           sendNotification(
-            '¡Tarea cercana!', 
-            `Has entrado en el área de la tarea: ${task.title}`
+            t('taskNearby'),
+            t('enteredTaskArea', { title: task.title })
           );
           createActivity(task.id, 'enter');
           tasksInRange[task.id] = true;
         } 
         // Si salimos del radio
         else if (!isInRange && wasInRange) {
-          console.log(`Saliste del radio de la tarea: ${task.title}`);
+          console.log(t('exitedTaskRadius', { title: task.title }));
           sendNotification(
-            'Has salido del área', 
-            `Ya no estás en el área de la tarea: ${task.title}`
+            t('exitedArea'),
+            t('leftTaskArea', { title: task.title })
           );
           createActivity(task.id, 'exit');
           tasksInRange[task.id] = false;
@@ -148,7 +177,56 @@ export const checkTasksProximity = async () => {
     
     return true;
   } catch (error) {
-    console.error('Error al comprobar proximidad de tareas:', error);
+    console.error(t('errorCheckingProximity'), error);
+    
+    // Mostrar alerta al usuario según el tipo de error
+    if (error.message.includes(t('locationServicesDisabled'))) {
+      Alert.alert(
+        t('locationServicesDisabled'),
+        t('enableLocationServices'),
+        [
+          {
+            text: t('openSettings'),
+            onPress: () => Location.openSettingsAsync()
+          },
+          {
+            text: t('cancel'),
+            style: 'cancel'
+          }
+        ]
+      );
+    } else if (error.message.includes('timeout')) {
+      Alert.alert(
+        t('locationError'),
+        t('locationTimeoutError'),
+        [
+          {
+            text: t('retry'),
+            onPress: () => checkTasksProximity()
+          },
+          {
+            text: t('cancel'),
+            style: 'cancel'
+          }
+        ]
+      );
+    } else {
+      Alert.alert(
+        t('locationError'),
+        t('locationErrorGeneric'),
+        [
+          {
+            text: t('retry'),
+            onPress: () => checkTasksProximity()
+          },
+          {
+            text: t('cancel'),
+            style: 'cancel'
+          }
+        ]
+      );
+    }
+    
     return false;
   }
 };
@@ -157,26 +235,78 @@ export const checkTasksProximity = async () => {
 export let locationMonitoringInterval = null;
 
 export const startLocationMonitoring = async () => {
-  // Solicitar permisos de ubicación
-  const { status } = await Location.requestForegroundPermissionsAsync();
-  if (status !== 'granted') {
-    console.log('No se otorgaron permisos de ubicación');
+  try {
+    // Verificar si los servicios de ubicación están habilitados
+    const isLocationEnabled = await Location.hasServicesEnabledAsync();
+    if (!isLocationEnabled) {
+      Alert.alert(
+        t('locationServicesDisabled'),
+        t('enableLocationServices'),
+        [
+          {
+            text: t('openSettings'),
+            onPress: () => Location.openSettingsAsync()
+          },
+          {
+            text: t('cancel'),
+            style: 'cancel'
+          }
+        ]
+      );
+      return false;
+    }
+
+    // Solicitar permisos de ubicación
+    const { status } = await Location.requestForegroundPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert(
+        t('locationPermissionDenied'),
+        t('locationPermissionRequired'),
+        [
+          {
+            text: t('openSettings'),
+            onPress: () => Location.openSettingsAsync()
+          },
+          {
+            text: t('cancel'),
+            style: 'cancel'
+          }
+        ]
+      );
+      return false;
+    }
+    
+    console.log(t('startingLocationMonitoring'));
+    
+    // Configurar notificaciones
+    await configureNotifications();
+    
+    // Iniciar el monitoreo periódico
+    locationMonitoringInterval = setInterval(checkTasksProximity, 30000); // Comprobar cada 30 segundos
+    
+    // Realizar la primera comprobación inmediatamente
+    await checkTasksProximity();
+    
+    console.log(t('locationMonitoringStarted'));
+    return true;
+  } catch (error) {
+    console.error(t('errorStartingMonitoring'), error);
+    Alert.alert(
+      t('error'),
+      t('errorStartingMonitoring'),
+      [
+        {
+          text: t('retry'),
+          onPress: () => startLocationMonitoring()
+        },
+        {
+          text: t('cancel'),
+          style: 'cancel'
+        }
+      ]
+    );
     return false;
   }
-  
-  console.log('Iniciando monitoreo de ubicación...');
-  
-  // Configurar notificaciones
-  await configureNotifications();
-  
-  // Iniciar el monitoreo periódico
-  locationMonitoringInterval = setInterval(checkTasksProximity, 30000); // Comprobar cada 30 segundos
-  
-  // Realizar la primera comprobación inmediatamente
-  await checkTasksProximity();
-  
-  console.log('Monitoreo de ubicación iniciado correctamente');
-  return true;
 };
 
 // Detener el monitoreo de ubicación
@@ -184,7 +314,7 @@ export const stopLocationMonitoring = () => {
   if (locationMonitoringInterval) {
     clearInterval(locationMonitoringInterval);
     locationMonitoringInterval = null;
-    console.log('Monitoreo de ubicación detenido');
+    console.log(t('locationMonitoringStopped'));
   }
   
   // Resetear el estado

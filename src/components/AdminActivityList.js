@@ -10,8 +10,10 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { getAdminActivities } from '../services/api';
+import { useLanguage } from '../context/LanguageContext';
 
 const AdminActivityList = () => {
+  const { t } = useLanguage();
   const [activities, setActivities] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -40,8 +42,8 @@ const AdminActivityList = () => {
         pages: 0
       });
     } catch (error) {
-      console.error('Error al cargar actividades:', error);
-      setError(error.message || 'Error al cargar actividades');
+      console.error('Error loading activities:', error);
+      setError(error.message || t('error'));
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -70,15 +72,9 @@ const AdminActivityList = () => {
   const formatDateTime = (dateString) => {
     try {
       const date = new Date(dateString);
-      return date.toLocaleString('es-AR', { 
-        day: 'numeric',
-        month: 'short',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      });
+      return date.toLocaleString();
     } catch (error) {
-      return 'Fecha desconocida';
+      return t('unknownDate');
     }
   };
 
@@ -94,16 +90,16 @@ const AdminActivityList = () => {
       const days = Math.floor(hours / 24);
 
       if (days > 0) {
-        return `${days} día${days > 1 ? 's' : ''} atrás`;
+        return `${days} ${t('daysAgo')}`;
       } else if (hours > 0) {
-        return `${hours} hora${hours > 1 ? 's' : ''} atrás`;
+        return `${hours} ${t('hoursAgo')}`;
       } else if (minutes > 0) {
-        return `${minutes} minuto${minutes > 1 ? 's' : ''} atrás`;
+        return `${minutes} ${t('minutesAgo')}`;
       } else {
-        return `${seconds} segundo${seconds !== 1 ? 's' : ''} atrás`;
+        return `${seconds} ${t('secondsAgo')}`;
       }
     } catch (error) {
-      return 'hace un tiempo';
+      return t('someTimeAgo');
     }
   };
 
@@ -151,27 +147,27 @@ const AdminActivityList = () => {
   const getActivityTypeText = (type) => {
     switch (type) {
       case 'location_enter':
-        return 'Entró en zona';
+        return t('locationEnter');
       case 'location_exit':
-        return 'Salió de zona';
+        return t('locationExit');
       case 'task_complete':
-        return 'Completó tarea';
+        return t('taskComplete');
       case 'task_create':
-        return 'Creó tarea';
+        return t('taskCreate');
       case 'task_update':
-        return 'Actualizó tarea';
+        return t('taskUpdate');
       case 'task_delete':
-        return 'Eliminó tarea';
+        return t('taskDelete');
       default:
-        return 'Actividad';
+        return t('activity');
     }
   };
 
   // Renderizar un elemento de actividad
   const renderActivityItem = ({ item }) => {
     const { type, message, createdAt, userId, taskId, metadata } = item;
-    const userName = userId?.username || 'Usuario desconocido';
-    const taskName = taskId?.title || 'Tarea sin nombre';
+    const userName = userId?.username || t('unknownUser');
+    const taskName = taskId?.title || t('unknownTask');
     const taskDescription = taskId?.description || '';
     const typeText = getActivityTypeText(type);
     const color = getActivityColor(type);
@@ -227,10 +223,10 @@ const AdminActivityList = () => {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>Actividades de Usuarios</Text>
+        <Text style={styles.title}>{t('userActivities')}</Text>
         {pagination.total > 0 && (
           <Text style={styles.subtitle}>
-            Mostrando {activities.length} de {pagination.total} actividades
+            {t('showingActivities', { count: activities.length, total: pagination.total })}
           </Text>
         )}
       </View>
@@ -239,7 +235,7 @@ const AdminActivityList = () => {
         <View style={styles.errorContainer}>
           <Text style={styles.errorText}>{error}</Text>
           <TouchableOpacity style={styles.retryButton} onPress={() => loadActivities(1)}>
-            <Text style={styles.retryButtonText}>Reintentar</Text>
+            <Text style={styles.retryButtonText}>{t('retry')}</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -258,23 +254,23 @@ const AdminActivityList = () => {
           loading ? (
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="large" color="#4A90E2" />
-              <Text style={styles.loadingText}>Cargando actividades...</Text>
+              <Text style={styles.loadingText}>{t('loading')}</Text>
             </View>
           ) : (
             <Text style={styles.emptyText}>
-              No hay actividades para mostrar
+              {t('noActivities')}
             </Text>
           )
         }
         ListFooterComponent={
           pagination.currentPage < pagination.pages && !loading ? (
             <TouchableOpacity style={styles.loadMoreButton} onPress={loadMore}>
-              <Text style={styles.loadMoreButtonText}>Cargar más</Text>
+              <Text style={styles.loadMoreButtonText}>{t('loadMore')}</Text>
             </TouchableOpacity>
           ) : pagination.currentPage > 1 && loading ? (
             <View style={styles.loadingMoreContainer}>
               <ActivityIndicator size="small" color="#4A90E2" />
-              <Text style={styles.loadingMoreText}>Cargando más...</Text>
+              <Text style={styles.loadingMoreText}>{t('loadingMore')}</Text>
             </View>
           ) : null
         }
@@ -282,31 +278,31 @@ const AdminActivityList = () => {
 
       {/* Leyenda de tipos de actividades */}
       <View style={styles.legendContainer}>
-        <Text style={styles.legendTitle}>Tipos de Actividades:</Text>
+        <Text style={styles.legendTitle}>{t('activityTypes')}:</Text>
         <View style={styles.legendItems}>
           <View style={styles.legendItem}>
             <View style={[styles.legendColor, { backgroundColor: getActivityColor('location_enter') }]} />
-            <Text style={styles.legendText}>Entrada a zona de tarea</Text>
+            <Text style={styles.legendText}>{t('locationEnter')}</Text>
           </View>
           <View style={styles.legendItem}>
             <View style={[styles.legendColor, { backgroundColor: getActivityColor('location_exit') }]} />
-            <Text style={styles.legendText}>Salida de zona de tarea</Text>
+            <Text style={styles.legendText}>{t('locationExit')}</Text>
           </View>
           <View style={styles.legendItem}>
             <View style={[styles.legendColor, { backgroundColor: getActivityColor('task_complete') }]} />
-            <Text style={styles.legendText}>Tarea completada</Text>
+            <Text style={styles.legendText}>{t('taskComplete')}</Text>
           </View>
           <View style={styles.legendItem}>
             <View style={[styles.legendColor, { backgroundColor: getActivityColor('task_create') }]} />
-            <Text style={styles.legendText}>Tarea creada</Text>
+            <Text style={styles.legendText}>{t('taskCreate')}</Text>
           </View>
           <View style={styles.legendItem}>
             <View style={[styles.legendColor, { backgroundColor: getActivityColor('task_update') }]} />
-            <Text style={styles.legendText}>Tarea actualizada</Text>
+            <Text style={styles.legendText}>{t('taskUpdate')}</Text>
           </View>
           <View style={styles.legendItem}>
             <View style={[styles.legendColor, { backgroundColor: getActivityColor('task_delete') }]} />
-            <Text style={styles.legendText}>Tarea eliminada</Text>
+            <Text style={styles.legendText}>{t('taskDelete')}</Text>
           </View>
         </View>
       </View>

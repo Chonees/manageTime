@@ -111,43 +111,32 @@ export const getAuthHeader = async () => {
   }
 };
 
-// Función para crear opciones de fetch con autenticación
-export const createFetchOptions = async (method, body = null, customHeaders = {}) => {
+// Helper function to create fetch options with auth token
+export const createFetchOptions = async (method, body = null) => {
   try {
-    // Obtener opciones base según la plataforma
-    const baseOptions = getFetchOptions();
+    const token = await AsyncStorage.getItem('token');
     
-    // Obtener headers de autenticación
-    const authHeaders = await getAuthHeader();
+    if (!token) {
+      throw new Error('No hay token de autenticación disponible');
+    }
     
-    // Crear opciones de fetch
     const options = {
-      ...baseOptions,
       method,
       headers: {
         'Content-Type': 'application/json',
-        ...authHeaders,
-        ...customHeaders
+        'Authorization': `Bearer ${token}`
       }
     };
     
-    // Añadir body si es necesario
     if (body) {
       options.body = JSON.stringify(body);
     }
     
+    console.log('Created fetch options:', JSON.stringify(options, null, 2));
     return options;
   } catch (error) {
-    console.error('Error al crear opciones de fetch:', error);
-    // Devolver opciones básicas en caso de error
-    return {
-      method,
-      headers: {
-        'Content-Type': 'application/json',
-        ...customHeaders
-      },
-      ...(body ? { body: JSON.stringify(body) } : {})
-    };
+    console.error('Error creating fetch options:', error);
+    throw error;
   }
 };
 
@@ -1058,45 +1047,46 @@ export const getAdminStats = async () => {
   }
 };
 
-// Function to get recent activity
-export const getRecentActivity = async () => {
+// Function to get recent activities
+export const getRecentActivities = async () => {
   try {
-    // Obtenemos el token de autenticación
-    let token;
-    try {
-      token = await AsyncStorage.getItem('token');
-    } catch (storageError) {
-      console.error('Error al obtener token de AsyncStorage:', storageError);
-      throw new Error('No se pudo acceder al token de autenticación');
-    }
+    const url = `${getApiUrl()}/api/stats/recent-activity`;
+    const options = await createFetchOptions('GET');
     
-    if (!token) {
-      throw new Error('No hay token de autenticación disponible');
-    }
+    console.log('Fetching recent activities from:', url);
+    const response = await fetchWithRetry(url, options);
     
-    // Establecemos un timeout para la solicitud
-    const options = {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      }
-    };
-    
-    const response = await fetchWithRetry(`${getApiUrl()}/api/stats/recent-activity`, options);
-    
-    // Si la respuesta no es exitosa, lanzamos un error
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
+      console.error('Error response from recent activities:', errorData);
       throw new Error(errorData.message || `Error ${response.status}: ${response.statusText}`);
     }
     
-    // Procesamos la respuesta
     const data = await response.json();
-    return data;
+    console.log('Received activities data:', JSON.stringify(data, null, 2));
+    
+    if (!Array.isArray(data)) {
+      console.error('Invalid response format:', data);
+      return [];
+    }
+    
+    // Transform the data to match the expected format
+    const transformedData = data.map(activity => ({
+      id: activity.id || activity._id,
+      type: activity.type,
+      action: activity.action,
+      username: activity.username,
+      title: activity.title,
+      message: activity.message,
+      timestamp: activity.timestamp,
+      metadata: activity.metadata || {}
+    }));
+    
+    console.log('Transformed activities data:', JSON.stringify(transformedData, null, 2));
+    return transformedData;
   } catch (error) {
-    console.error('Error al obtener actividad reciente:', error);
-    throw error;
+    console.error('Error fetching recent activities:', error);
+    return [];
   }
 };
 
@@ -1222,6 +1212,53 @@ export const getAdminActivities = async (options = {}) => {
     return await response.json();
   } catch (error) {
     console.error('Error en getAdminActivities:', error);
+    throw error;
+  }
+};
+
+// Function to update task completion status
+export const updateTaskCompletion = async (taskId, completed) => {
+  try {
+    console.log(`Actualizando estado de completado de tarea ${taskId} a ${completed}`);
+    
+    // Obtenemos el token de autenticación
+    let token;
+    try {
+      token = await AsyncStorage.getItem('token');
+    } catch (storageError) {
+      console.error('Error al obtener token de AsyncStorage:', storageError);
+      throw new Error('No se pudo acceder al token de autenticación');
+    }
+    
+    if (!token) {
+      throw new Error('No hay token de autenticación disponible');
+    }
+    
+    // Establecemos un timeout para la solicitud
+    const options = {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({ completed })
+    };
+    
+    const response = await fetchWithRetry(`${getApiUrl()}/api/tasks/${taskId}`, options);
+    
+    // Si la respuesta no es exitosa, lanzamos un error
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || `Error ${response.status}: ${response.statusText}`);
+    }
+    
+    // Procesamos la respuesta
+    const responseData = await response.json();
+    console.log('Estado de completado actualizado correctamente:', responseData);
+    
+    return responseData;
+  } catch (error) {
+    console.error('Error al actualizar estado de completado:', error);
     throw error;
   }
 };

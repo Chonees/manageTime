@@ -60,7 +60,7 @@ const platformConfig = {
   
   // Configuración base
   config: {
-    apiUrl: 'http://192.168.0.122:5555',
+    apiUrl: 'http://192.168.31.174:5555',
     timeout: 60000, // 60 segundos
     maxRetries: 3,  // Número máximo de reintentos
     retryDelay: 1000, // Retraso base entre reintentos (ms)

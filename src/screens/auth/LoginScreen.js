@@ -12,15 +12,18 @@ import {
   Alert
 } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
+import { useLanguage } from '../../context/LanguageContext';
+import { Ionicons } from '@expo/vector-icons';
 
 const LoginScreen = ({ navigation }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const { login, loading, error, setLoading, setError } = useAuth();
+  const { t, toggleLanguage, language } = useLanguage();
 
   const handleLogin = async () => {
     if (!username.trim() || !password.trim()) {
-      Alert.alert('Error', 'Por favor ingresa usuario y contraseña');
+      Alert.alert(t('error'), t('pleaseEnter'));
       return;
     }
 
@@ -29,25 +32,23 @@ const LoginScreen = ({ navigation }) => {
       setError(null);
       console.log('Iniciando sesión para usuario:', username);
       
-      // Usar admin@managetime.com (minúscula) si el usuario ingresa admin@manageTime.com
       const normalizedUsername = username.toLowerCase();
       console.log('Usuario normalizado:', normalizedUsername);
       
       const result = await login(normalizedUsername, password);
       
       if (!result || !result.success) {
-        const errorMessage = result?.error || 'No se pudo iniciar sesión. Intenta nuevamente.';
+        const errorMessage = result?.error || t('tryAgain');
         console.log('Login fallido:', errorMessage);
         setError(errorMessage);
-        Alert.alert('Error de inicio de sesión', errorMessage);
+        Alert.alert(t('loginError'), errorMessage);
       } else {
         console.log('Login exitoso, usuario:', result.user?.username);
-        // No es necesario navegar, el AppNavigator lo hará automáticamente
       }
     } catch (error) {
       console.error('Error en login:', error);
-      setError('Ocurrió un error durante el inicio de sesión. Intenta nuevamente.');
-      Alert.alert('Error', 'Ocurrió un error durante el inicio de sesión. Intenta nuevamente.');
+      setError(t('unexpectedError'));
+      Alert.alert(t('error'), t('unexpectedError'));
     } finally {
       setLoading(false);
     }
@@ -60,15 +61,26 @@ const LoginScreen = ({ navigation }) => {
     >
       <ScrollView contentContainerStyle={styles.scrollContainer}>
         <View style={styles.formContainer}>
-          <Text style={styles.title}>Iniciar Sesión</Text>
+          <View style={styles.languageToggleContainer}>
+            <TouchableOpacity onPress={toggleLanguage} style={styles.languageToggle}>
+              <Ionicons 
+                name={language === 'es' ? 'language' : 'language-outline'} 
+                size={24} 
+                color="#4A90E2" 
+              />
+              <Text style={styles.languageText}>{language.toUpperCase()}</Text>
+            </TouchableOpacity>
+          </View>
+
+          <Text style={styles.title}>{t('login')}</Text>
           
           {error && <Text style={styles.errorText}>{error}</Text>}
           
           <View style={styles.inputContainer}>
-            <Text style={styles.label}>Usuario</Text>
+            <Text style={styles.label}>{t('username')}</Text>
             <TextInput
               style={styles.input}
-              placeholder="Ingresa tu usuario"
+              placeholder={t('username')}
               value={username}
               onChangeText={setUsername}
               autoCapitalize="none"
@@ -76,10 +88,10 @@ const LoginScreen = ({ navigation }) => {
           </View>
           
           <View style={styles.inputContainer}>
-            <Text style={styles.label}>Contraseña</Text>
+            <Text style={styles.label}>{t('password')}</Text>
             <TextInput
               style={styles.input}
-              placeholder="Ingresa tu contraseña"
+              placeholder={t('password')}
               value={password}
               onChangeText={setPassword}
               secureTextEntry
@@ -94,22 +106,22 @@ const LoginScreen = ({ navigation }) => {
             {loading ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text style={styles.loginButtonText}>Iniciar Sesión</Text>
+              <Text style={styles.loginButtonText}>{t('loginButton')}</Text>
             )}
           </TouchableOpacity>
           
           <View style={styles.registerContainer}>
-            <Text style={styles.registerText}>¿No tienes una cuenta?</Text>
+            <Text style={styles.registerText}>{t('noAccount')}</Text>
             <TouchableOpacity onPress={() => navigation.navigate('Register')}>
-              <Text style={styles.registerLink}>Regístrate aquí</Text>
+              <Text style={styles.registerLink}>{t('registerHere')}</Text>
             </TouchableOpacity>
           </View>
           
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.diagnosticButton}
             onPress={() => navigation.navigate('Diagnostic')}
           >
-            <Text style={styles.diagnosticText}>Diagnosticar problemas de conexión</Text>
+            <Text style={styles.diagnosticText}>{t('diagnostic')}</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -136,6 +148,22 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+  },
+  languageToggleContainer: {
+    alignItems: 'flex-end',
+    marginBottom: 10,
+  },
+  languageToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: 'rgba(74, 144, 226, 0.1)',
+  },
+  languageText: {
+    marginLeft: 5,
+    color: '#4A90E2',
+    fontWeight: 'bold',
   },
   title: {
     fontSize: 24,

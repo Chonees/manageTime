@@ -11,10 +11,13 @@ import {
   Modal
 } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
+import { useLanguage } from '../../context/LanguageContext';
 import * as api from '../../services/api';
+import { Ionicons } from '@expo/vector-icons';
 
 const UserManagementScreen = () => {
   const { user } = useAuth();
+  const { t, toggleLanguage, language } = useLanguage();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -22,7 +25,7 @@ const UserManagementScreen = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
 
-  // Cargar usuarios
+  // Load users
   const loadUsers = async () => {
     setLoading(true);
     setError(null);
@@ -31,31 +34,28 @@ const UserManagementScreen = () => {
       const usersList = await api.getUsers();
       setUsers(usersList);
     } catch (error) {
-      setError(error.message || 'Error al cargar usuarios');
-      Alert.alert('Error', error.message || 'Error al cargar usuarios');
+      setError(error.message || t('error'));
+      Alert.alert(t('error'), error.message || t('error'));
     } finally {
       setLoading(false);
     }
   };
 
-  // Cargar usuarios al montar el componente
   useEffect(() => {
     loadUsers();
   }, []);
 
-  // Filtrar usuarios según la búsqueda
   const filteredUsers = users.filter(user => 
     user.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
     (user.email && user.email.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
-  // Renderizar lista de usuarios
   const renderUserList = () => {
     if (loading) {
       return (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#0066cc" />
-          <Text style={styles.loadingText}>Cargando usuarios...</Text>
+          <Text style={styles.loadingText}>{t('loadingUsers')}</Text>
         </View>
       );
     }
@@ -63,9 +63,9 @@ const UserManagementScreen = () => {
     if (error) {
       return (
         <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>Error: {error}</Text>
+          <Text style={styles.errorText}>{t('error')}: {error}</Text>
           <TouchableOpacity style={styles.retryButton} onPress={loadUsers}>
-            <Text style={styles.retryButtonText}>Reintentar</Text>
+            <Text style={styles.retryButtonText}>{t('retry')}</Text>
           </TouchableOpacity>
         </View>
       );
@@ -74,7 +74,7 @@ const UserManagementScreen = () => {
     if (users.length === 0) {
       return (
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>No hay usuarios registrados</Text>
+          <Text style={styles.emptyText}>{t('noUsers')}</Text>
         </View>
       );
     }
@@ -96,16 +96,16 @@ const UserManagementScreen = () => {
             >
               <View style={styles.userInfo}>
                 <Text style={styles.username}>{item.username}</Text>
-                <Text style={styles.email}>{item.email || 'Sin email'}</Text>
+                <Text style={styles.email}>{item.email || t('noEmail')}</Text>
                 <View style={styles.userMeta}>
                   <Text style={[
                     styles.userStatus,
                     { color: item.isActive ? '#2ecc71' : '#e74c3c' }
                   ]}>
-                    {item.isActive ? 'Activo' : 'Inactivo'}
+                    {item.isActive ? t('active') : t('inactive')}
                   </Text>
                   <Text style={styles.userRole}>
-                    {item.isAdmin ? 'Administrador' : 'Usuario'}
+                    {item.isAdmin ? t('adminUser') : t('normalUser')}
                   </Text>
                 </View>
               </View>
@@ -116,7 +116,7 @@ const UserManagementScreen = () => {
                   onPress={() => toggleUserStatus(item._id, item.isActive)}
                 >
                   <Text style={styles.buttonText}>
-                    {item.isActive ? 'Desactivar' : 'Activar'}
+                    {item.isActive ? t('deactivate') : t('activate')}
                   </Text>
                 </TouchableOpacity>
                 
@@ -125,7 +125,7 @@ const UserManagementScreen = () => {
                   onPress={() => toggleUserRole(item._id, item.isAdmin)}
                 >
                   <Text style={styles.buttonText}>
-                    {item.isAdmin ? 'Normal' : 'Admin'}
+                    {item.isAdmin ? t('normalUser') : t('adminUser')}
                   </Text>
                 </TouchableOpacity>
                 
@@ -133,7 +133,7 @@ const UserManagementScreen = () => {
                   style={[styles.actionButton, styles.deleteButton]}
                   onPress={() => confirmDeleteUser(item._id)}
                 >
-                  <Text style={styles.buttonText}>Eliminar</Text>
+                  <Text style={styles.buttonText}>{t('delete')}</Text>
                 </TouchableOpacity>
               </View>
             </TouchableOpacity>
@@ -143,68 +143,50 @@ const UserManagementScreen = () => {
     );
   };
 
-  // Función para cambiar el estado de un usuario (activo/inactivo)
   const toggleUserStatus = async (userId, isActive) => {
     try {
-      // En una implementación real, esto sería una llamada a la API
-      // await api.updateUserStatus(userId, !isActive);
-      
-      // Actualizar estado local
       setUsers(users.map(user => 
         user._id === userId ? { ...user, isActive: !isActive } : user
       ));
       
-      Alert.alert('Éxito', `Usuario ${isActive ? 'desactivado' : 'activado'} correctamente`);
+      Alert.alert(t('success'), t('userUpdated'));
     } catch (error) {
-      Alert.alert('Error', error.message || 'Error al actualizar estado del usuario');
+      Alert.alert(t('error'), t('errorUpdatingUser'));
     }
   };
 
-  // Función para cambiar el rol de un usuario (admin/normal)
   const toggleUserRole = async (userId, isAdmin) => {
     try {
-      // En una implementación real, esto sería una llamada a la API
-      // await api.updateUserRole(userId, !isAdmin);
-      
-      // Actualizar estado local
       setUsers(users.map(user => 
         user._id === userId ? { ...user, isAdmin: !isAdmin } : user
       ));
       
-      Alert.alert('Éxito', `Rol de usuario cambiado a ${isAdmin ? 'normal' : 'administrador'}`);
+      Alert.alert(t('success'), t('userUpdated'));
     } catch (error) {
-      Alert.alert('Error', error.message || 'Error al actualizar rol del usuario');
+      Alert.alert(t('error'), t('errorUpdatingUser'));
     }
   };
 
-  // Función para eliminar un usuario
   const deleteUser = async (userId) => {
     try {
-      // En una implementación real, esto sería una llamada a la API
-      // await api.deleteUser(userId);
-      
-      // Actualizar estado local
       setUsers(users.filter(user => user._id !== userId));
-      
-      Alert.alert('Éxito', 'Usuario eliminado correctamente');
+      Alert.alert(t('success'), t('userDeleted'));
     } catch (error) {
-      Alert.alert('Error', error.message || 'Error al eliminar usuario');
+      Alert.alert(t('error'), t('errorDeletingUser'));
     }
   };
 
-  // Función para confirmar eliminación de usuario
   const confirmDeleteUser = (userId) => {
     Alert.alert(
-      'Confirmar Eliminación',
-      '¿Estás seguro de que deseas eliminar este usuario? Esta acción no se puede deshacer.',
+      t('confirmDelete'),
+      t('deleteConfirmation'),
       [
-        { text: 'Cancelar', style: 'cancel' },
-        { text: 'Eliminar', style: 'destructive', onPress: () => deleteUser(userId) }
+        { text: t('cancel'), style: 'cancel' },
+        { text: t('delete'), style: 'destructive', onPress: () => deleteUser(userId) }
       ]
     );
   };
 
-  // Renderizar modal de detalles de usuario
   const renderUserDetailsModal = () => {
     if (!selectedUser) return null;
     
@@ -217,42 +199,42 @@ const UserManagementScreen = () => {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Detalles del Usuario</Text>
+            <Text style={styles.modalTitle}>{t('userDetails')}</Text>
             
             <View style={styles.userDetailItem}>
-              <Text style={styles.detailLabel}>ID:</Text>
-              <Text style={styles.detailValue}>{selectedUser._id || 'No disponible'}</Text>
+              <Text style={styles.detailLabel}>{t('userId')}:</Text>
+              <Text style={styles.detailValue}>{selectedUser._id || t('notAvailable')}</Text>
             </View>
             
             <View style={styles.userDetailItem}>
-              <Text style={styles.detailLabel}>Usuario:</Text>
-              <Text style={styles.detailValue}>{selectedUser.username || 'No disponible'}</Text>
+              <Text style={styles.detailLabel}>{t('username')}:</Text>
+              <Text style={styles.detailValue}>{selectedUser.username || t('notAvailable')}</Text>
             </View>
             
             <View style={styles.userDetailItem}>
-              <Text style={styles.detailLabel}>Email:</Text>
-              <Text style={styles.detailValue}>{selectedUser.email || 'No disponible'}</Text>
+              <Text style={styles.detailLabel}>{t('email')}:</Text>
+              <Text style={styles.detailValue}>{selectedUser.email || t('notAvailable')}</Text>
             </View>
             
             <View style={styles.userDetailItem}>
-              <Text style={styles.detailLabel}>Rol:</Text>
-              <Text style={styles.detailValue}>{selectedUser.isAdmin ? 'Administrador' : 'Usuario normal'}</Text>
+              <Text style={styles.detailLabel}>{t('role')}:</Text>
+              <Text style={styles.detailValue}>{selectedUser.isAdmin ? t('adminUser') : t('normalUser')}</Text>
             </View>
             
             <View style={styles.userDetailItem}>
-              <Text style={styles.detailLabel}>Estado:</Text>
+              <Text style={styles.detailLabel}>{t('status')}:</Text>
               <Text style={[
                 styles.detailValue,
                 { color: selectedUser.isActive ? '#2ecc71' : '#e74c3c' }
               ]}>
-                {selectedUser.isActive ? 'Activo' : 'Inactivo'}
+                {selectedUser.isActive ? t('active') : t('inactive')}
               </Text>
             </View>
             
             <View style={styles.userDetailItem}>
-              <Text style={styles.detailLabel}>Fecha de registro:</Text>
+              <Text style={styles.detailLabel}>{t('registrationDate')}:</Text>
               <Text style={styles.detailValue}>
-                {selectedUser.createdAt ? new Date(selectedUser.createdAt).toLocaleDateString() : 'No disponible'}
+                {selectedUser.createdAt ? new Date(selectedUser.createdAt).toLocaleDateString() : t('notAvailable')}
               </Text>
             </View>
             
@@ -261,7 +243,7 @@ const UserManagementScreen = () => {
                 style={[styles.modalButton, styles.closeButton]}
                 onPress={() => setModalVisible(false)}
               >
-                <Text style={styles.closeButtonText}>Cerrar</Text>
+                <Text style={styles.closeButtonText}>{t('close')}</Text>
               </TouchableOpacity>
               
               <TouchableOpacity 
@@ -274,7 +256,7 @@ const UserManagementScreen = () => {
                 }}
               >
                 <Text style={styles.buttonText}>
-                  {selectedUser.isActive ? 'Desactivar' : 'Activar'}
+                  {selectedUser.isActive ? t('deactivate') : t('activate')}
                 </Text>
               </TouchableOpacity>
               
@@ -288,7 +270,7 @@ const UserManagementScreen = () => {
                 }}
               >
                 <Text style={styles.buttonText}>
-                  Cambiar a {selectedUser.isAdmin ? 'Normal' : 'Admin'}
+                  {selectedUser.isAdmin ? t('normalUser') : t('adminUser')}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -300,10 +282,14 @@ const UserManagementScreen = () => {
 
   return (
     <View style={styles.container}>
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>{t('userManagement')}</Text>
+      </View>
+      
       <View style={styles.searchContainer}>
         <TextInput
           style={styles.searchInput}
-          placeholder="Buscar usuarios..."
+          placeholder={t('searchUsers')}
           value={searchQuery}
           onChangeText={setSearchQuery}
         />
@@ -322,6 +308,19 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f5f5f5',
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#2c3e50',
+    padding: 15,
+    paddingTop: 40,
+  },
+  headerTitle: {
+    color: '#fff',
+    fontSize: 20,
+    fontWeight: 'bold',
   },
   searchContainer: {
     padding: 15,

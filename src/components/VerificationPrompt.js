@@ -16,6 +16,7 @@ import * as Speech from 'expo-speech';
 import { Audio } from 'expo-av';
 import { Ionicons } from '@expo/vector-icons';
 import * as FileSystem from 'expo-file-system';
+import { useLanguage } from '../context/LanguageContext';
 
 const VERIFICATION_INTERVAL = 10000; // 10 segundos en milisegundos
 const VIBRATION_PATTERN = Platform.OS === 'android' ? [1000, 1000] : [1000, 2000, 1000, 2000]; // Patrón de vibración (vibrar, pausa)
@@ -32,6 +33,7 @@ const VerificationPrompt = ({ isWorking, onVerificationFailed }) => {
   const [recognitionStatus, setRecognitionStatus] = useState('');
   const [recordingAttempts, setRecordingAttempts] = useState(0);
   const MAX_RECORDING_ATTEMPTS = 3;
+  const { t, language } = useLanguage();
   
   // Usar useRef en lugar de useState para los timers para evitar re-renderizaciones
   const verificationTimerRef = useRef(null);
@@ -418,7 +420,6 @@ const VerificationPrompt = ({ isWorking, onVerificationFailed }) => {
       // Detener la grabación y obtener el URI
       const audioUri = await stopListening();
       
-      // Si no hay URI, continuar sin mostrar alerta
       if (!audioUri) {
         return;
       }
@@ -426,45 +427,51 @@ const VerificationPrompt = ({ isWorking, onVerificationFailed }) => {
       setRecognitionStatus('Procesando...');
       
       try {
-        // Llamada a Google Speech-to-Text - Procesamiento más rápido
+        // Llamada a Google Speech-to-Text
         let recognizedText = await recognizeWithGoogleSpeech(audioUri, currentCode);
         
         // Convertir palabras numéricas a dígitos
         recognizedText = convertirPalabrasANumeros(recognizedText);
         
-        // Verificación rápida: si el texto contiene el código actual
-        if (recognizedText.includes(currentCode)) {
-          verifyCode(currentCode);
-          return;
-        }
-        
-        // Extraer números del texto reconocido - Algoritmo optimizado
+        // Extraer números del texto reconocido
         const numbers = recognizedText.match(/\d+/g);
+        
         if (numbers && numbers.length > 0) {
-          // Verificar si alguno de los números coincide con el código
+          // Intentar con cada número encontrado
           for (const num of numbers) {
+            // Verificar si el número coincide con el código actual
             if (num === currentCode) {
               verifyCode(currentCode);
               return;
             }
+            
+            // Si el número es más largo que el código, verificar los últimos 4 dígitos
+            if (num.length > 4) {
+              const lastFourDigits = num.slice(-4);
+              if (lastFourDigits === currentCode) {
+                verifyCode(currentCode);
+                return;
+              }
+            }
           }
           
-          // Intentar con el primer número encontrado
+          // Si no se encontró una coincidencia exacta, intentar con el primer número
           const potentialCode = numbers[0].substring(0, 4);
           if (potentialCode.length === 4) {
             verifyCode(potentialCode);
+          }
+        } else {
+          // Si no se encontraron números, intentar con dígitos individuales
+          const digitosIndividuales = recognizedText.match(/\d/g);
+          if (digitosIndividuales && digitosIndividuales.length >= 4) {
+            const codigoUnido = digitosIndividuales.slice(0, 4).join('');
+            verifyCode(codigoUnido);
           } else {
-            // Intentar unir dígitos individuales si hay al menos 4
-            const digitosIndividuales = recognizedText.match(/\d/g);
-            if (digitosIndividuales && digitosIndividuales.length >= 4) {
-              const codigoUnido = digitosIndividuales.slice(0, 4).join('');
-              verifyCode(codigoUnido);
-              return;
-            }
+            setRecognitionStatus(t('codeMismatch'));
           }
         }
       } catch (error) {
-        // Simplemente continuar sin mostrar error
+        setRecognitionStatus(t('errorRecognizingSpeech'));
       } finally {
         setRecognitionStatus('');
       }
@@ -484,7 +491,7 @@ const VerificationPrompt = ({ isWorking, onVerificationFailed }) => {
         throw new Error('URI de audio inválido');
       }
       
-      // Verificar que el archivo exista - Verificación rápida
+      // Verificar que el archivo exista
       const fileInfo = await FileSystem.getInfoAsync(audioUri);
       if (!fileInfo.exists || fileInfo.size < 1000) {
         throw new Error('Archivo de audio no válido');
@@ -493,7 +500,7 @@ const VerificationPrompt = ({ isWorking, onVerificationFailed }) => {
       // 1. Obtener el archivo de audio
       const audioFile = await FileSystem.readAsStringAsync(audioUri, { encoding: FileSystem.EncodingType.Base64 });
       
-      // 2. Preparar la petición a Google Speech-to-Text con configuración optimizada
+      // 2. Preparar la petición a Google Speech-to-Text
       const response = await fetch('https://speech.googleapis.com/v1/speech:recognize?key=AIzaSyDGqyJR4KZRJt9qRLmeGjdlgIBt_nb7Kqw', {
         method: 'POST',
         headers: {
@@ -503,11 +510,11 @@ const VerificationPrompt = ({ isWorking, onVerificationFailed }) => {
           config: {
             encoding: 'AMR',
             sampleRateHertz: 8000,
-            languageCode: 'es-ES',
-            model: 'command_and_search', // Modelo optimizado para comandos cortos
+            languageCode: language === 'es' ? 'es-ES' : 'en-US',
+            model: 'command_and_search',
             speechContexts: [{
-              phrases: [expectedCode, ...expectedCode.split('')], // Ayuda al reconocimiento con el código esperado
-              boost: 10 // Aumenta la probabilidad de reconocer estos términos
+              phrases: [expectedCode, ...expectedCode.split('')],
+              boost: 10
             }]
           },
           audio: {
@@ -517,7 +524,7 @@ const VerificationPrompt = ({ isWorking, onVerificationFailed }) => {
       });
       
       // 3. Procesar la respuesta
-      const data = JSON.parse(await response.text());
+      const data = await response.json();
       
       // 4. Extraer el texto reconocido
       if (data.results && data.results.length > 0) {
@@ -613,79 +620,47 @@ const VerificationPrompt = ({ isWorking, onVerificationFailed }) => {
     }
   };
 
-  // Función para leer el código en voz alta usando Google Cloud Text-to-Speech
+  // Función para leer el código en voz alta
   const speakCode = async (code) => {
     try {
-      // Formatear el código para que se lea dígito por dígito con pausas
-      const formattedCode = code.split('').join(', ');
-      const textToSpeak = `Código de verificación: ${formattedCode}`;
+      const speechLanguage = language === 'es' ? 'es-ES' : 'en-US';
+      const speechText = language === 'es' 
+        ? `Código de verificación: ${code.split('').join(' ')}`
+        : `Verification code: ${code.split('').join(' ')}`;
+
+      // Detener cualquier síntesis de voz en curso
+      await Speech.stop();
       
-      console.log('Llamando a Google Cloud Text-to-Speech API');
-      
-      // Llamar a la API de Google Cloud Text-to-Speech
-      const response = await fetch('https://texttospeech.googleapis.com/v1/text:synthesize?key=AIzaSyDGqyJR4KZRJt9qRLmeGjdlgIBt_nb7Kqw', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
+      // Esperar un momento antes de iniciar la nueva síntesis
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      await Speech.speak(speechText, {
+        language: speechLanguage,
+        pitch: 1.0,
+        rate: 0.8,
+        onDone: () => {
+          startListening();
         },
-        body: JSON.stringify({
-          input: {
-            text: textToSpeak,
-          },
-          voice: {
-            languageCode: 'es-ES',
-            name: 'es-ES-Standard-A',
-            ssmlGender: 'FEMALE'
-          },
-          audioConfig: {
-            audioEncoding: 'MP3',
-            speakingRate: 0.85,
-            pitch: 0,
-            volumeGainDb: 3.0
-          }
-        }),
+        onError: (error) => {
+          addDebugInfo(`Speech error: ${error.message}`);
+        }
       });
-      
-      // Procesar la respuesta
-      const data = await response.json();
-      
-      if (!data.audioContent) {
-        throw new Error('No se recibió contenido de audio de la API');
-      }
-      
-      // Guardar el audio en un archivo temporal
-      const audioPath = `${FileSystem.cacheDirectory}speech_${Date.now()}.mp3`;
-      await FileSystem.writeAsStringAsync(audioPath, data.audioContent, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
-      
-      // Reproducir el audio
-      const { sound } = await Audio.Sound.createAsync(
-        { uri: audioPath },
-        { shouldPlay: true, volume: 1.0 }
-      );
-      
-      // Esperar a que termine la reproducción
-      await new Promise((resolve) => {
-        sound.setOnPlaybackStatusUpdate((status) => {
-          if (status.didJustFinish) {
-            resolve();
-          }
-        });
-      });
-      
-      // Liberar recursos
-      await sound.unloadAsync();
-      
-      // Iniciar reconocimiento de voz inmediatamente después de reproducir el audio
-      startListening();
-      
-      return true;
     } catch (error) {
-      console.log(`Error al usar Text-to-Speech: ${error.message}`);
-      return false;
+      addDebugInfo(`Error in speakCode: ${error.message}`);
     }
   };
+
+  // Efecto para leer el código en voz alta cuando se muestra el modal
+  useEffect(() => {
+    if (modalVisible && currentCode) {
+      // Pequeño retraso para asegurar que el modal esté completamente visible
+      const timer = setTimeout(() => {
+        speakCode(currentCode);
+      }, 500);
+
+      return () => clearTimeout(timer);
+    }
+  }, [modalVisible, currentCode, language]);
 
   // Activar la verificación
   const triggerVerification = () => {
@@ -751,77 +726,68 @@ const VerificationPrompt = ({ isWorking, onVerificationFailed }) => {
     }, 1000);
   };
 
-  // Efecto para leer el código en voz alta cuando se muestra el modal
-  useEffect(() => {
-    if (modalVisible && currentCode) {
-      // Pequeño retraso para asegurar que el modal esté completamente visible
-      setTimeout(() => {
-        speakCode(currentCode);
-      }, 500);
-    }
-  }, [modalVisible, currentCode]);
-
   // Renderizar el componente
   return (
     <Modal
-      animationType="fade"
+      animationType="slide"
       transparent={true}
       visible={modalVisible}
       onRequestClose={() => {
-        // No permitir cerrar el modal con el botón de atrás
+        setModalVisible(false);
+        cleanupResources();
       }}
     >
-      <View style={styles.centeredView}>
-        <View style={styles.modalView}>
-          <Text style={styles.modalTitle}>Verificación de Presencia</Text>
+      <View style={styles.modalContainer}>
+        <View style={styles.modalContent}>
+          <Text style={styles.modalTitle}>{t('verificationRequired')}</Text>
+          <Text style={styles.modalSubtitle}>{t('enterVerificationCode')}</Text>
           
-          <Text style={styles.modalText}>
-            Por favor, verifique su presencia ingresando el siguiente código:
+          <Text style={styles.codeDisplay}>{currentCode}</Text>
+          
+          <Text style={styles.timeRemaining}>
+            {t('timeRemaining', { time: timeRemaining })}
           </Text>
-          
-          <View style={styles.codeContainer}>
-            <Text style={styles.codeText}>Código:</Text>
-            <Text style={styles.codeValue}>{currentCode}</Text>
-            <TouchableOpacity 
-              style={styles.speakButton}
-              onPress={() => speakCode(currentCode)}
-            >
-              <Ionicons name="volume-high" size={24} color="#4A90E2" />
-            </TouchableOpacity>
-          </View>
           
           {isListening ? (
             <View style={styles.listeningContainer}>
               <ActivityIndicator size="large" color="#4A90E2" />
-              <Text style={styles.listeningText}>
-                {recognitionStatus || "Escuchando..."}
-              </Text>
+              <Text style={styles.listeningText}>{t('listening')}</Text>
+              <Text style={styles.speakCodeText}>{t('speakCode')}</Text>
             </View>
           ) : (
-            <TextInput
-              style={styles.input}
-              onChangeText={setVerificationCode}
-              value={verificationCode}
-              placeholder="O ingrese el código manualmente"
-              keyboardType="numeric"
-              maxLength={4}
-            />
+            <View style={styles.inputContainer}>
+              <TextInput
+                style={styles.codeInput}
+                value={verificationCode}
+                onChangeText={setVerificationCode}
+                placeholder={t('enterCode')}
+                keyboardType="numeric"
+                maxLength={4}
+              />
+            </View>
           )}
           
-          <Text style={styles.timerText}>
-            Tiempo restante: {timeRemaining} segundos
-          </Text>
+          <View style={styles.buttonContainer}>
+            <TouchableOpacity
+              style={[styles.button, styles.verifyButton]}
+              onPress={() => verifyCode(verificationCode)}
+            >
+              <Text style={styles.buttonText}>{t('verify')}</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={[styles.button, styles.cancelButton]}
+              onPress={() => {
+                setModalVisible(false);
+                cleanupResources();
+              }}
+            >
+              <Text style={styles.buttonText}>{t('cancel')}</Text>
+            </TouchableOpacity>
+          </View>
           
-          {!isListening && (
-            <View style={styles.buttonContainer}>
-              <TouchableOpacity
-                style={styles.verifyButton}
-                onPress={() => verifyCode()}
-                disabled={verificationCode.length !== 4}
-              >
-                <Text style={styles.verifyButtonText}>Verificar</Text>
-              </TouchableOpacity>
-            </View>
+          {recognitionStatus && (
+            <Text style={styles.recognitionStatus}>{recognitionStatus}</Text>
           )}
         </View>
       </View>
@@ -830,13 +796,13 @@ const VerificationPrompt = ({ isWorking, onVerificationFailed }) => {
 };
 
 const styles = StyleSheet.create({
-  centeredView: {
+  modalContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
-  modalView: {
+  modalContent: {
     width: Dimensions.get('window').width * 0.9,
     backgroundColor: 'white',
     borderRadius: 20,
@@ -857,64 +823,60 @@ const styles = StyleSheet.create({
     marginBottom: 15,
     color: '#4A90E2',
   },
-  modalText: {
+  modalSubtitle: {
     marginBottom: 15,
     textAlign: 'center',
     fontSize: 16,
     color: '#333',
   },
-  codeContainer: {
-    backgroundColor: '#f0f0f0',
-    padding: 10,
-    borderRadius: 8,
-    marginBottom: 15,
-    width: '100%',
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'center',
-  },
-  codeText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-    marginRight: 10,
-  },
-  codeValue: {
+  codeDisplay: {
     fontSize: 36,
     fontWeight: 'bold',
     letterSpacing: 2,
     color: '#4A90E2',
-  },
-  input: {
-    width: '100%',
-    height: 50,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    padding: 10,
-    fontSize: 18,
     marginBottom: 20,
-    textAlign: 'center',
   },
-  timerText: {
+  timeRemaining: {
     fontSize: 16,
     color: '#e74c3c',
     marginBottom: 20,
   },
+  inputContainer: {
+    width: '100%',
+    height: 60,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    marginBottom: 20,
+    justifyContent: 'center',
+  },
+  codeInput: {
+    width: '100%',
+    height: '100%',
+    textAlign: 'center',
+    fontSize: 24,
+    padding: 10,
+  },
   buttonContainer: {
     flexDirection: 'row',
     width: '100%',
-    justifyContent: 'center',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 20,
+  },
+  button: {
+    padding: 15,
+    borderRadius: 10,
+    width: '45%',
     alignItems: 'center',
   },
   verifyButton: {
     backgroundColor: '#4A90E2',
-    borderRadius: 10,
-    padding: 15,
-    width: '100%',
-    alignItems: 'center',
   },
-  verifyButtonText: {
+  cancelButton: {
+    backgroundColor: '#e74c3c',
+  },
+  buttonText: {
     color: 'white',
     fontWeight: 'bold',
     fontSize: 16,
@@ -932,9 +894,17 @@ const styles = StyleSheet.create({
     color: '#4A90E2',
     fontWeight: 'bold',
   },
-  speakButton: {
-    marginLeft: 10,
-    padding: 5,
+  speakCodeText: {
+    marginTop: 10,
+    fontSize: 16,
+    color: '#4A90E2',
+    fontWeight: 'bold',
+  },
+  recognitionStatus: {
+    marginTop: 10,
+    fontSize: 16,
+    color: '#e74c3c',
+    fontWeight: 'bold',
   },
 });
 

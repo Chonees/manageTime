@@ -58,63 +58,51 @@ exports.getRecentActivity = async (req, res) => {
     // Obtener las últimas tareas creadas o completadas
     const recentTasks = await Task.find()
       .sort({ updatedAt: -1 })
-      .limit(10)
+      .limit(15)
       .populate('userId', 'username');
     
     // Obtener los últimos registros de ubicación
     const recentLocations = await Location.find()
       .sort({ timestamp: -1 })
-      .limit(10)
+      .limit(15)
       .populate('userId', 'username');
     
     // Obtener las últimas actividades del nuevo sistema
     const recentActivitiesFromDb = await Activity.find()
       .sort({ createdAt: -1 })
-      .limit(10)
+      .limit(15)
       .populate('userId', 'username')
       .populate('taskId', 'title');
       
     // Combinar y ordenar por fecha
     const activities = [
       ...recentTasks.map(task => ({
+        id: task._id.toString(),
         type: 'task',
         action: task.completed ? 'completed' : 'created',
         username: task.userId ? task.userId.username : 'Usuario desconocido',
         title: task.title,
         timestamp: task.updatedAt,
-        id: task._id.toString()
+        message: `${task.userId ? task.userId.username : 'Usuario desconocido'} ${task.completed ? 'completó' : 'creó'} la tarea: ${task.title}`
       })),
       ...recentLocations.map(location => ({
+        id: location._id.toString(),
         type: 'location',
         action: location.type === 'start' ? 'started_working' : 'stopped_working',
         username: location.userId ? location.userId.username : 'Usuario desconocido',
-        coordinates: {
-          latitude: location.latitude,
-          longitude: location.longitude
-        },
+        title: location.locationName || 'Unknown Location',
         timestamp: location.timestamp,
-        id: location._id.toString()
+        message: `${location.userId ? location.userId.username : 'Usuario desconocido'} ${location.type === 'start' ? 'inició' : 'detuvo'} el trabajo en ${location.locationName || 'Unknown Location'}`
       })),
-      // Agregar actividades del nuevo sistema
-      ...recentActivitiesFromDb.map(activity => {
-        // Mapear tipo de actividad a acción
-        let action = 'updated';
-        if (activity.type === 'task_create') action = 'created';
-        if (activity.type === 'task_complete') action = 'completed';
-        if (activity.type === 'task_delete') action = 'deleted';
-        if (activity.type === 'location_enter') action = 'entered_location';
-        if (activity.type === 'location_exit') action = 'exited_location';
-        
-        return {
-          type: activity.type.startsWith('task_') ? 'task' : 'location',
-          action,
-          username: activity.userId ? activity.userId.username : 'Usuario desconocido',
-          title: activity.taskId ? activity.taskId.title : (activity.metadata?.title || ''),
-          message: activity.message,
-          timestamp: activity.createdAt,
-          id: activity._id.toString()
-        };
-      })
+      ...recentActivitiesFromDb.map(activity => ({
+        id: activity._id.toString(),
+        type: activity.type.startsWith('task_') ? 'task' : 'location',
+        action: activity.type.split('_')[1] || 'updated',
+        username: activity.userId ? activity.userId.username : 'Usuario desconocido',
+        title: activity.taskId ? activity.taskId.title : (activity.metadata?.locationName || 'Unknown Location'),
+        timestamp: activity.createdAt,
+        message: activity.message || `${activity.userId ? activity.userId.username : 'Usuario desconocido'} ${activity.type}`
+      }))
     ];
     
     // Ordenar por fecha (más reciente primero)
@@ -123,12 +111,13 @@ exports.getRecentActivity = async (req, res) => {
     // Limitar a 15 actividades
     const recentActivities = activities.slice(0, 15);
     
-    // Registrar la respuesta para depuración
-    console.log('Enviando actividades recientes:', JSON.stringify(recentActivities, null, 2));
-    
+    console.log('Sending recent activities:', recentActivities);
     res.status(200).json(recentActivities);
   } catch (error) {
     console.error('Error al obtener actividad reciente:', error);
-    res.status(500).json({ message: 'Error al obtener actividad reciente' });
+    res.status(500).json({ 
+      message: 'Error al obtener actividad reciente', 
+      error: error.message 
+    });
   }
 };
