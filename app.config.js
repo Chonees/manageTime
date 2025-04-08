@@ -32,11 +32,17 @@ module.exports = {
   },
   extra: {
     // Configuración para diferentes entornos
-    apiUrl: "http://192.168.31.174:5555/api",
+
+    apiUrl: "https://managetime-backend-48f256c2dfe5.herokuapp.com/api",
+
     // Tiempo de espera para solicitudes API (en milisegundos)
-    apiTimeout: 15000,
+    apiTimeout: 60000,
     // Habilitar logs detallados para depuración
-    enableDetailedLogs: true
+    enableDetailedLogs: true,
+    // ID del proyecto EAS
+    eas: {
+      projectId: "b1d4e758-f8ad-47d6-b479-dd1edcf9b380"
+    }
   },
   // Configuración de red para Expo
   packagerOpts: {

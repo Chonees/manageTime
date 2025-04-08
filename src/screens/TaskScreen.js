@@ -299,6 +299,7 @@ const TaskScreen = ({ navigation }) => {
     }
   };
 
+
   // Toggle task completion
   const toggleComplete = async (taskId) => {
     try {
@@ -360,6 +361,7 @@ const TaskScreen = ({ navigation }) => {
       }));
       
       Alert.alert('Error', error.message || t('errorOccurred'));
+
     }
   };
 

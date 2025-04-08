@@ -18,14 +18,14 @@ const AdminDashboardScreen = ({ navigation }) => {
   const { user, logout } = useAuth();
   const { t, language } = useLanguage();
   const [stats, setStats] = useState({
-    users: { total: 0, active: 0 },
+    users: { total: 0 },
     tasks: { total: 0, completed: 0, pending: 0, completionRate: 0 },
     locations: { total: 0 }
   });
-  const [recentActivity, setRecentActivity] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
+  const [recentActivity, setRecentActivity] = useState([]); // Añadir estado para actividades recientes
 
   // Load statistics and recent activities
   const loadStats = async () => {

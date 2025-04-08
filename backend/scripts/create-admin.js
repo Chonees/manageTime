@@ -5,9 +5,9 @@ const User = require('../src/models/user.model');
 
 // Datos del usuario administrador
 const adminUser = {
-  username: 'cristian',
-  email: 'cristian@managetime.com',
-  password: 'Password123',
+  username: 'admin',
+  email: 'admin@managetime.com',
+  password: 'admin',
   isAdmin: true,
   isActive: true
 };
