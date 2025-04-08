@@ -1,4 +1,5 @@
 import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 
 // Configuración específica para cada plataforma
 const platformConfig = {
@@ -60,15 +61,13 @@ const platformConfig = {
   
   // Configuración base
   config: {
-
     // URL de Heroku (producción)
-    apiUrl: 'https://managetime-backend-48f256c2dfe5.herokuapp.com', 
+    apiUrl: detectTunnelUrl() || process.env.API_URL , 
     
     // Configuración optimizada para redes móviles
     timeout: 90000, // 90 segundos
     maxRetries: 5,  // Aumentar reintentos para redes móviles
     retryDelay: 2000, // Retraso base entre reintentos (ms)
-
   },
   
   // Configuración específica para Android
@@ -109,6 +108,25 @@ const platformConfig = {
   }
 };
 
+// Función para detectar si estamos en modo túnel y obtener la URL correspondiente
+function detectTunnelUrl() {
+  try {
+    // Forzar el uso de la URL de Heroku para dispositivos móviles
+    if (Platform.OS === 'ios' || Platform.OS === 'android') {
+      const herokuUrl = process.env.API_URL ;
+      console.log('Forzando URL de Heroku para dispositivo móvil:', herokuUrl);
+      return herokuUrl;
+    }
+    
+    // Para desarrollo web, también usar Heroku
+    console.log('Usando URL de Heroku para web');
+    return process.env.API_URL ;
+  } catch (error) {
+    console.error('Error al detectar modo:', error);
+    return process.env.API_URL ;
+  }
+}
+
 // Función para obtener la configuración específica de la plataforma actual
 export const getPlatformConfig = (section) => {
   if (!section) return platformConfig;
@@ -132,7 +150,16 @@ export const mapConfig = {
 
 // Función para obtener la URL de la API según la plataforma
 export const getApiBaseUrl = () => {
+  // Primero intentar detectar si estamos en modo túnel
+  const tunnelUrl = detectTunnelUrl();
+  if (tunnelUrl) {
+    console.log('Usando URL del túnel:', tunnelUrl);
+    return tunnelUrl;
+  }
+  
+  // Si no estamos en modo túnel, usar la URL de Heroku
   const config = getPlatformConfig('config');
+  console.log('Usando URL de la API estándar:', config.apiUrl);
   return config.apiUrl;
 };
 
