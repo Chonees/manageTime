@@ -13,17 +13,21 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
+import LanguageToggle from '../components/LanguageToggle';
 import * as api from '../services/api';
 import LocationRadiusSelector from '../components/LocationRadiusSelector';
 
 const TaskScreen = ({ navigation }) => {
   const { user } = useAuth();
+  const { t } = useLanguage();
   const [tasks, setTasks] = useState([]);
   const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskDescription, setNewTaskDescription] = useState('');
   const [selectedUserId, setSelectedUserId] = useState(null);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showAddForm, setShowAddForm] = useState(false);
   const [showUserSelector, setShowUserSelector] = useState(false);
@@ -32,6 +36,18 @@ const TaskScreen = ({ navigation }) => {
   const [taskRadius, setTaskRadius] = useState(1.0);
   const [taskLocationName, setTaskLocationName] = useState('');
 
+  // Function to handle pull-to-refresh
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await loadTasks();
+    } catch (error) {
+      console.error('Error refreshing data:', error);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   // Cargar tareas
   const loadTasks = async () => {
     setLoading(true);
@@ -39,6 +55,13 @@ const TaskScreen = ({ navigation }) => {
 
     try {
       console.log('Cargando tareas...');
+      
+      // Si es administrador, primero cargar usuarios para tener los datos disponibles
+      if (user?.isAdmin) {
+        console.log('Cargando usuarios primero...');
+        await loadUsers();
+      }
+      
       // Usar getUserTasks para usuarios normales y getTasks para administradores
       const tasksData = user?.isAdmin 
         ? await api.getTasks() 
@@ -46,22 +69,44 @@ const TaskScreen = ({ navigation }) => {
       
       console.log(`Se cargaron ${tasksData.length} tareas`);
       
+      // Log the tasks data to see if user information is included
+      tasksData.forEach(task => {
+        console.log(`Task ${task._id}: title=${task.title}, userId=${task.userId && typeof task.userId === 'object' ? task.userId._id : task.userId}, username=${task.userId && typeof task.userId === 'object' ? task.userId.username : 'no username'}`);
+      });
+      
       // Asegurarnos de que todas las tareas tengan la propiedad completed
-      const formattedTasks = tasksData.map(task => ({
+      const formattedTasks = tasksData.map(task => {
+        // Extract username from populated userId if it exists
+        let taskUserId = null;
+        let taskUsername = null;
+        
+        if (task.userId) {
+          // If userId is an object (populated), extract _id and username
+          if (typeof task.userId === 'object') {
+            taskUserId = task.userId._id;
+            taskUsername = task.userId.username;
+            console.log(`Task ${task._id} has populated userId with username: ${taskUsername}`);
+          } else {
+            // If userId is just an ID, keep it as is
+            taskUserId = task.userId;
+            console.log(`Task ${task._id} has unpopulated userId: ${taskUserId}`);
+          }
+        }
+        
+        return {
         ...task,
-        completed: task.completed !== undefined ? task.completed : false
-      }));
+          completed: task.completed !== undefined ? task.completed : false,
+          // Preserve populated user information if it exists
+          _username: taskUsername, // Store username directly in task for easy access
+          userId: taskUserId || task.userId // Ensure userId is always the ID string
+        };
+      });
       
       setTasks(formattedTasks);
-      
-      // Si es administrador, también cargar usuarios
-      if (user?.isAdmin) {
-        await loadUsers();
-      }
     } catch (error) {
       console.error('Error al cargar tareas:', error);
-      setError(error.message || 'Error al cargar tareas');
-      Alert.alert('Error', error.message || 'Error al cargar tareas');
+      setError(error.message || t('errorLoadingTasks'));
+      Alert.alert('Error', error.message || t('errorLoadingTasks'));
     } finally {
       setLoading(false);
     }
@@ -78,7 +123,7 @@ const TaskScreen = ({ navigation }) => {
       setUsers(usersData);
     } catch (error) {
       console.error('Error al cargar usuarios:', error);
-      Alert.alert('Error', 'No se pudieron cargar los usuarios');
+      Alert.alert('Error', t('errorLoadingUsers'));
     }
   };
 
@@ -90,12 +135,12 @@ const TaskScreen = ({ navigation }) => {
   // Añadir nueva tarea
   const addTask = async () => {
     if (!newTaskTitle.trim()) {
-      Alert.alert('Error', 'Por favor ingresa un título para la tarea');
+      Alert.alert(t('error'), t('taskTitleRequired'));
       return;
     }
 
     try {
-      console.log('Creando tarea con los siguientes datos:');
+      console.log(t('creatingTask'));
       
       const taskData = { 
         title: newTaskTitle,
@@ -108,30 +153,87 @@ const TaskScreen = ({ navigation }) => {
         taskData.location = taskLocation;
         taskData.radius = taskRadius;
         taskData.locationName = taskLocationName;
-        console.log(`Añadiendo ubicación: ${taskLocation.coordinates}, radio: ${taskRadius}km, lugar: ${taskLocationName || 'Sin nombre'}`);
+        console.log(t('addingLocation', { 
+          coordinates: taskLocation.coordinates, 
+          radius: taskRadius,
+          place: taskLocationName || t('noPlaceName')
+        }));
       }
       
       let result;
       
       // Si es admin y hay un usuario seleccionado, usar el endpoint específico para asignar tareas
       if (user?.isAdmin && selectedUserId) {
-        console.log(`Administrador asignando tarea al usuario con ID: ${selectedUserId}`);
-        taskData.userId = selectedUserId;
+        // Make sure userId is a string
+        const userIdString = String(selectedUserId);
+        console.log(t('adminAssigningTask', { userId: userIdString }));
+        
+        // Include userId as string in taskData
+        taskData.userId = userIdString;
         
         // Usar la nueva función específica para asignar tareas
         result = await api.assignTask(taskData);
-        console.log('Respuesta del servidor (asignación):', JSON.stringify(result));
+        console.log(t('serverResponseAssignment'), JSON.stringify(result));
       } else {
         // Caso normal: crear tarea para el usuario actual
-        console.log('Creando tarea para el usuario actual');
+        console.log(t('creatingTaskForCurrentUser'));
         result = await api.saveTask(taskData);
-        console.log('Respuesta del servidor (normal):', JSON.stringify(result));
+        console.log(t('serverResponseNormal'), JSON.stringify(result));
       }
       
       // Verificamos que result.task existe antes de añadirlo
       if (result && result.task) {
+        // Log the task data that came back from server
+        console.log(t('taskDataReceived'), JSON.stringify(result.task));
+        
+        // Process the returned task object to handle populated userId
+        let taskUsername = null;
+        let taskUserId = null;
+        
+        if (result.task.userId) {
+          if (typeof result.task.userId === 'object') {
+            taskUserId = result.task.userId._id;
+            taskUsername = result.task.userId.username;
+            console.log(t('newTaskHasUsername', { username: taskUsername }));
+          } else {
+            taskUserId = result.task.userId;
+            
+            // Try to find the username in our local users list
+            if (users.length > 0) {
+              const taskUser = users.find(u => String(u._id) === String(taskUserId));
+              if (taskUser) {
+                taskUsername = taskUser.username;
+                console.log(t('foundUsernameForTask', { username: taskUsername }));
+              }
+            }
+          }
+        }
+        
+        // Create a properly formatted task object with username info
+        const newTaskObject = {
+          ...result.task,
+          _username: taskUsername,
+          userId: taskUserId || result.task.userId
+        };
+        
         // Añadimos la nueva tarea a la lista actual
-        setTasks(currentTasks => [result.task, ...currentTasks]);
+        setTasks(currentTasks => [newTaskObject, ...currentTasks]);
+        
+        // Save activity for task creation
+        try {
+          await api.saveActivity({
+            type: 'task_create',
+            taskId: result.task._id,
+            message: t('taskCreatedActivity', { title: result.task.title }),
+            metadata: {
+              title: result.task.title,
+              description: result.task.description || '',
+              location: result.task.location || null
+            }
+          });
+        } catch (error) {
+          console.error(t('errorSavingActivity'), error);
+        }
         
         // Resetear formulario
         setNewTaskTitle('');
@@ -142,50 +244,123 @@ const TaskScreen = ({ navigation }) => {
         setTaskLocationName('');
         setShowAddForm(false);
         
-        console.log('Tarea añadida correctamente a la interfaz de usuario');
+        console.log(t('taskAddedSuccessfully'));
       } else {
-        console.error('Respuesta incompleta del servidor:', result);
-        Alert.alert('Error', 'No se pudo crear la tarea');
+        console.error(t('incompleteServerResponse'), result);
+        Alert.alert(t('error'), t('errorCreatingTask'));
       }
     } catch (error) {
-      console.error('Error al crear tarea:', error);
-      Alert.alert('Error', error.message || 'No se pudo crear la tarea');
+      console.error(t('errorCreatingTask'), error);
+      
+      // Traducir mensajes de error específicos
+      let errorMessage = error.message;
+      if (error.message === 'USER_ID_REQUIRED') {
+        errorMessage = t('userIdRequired');
+      } else if (error.message === 'ERROR_ACCESSING_TOKEN') {
+        errorMessage = t('errorAccessingToken');
+      } else if (error.message === 'NO_AUTH_TOKEN') {
+        errorMessage = t('noAuthToken');
+      }
+      
+      Alert.alert(t('error'), errorMessage || t('errorCreatingTask'));
     }
   };
 
   // Eliminar tarea
   const deleteTask = async (taskId) => {
     try {
+      const taskToDelete = tasks.find(task => task._id === taskId);
+      if (!taskToDelete) {
+        console.error(t('taskNotFound'), taskId);
+        return;
+      }
+
       await api.deleteTask(taskId);
+      
+      // Save activity for task deletion
+      try {
+        await api.saveActivity({
+          type: 'task_delete',
+          taskId,
+          message: t('taskDeletedActivity', { title: taskToDelete.title }),
+          metadata: {
+            title: taskToDelete.title,
+            deletedAt: new Date().toISOString()
+          }
+        });
+      } catch (error) {
+        console.error('Error saving activity:', error);
+      }
+      
       setTasks(tasks.filter(task => task._id !== taskId));
     } catch (error) {
-      console.error('Error al eliminar tarea:', error);
-      Alert.alert('Error', error.message || 'Error al eliminar tarea');
+      console.error('Error deleting task:', error);
+      Alert.alert('Error', error.message || t('errorDeletingTask'));
     }
   };
 
-  // Confirmar eliminación de tarea
-  const confirmDeleteTask = (taskId) => {
-    Alert.alert(
-      'Confirmar Eliminación',
-      '¿Estás seguro de que deseas eliminar esta tarea?',
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        { text: 'Eliminar', style: 'destructive', onPress: () => deleteTask(taskId) }
-      ]
-    );
-  };
-
-  // Alternar estado de completado
-  const toggleComplete = (taskId) => {
-    setTasks(tasks.map(task => {
-      if (task._id === taskId) {
-        // Asegurarnos de que completed tenga un valor por defecto
-        const currentCompleted = task.completed !== undefined ? task.completed : false;
-        return { ...task, completed: !currentCompleted };
+  // Toggle task completion
+  const toggleComplete = async (taskId) => {
+    try {
+      // Find the task to toggle
+      const taskToToggle = tasks.find(task => task._id === taskId);
+      if (!taskToToggle) {
+        console.error('Task not found:', taskId);
+        return;
       }
-      return task;
-    }));
+      
+      // Determine the new completion status
+      const currentCompleted = taskToToggle.completed !== undefined ? taskToToggle.completed : false;
+      const newCompletedStatus = !currentCompleted;
+      
+      console.log(`Toggling task ${taskId} from ${currentCompleted} to ${newCompletedStatus}`);
+      
+      // Update locally first for immediate UI feedback
+      setTasks(tasks.map(task => {
+        if (task._id === taskId) {
+          return { ...task, completed: newCompletedStatus };
+        }
+        return task;
+      }));
+      
+      // Send update to server
+      const result = await api.updateTaskCompletion(taskId, newCompletedStatus);
+      console.log('Server response for task update:', result);
+      
+      // Save activity for task completion
+      try {
+        await api.saveActivity({
+          type: newCompletedStatus ? 'task_complete' : 'task_update',
+          taskId,
+          message: newCompletedStatus 
+            ? `Tarea "${taskToToggle.title}" completada`
+            : `Tarea "${taskToToggle.title}" actualizada`,
+          metadata: {
+            title: taskToToggle.title,
+            completed: newCompletedStatus,
+            updatedAt: new Date().toISOString()
+          }
+        });
+      } catch (error) {
+        console.error('Error saving activity:', error);
+      }
+      
+      // If we got here, the server update was successful
+    } catch (error) {
+      console.error('Error updating task completion status:', error);
+      
+      // Revert the local change if the server update failed
+      setTasks(tasks.map(task => {
+        if (task._id === taskId) {
+          // Asegurarnos de que completed tenga un valor por defecto
+          const currentCompleted = task.completed !== undefined ? task.completed : false;
+          return { ...task, completed: currentCompleted }; // Revert to original state
+        }
+        return task;
+      }));
+      
+      Alert.alert('Error', error.message || t('errorOccurred'));
+    }
   };
 
   // Seleccionar usuario para asignar tarea
@@ -201,99 +376,66 @@ const TaskScreen = ({ navigation }) => {
     setShowUserSelector(false);
   };
 
-  // Renderizar cada tarea
+  // Renderizar una tarea
   const renderTask = ({ item }) => {
-    // Verificar que item existe
-    if (!item) {
-      console.log('Error: Se intentó renderizar una tarea undefined');
-      return null;
-    }
-    
-    // Asegurarnos de que completed tenga un valor por defecto
-    const completed = item.completed !== undefined ? item.completed : false;
-    
-    // Encontrar el nombre del usuario asignado si es administrador
-    let assignedUserName = '';
-    if (user?.isAdmin && users.length > 0 && item.userId) {
-      // Extraer el ID del usuario, que puede venir como string u objeto
-      let userIdToFind;
-      
-      if (typeof item.userId === 'object' && item.userId._id) {
-        // Si es un objeto con _id (usuario populado desde el backend)
-        userIdToFind = item.userId._id.toString();
-        console.log(`Tarea con usuario populado. ID a buscar: ${userIdToFind}`);
-        assignedUserName = item.userId.username || 'Usuario sin nombre';
+    // Get assigned user's name
+    let assignedUserName = t('noUserAssigned');
+    if (user?.isAdmin && item.userId) {
+      // Try to get username from cached username first
+      if (item._username) {
+        assignedUserName = item._username;
+        console.log(t('usingCachedUsername', { taskId: item._id, username: assignedUserName }));
       } else {
-        // Si es un string o un ObjectId
-        userIdToFind = item.userId.toString();
-        console.log(`Buscando usuario con ID: ${userIdToFind}`);
-        
-        // Buscar en la lista de usuarios
-        const assignedUser = users.find(u => 
-          u._id === userIdToFind || 
-          u._id.toString() === userIdToFind
-        );
-        
+        // If no cached username, look up in users array
+        const assignedUser = users.find(u => u._id === item.userId);
         if (assignedUser) {
           assignedUserName = assignedUser.username;
-          console.log(`Usuario encontrado: ${assignedUserName}`);
+          console.log(t('foundUsernameInUsers', { taskId: item._id, username: assignedUserName }));
         } else {
-          assignedUserName = 'Usuario desconocido';
-          console.log(`No se encontró usuario con ID: ${userIdToFind}`);
-          console.log('Lista de usuarios disponibles:', JSON.stringify(users.map(u => ({ id: u._id, username: u.username }))));
+          console.log(t('noUserFoundForTask', { taskId: item._id, userId: item.userId }));
         }
       }
     }
     
     return (
       <View style={styles.taskItem}>
-        <TouchableOpacity 
-          style={styles.taskCheckbox}
-          onPress={() => toggleComplete(item._id)}
-        >
-          <Ionicons 
-            name={completed ? 'checkbox' : 'square-outline'} 
-            size={24} 
-            color={completed ? '#4CAF50' : '#757575'} 
-          />
-        </TouchableOpacity>
-        
-        <View style={styles.taskContent}>
-          <Text 
-            style={[
-              styles.taskTitle, 
-              completed && styles.taskCompleted
-            ]}
+        <View style={styles.taskHeader}>
+          <Text style={styles.taskTitle}>{item.title || t('noTitle')}</Text>
+          <TouchableOpacity 
+            onPress={() => deleteTask(item._id)}
+            style={styles.deleteButton}
           >
-            {item.title || 'Sin título'}
-          </Text>
-          
-          {item.description ? (
-            <Text 
-              style={[
-                styles.taskDescription, 
-                completed && styles.taskCompleted
-              ]}
-              numberOfLines={2}
-            >
-              {item.description}
-            </Text>
-          ) : null}
-          
-          {/* Mostrar el usuario asignado si es administrador */}
-          {user?.isAdmin && (
-            <Text style={styles.assignedUser}>
-              Asignado a: {assignedUserName}
-            </Text>
-          )}
+            <Text style={styles.deleteButtonText}>×</Text>
+          </TouchableOpacity>
         </View>
         
-        <TouchableOpacity 
-          style={styles.deleteButton}
-          onPress={() => confirmDeleteTask(item._id)}
-        >
-          <Ionicons name="trash-outline" size={24} color="#F44336" />
-        </TouchableOpacity>
+        <View style={styles.taskDetails}>
+          <Text style={styles.taskDescription}>{item.description || ''}</Text>
+          
+          {user?.isAdmin && (
+            <View style={styles.assignedToContainer}>
+              <Text style={styles.assignedToLabel}>{t('assignedTo')}:</Text>
+              <Text style={styles.assignedToValue}>{assignedUserName}</Text>
+            </View>
+          )}
+          
+          <View style={styles.taskFooter}>
+            <Text style={styles.taskDate}>
+              {new Date(item.createdAt).toLocaleDateString()}
+            </Text>
+            <TouchableOpacity
+              style={[
+                styles.completeButton,
+                item.completed && styles.completedButton
+              ]}
+              onPress={() => toggleComplete(item._id)}
+            >
+              <Text style={styles.completeButtonText}>
+                {item.completed ? '✓' : '○'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
       </View>
     );
   };
@@ -306,29 +448,31 @@ const TaskScreen = ({ navigation }) => {
       animationType="slide"
       onRequestClose={() => setShowUserSelector(false)}
     >
-      <View style={styles.modalOverlay}>
+      <View style={styles.modalContainer}>
         <View style={styles.modalContent}>
-          <Text style={styles.modalTitle}>Seleccionar Usuario</Text>
-          
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>{t('selectUser')}</Text>
+            <TouchableOpacity 
+              onPress={() => setShowUserSelector(false)}
+              style={styles.closeButton}
+            >
+              <Text style={styles.closeButtonText}>×</Text>
+            </TouchableOpacity>
+          </View>
           <ScrollView style={styles.userList}>
             {users.map(user => (
               <TouchableOpacity
                 key={user._id}
-                style={styles.userItem}
+                style={[
+                  styles.userItem,
+                  selectedUserId === user._id && styles.selectedUserItem
+                ]}
                 onPress={() => selectUser(user._id)}
               >
-                <Text style={styles.userName}>{user.username}</Text>
-                <Text style={styles.userEmail}>{user.email}</Text>
+                <Text style={styles.userItemText}>{user.username}</Text>
               </TouchableOpacity>
             ))}
           </ScrollView>
-          
-          <TouchableOpacity
-            style={styles.closeButton}
-            onPress={() => setShowUserSelector(false)}
-          >
-            <Text style={styles.closeButtonText}>Cancelar</Text>
-          </TouchableOpacity>
         </View>
       </View>
     </Modal>
@@ -339,25 +483,31 @@ const TaskScreen = ({ navigation }) => {
     setTaskLocation(locationData.location);
     setTaskRadius(locationData.radius);
     setTaskLocationName(locationData.locationName);
-    console.log(`Ubicación seleccionada: ${JSON.stringify(locationData.location.coordinates)}, radio: ${locationData.radius}km, lugar: ${locationData.locationName}`);
+    console.log(t('locationSelected', { 
+      coordinates: JSON.stringify(locationData.location.coordinates), 
+      radius: locationData.radius,
+      place: locationData.locationName 
+    }));
   };
 
   // Renderizar el formulario para añadir tareas
   const renderAddTaskForm = () => {
     return (
       <View style={styles.formContainer}>
-        <Text style={styles.formTitle}>Añadir Nueva Tarea</Text>
+        <View style={styles.formHeaderRow}>
+          <Text style={styles.formTitle}>{t('addNewTask')}</Text>
+        </View>
         
         <TextInput
           style={styles.input}
-          placeholder="Título de la tarea"
+          placeholder={t('taskTitle')}
           value={newTaskTitle}
           onChangeText={setNewTaskTitle}
         />
         
         <TextInput
           style={[styles.input, styles.textArea]}
-          placeholder="Descripción (opcional)"
+          placeholder={t('taskDescription')}
           value={newTaskDescription}
           onChangeText={setNewTaskDescription}
           multiline={true}
@@ -372,8 +522,8 @@ const TaskScreen = ({ navigation }) => {
           <Ionicons name="location" size={20} color="#4A90E2" />
           <Text style={styles.locationButtonText}>
             {taskLocation 
-              ? `${taskLocationName || 'Ubicación seleccionada'} (${taskRadius} km)` 
-              : 'Añadir ubicación y radio'}
+              ? `${taskLocationName || t('selectedLocation')} (${taskRadius} km)` 
+              : t('addLocationAndRadius')}
           </Text>
         </TouchableOpacity>
         
@@ -384,8 +534,8 @@ const TaskScreen = ({ navigation }) => {
           >
             <Text style={styles.userSelectButtonText}>
               {selectedUserId 
-                ? users.find(u => u._id === selectedUserId)?.username || 'Usuario seleccionado'
-                : 'Asignar a un usuario'}
+                ? users.find(u => u._id === selectedUserId)?.username || t('userSelected')
+                : t('assignToUser')}
             </Text>
             <Ionicons name="chevron-forward" size={16} color="#4A90E2" />
           </TouchableOpacity>
@@ -404,94 +554,97 @@ const TaskScreen = ({ navigation }) => {
               setTaskLocationName('');
             }}
           >
-            <Text style={styles.cancelButtonText}>Cancelar</Text>
+            <Text style={styles.cancelButtonText}>{t('cancel')}</Text>
           </TouchableOpacity>
           
           <TouchableOpacity 
             style={[styles.formButton, styles.saveButton]}
             onPress={addTask}
           >
-            <Text style={styles.saveButtonText}>Guardar</Text>
+            <Text style={styles.saveButtonText}>{t('save')}</Text>
           </TouchableOpacity>
         </View>
+
+        {/* Location and Radius Selector ayush */}
+        <LocationRadiusSelector
+          visible={showLocationSelector}
+          onClose={() => setShowLocationSelector(false)}
+          onSave={handleLocationSelected}
+          initialLocation={taskLocation ? {
+            latitude: taskLocation.coordinates[1],
+            longitude: taskLocation.coordinates[0]
+          } : null}
+          initialRadius={taskRadius}
+          initialLocationName={taskLocationName}
+        />
       </View>
     );
   };
 
   return (
     <View style={styles.container}>
-      {loading ? (
+      <View style={styles.header}>
+        <Text style={styles.title}>{t('tasks')}</Text>
+      </View>
+      <View style={styles.statsContainer}>
+        <View style={styles.statItem}>
+          <Text style={styles.statValue}>{tasks.length}</Text>
+          <Text style={styles.statLabel}>{t('total')}</Text>
+        </View>
+        <View style={styles.statItem}>
+          <Text style={styles.statValue}>
+            {tasks.filter(task => task.completed).length}
+          </Text>
+          <Text style={styles.statLabel}>{t('completed')}</Text>
+        </View>
+        <View style={[styles.statItem, { borderRightWidth: 0 }]}>
+          <Text style={styles.statValue}>
+            {tasks.filter(task => !task.completed).length}
+          </Text>
+          <Text style={styles.statLabel}>{t('pending')}</Text>
+        </View>
+      </View>
+      
+      {loading && !refreshing ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#4A90E2" />
-          <Text style={styles.loadingText}>Cargando tareas...</Text>
+          <Text style={styles.loadingText}>{t('loadingTasks')}</Text>
         </View>
       ) : (
         <>
-          <View style={styles.statsContainer}>
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>{tasks.length}</Text>
-              <Text style={styles.statLabel}>Total</Text>
-            </View>
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>
-                {tasks.filter(task => task.completed).length}
-              </Text>
-              <Text style={styles.statLabel}>Completadas</Text>
-            </View>
-            <View style={[styles.statItem, { borderRightWidth: 0 }]}>
-              <Text style={styles.statValue}>
-                {tasks.filter(task => !task.completed).length}
-              </Text>
-              <Text style={styles.statLabel}>Pendientes</Text>
-            </View>
-          </View>
-          
           {!showAddForm && (
             <TouchableOpacity 
               style={styles.addTaskButton}
               onPress={() => setShowAddForm(true)}
             >
               <Ionicons name="add-circle-outline" size={20} color="#fff" />
-              <Text style={styles.addTaskButtonText}>Añadir Tarea</Text>
+              <Text style={styles.addTaskButtonText}>{t('addTask')}</Text>
             </TouchableOpacity>
           )}
           
           {showAddForm && renderAddTaskForm()}
           
-          {error && <Text style={styles.errorText}>{error}</Text>}
-          
-          {tasks.length > 0 ? (
+          {error ? (
+            <Text style={styles.errorText}>{error}</Text>
+          ) : tasks.length === 0 ? (
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyText}>{t('noTasks')}</Text>
+              <Text style={styles.emptySubText}>{t('tasksWillAppearHere')}</Text>
+            </View>
+          ) : (
             <FlatList
+              style={styles.taskList}
               data={tasks}
               renderItem={renderTask}
-              keyExtractor={(item) => item._id}
-              style={styles.taskList}
+              keyExtractor={item => item._id}
+              refreshing={refreshing}
+              onRefresh={onRefresh}
             />
-          ) : (
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>No hay tareas disponibles</Text>
-              <Text style={styles.emptySubtext}>
-                Las tareas que añadas aparecerán aquí
-              </Text>
-            </View>
           )}
         </>
       )}
       
       {renderUserSelector()}
-      
-      {/* Selector de ubicación y radio */}
-      <LocationRadiusSelector
-        visible={showLocationSelector}
-        onClose={() => setShowLocationSelector(false)}
-        onSave={handleLocationSelected}
-        initialLocation={taskLocation ? {
-          latitude: taskLocation.coordinates[1],
-          longitude: taskLocation.coordinates[0]
-        } : null}
-        initialRadius={taskRadius}
-        initialLocationName={taskLocationName}
-      />
     </View>
   );
 };
@@ -499,13 +652,26 @@ const TaskScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 15,
     backgroundColor: '#f8f9fa',
   },
-  formContainer: {
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+    backgroundColor: '#4A90E2',
+  },
+  title: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  statsContainer: {
+    flexDirection: 'row',
     backgroundColor: '#fff',
     borderRadius: 8,
-    padding: 15,
+    marginHorizontal: 15,
     marginBottom: 15,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -513,11 +679,175 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
+  statItem: {
+    flex: 1,
+    alignItems: 'center',
+    padding: 15,
+    borderRightWidth: 1,
+    borderRightColor: '#f0f0f0',
+  },
+  statValue: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#4A90E2',
+  },
+  statLabel: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 5,
+  },
+  addTaskButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#4A90E2',
+    padding: 15,
+    borderRadius: 8,
+    marginHorizontal: 15,
+    marginBottom: 15,
+  },
+  addTaskButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 16,
+    marginLeft: 8,
+  },
+  taskList: {
+    flex: 1,
+    marginHorizontal: 15,
+  },
+  taskItem: {
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    padding: 15,
+    marginBottom: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  taskHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 5,
+  },
+  taskTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  deleteButton: {
+    padding: 5,
+  },
+  deleteButtonText: {
+    color: '#F44336',
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  taskDetails: {
+    flex: 1,
+  },
+  taskDescription: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 5,
+  },
+  assignedToContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 5,
+  },
+  assignedToLabel: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#4A90E2',
+  },
+  assignedToValue: {
+    fontSize: 14,
+    color: '#666',
+    marginLeft: 5,
+  },
+  taskFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 5,
+  },
+  taskDate: {
+    fontSize: 12,
+    color: '#666',
+  },
+  completeButton: {
+    padding: 5,
+    borderRadius: 15,
+    width: 30,
+    height: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f0f0f0',
+  },
+  completedButton: {
+    backgroundColor: '#4CAF50',
+  },
+  completeButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 10,
+    color: '#666',
+  },
+  errorText: {
+    color: '#F44336',
+    marginBottom: 15,
+    textAlign: 'center',
+    marginHorizontal: 15,
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 30,
+  },
+  emptyText: {
+    fontSize: 18,
+    color: '#666',
+    marginBottom: 10,
+  },
+  emptySubText: {
+    fontSize: 14,
+    color: '#999',
+    textAlign: 'center',
+  },
+  formContainer: {
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    padding: 15,
+    marginHorizontal: 15,
+    marginBottom: 15,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  formHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 15,
+  },
   formTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    marginBottom: 15,
     color: '#333',
+    flex: 1,
   },
   input: {
     backgroundColor: '#f9f9f9',
@@ -585,124 +915,7 @@ const styles = StyleSheet.create({
   cancelButtonText: {
     color: '#666',
   },
-  addTaskButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#4A90E2',
-    padding: 15,
-    borderRadius: 8,
-    marginBottom: 15,
-  },
-  addTaskButtonText: {
-    color: '#fff',
-    fontWeight: 'bold',
-    fontSize: 16,
-    marginLeft: 8,
-  },
-  errorText: {
-    color: '#F44336',
-    marginBottom: 15,
-    textAlign: 'center',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    marginTop: 10,
-    color: '#666',
-  },
-  statsContainer: {
-    flexDirection: 'row',
-    backgroundColor: '#fff',
-    borderRadius: 8,
-    marginBottom: 15,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  statItem: {
-    flex: 1,
-    alignItems: 'center',
-    padding: 15,
-    borderRightWidth: 1,
-    borderRightColor: '#f0f0f0',
-  },
-  statValue: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#4A90E2',
-  },
-  statLabel: {
-    fontSize: 12,
-    color: '#666',
-    marginTop: 5,
-  },
-  taskList: {
-    flex: 1,
-  },
-  taskItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 8,
-    padding: 15,
-    marginBottom: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  taskCheckbox: {
-    marginRight: 10,
-  },
-  taskContent: {
-    flex: 1,
-  },
-  taskTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 5,
-  },
-  taskDescription: {
-    fontSize: 14,
-    color: '#666',
-  },
-  assignedUser: {
-    fontSize: 12,
-    color: '#4A90E2',
-    marginTop: 5,
-    fontStyle: 'italic',
-  },
-  taskCompleted: {
-    textDecorationLine: 'line-through',
-    color: '#aaa',
-  },
-  deleteButton: {
-    padding: 5,
-  },
-  emptyContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 30,
-  },
-  emptyText: {
-    fontSize: 18,
-    color: '#666',
-    marginBottom: 10,
-  },
-  emptySubtext: {
-    fontSize: 14,
-    color: '#999',
-    textAlign: 'center',
-  },
-  modalOverlay: {
+  modalContainer: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
@@ -716,12 +929,17 @@ const styles = StyleSheet.create({
     width: '100%',
     maxHeight: '80%',
   },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 15,
+  },
   modalTitle: {
     fontSize: 18,
     fontWeight: 'bold',
     color: '#333',
-    marginBottom: 15,
-    textAlign: 'center',
+    flex: 1,
   },
   userList: {
     maxHeight: 300,
@@ -731,15 +949,13 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',
   },
-  userName: {
+  userItemText: {
     fontSize: 16,
     fontWeight: 'bold',
     color: '#333',
   },
-  userEmail: {
-    fontSize: 14,
-    color: '#666',
-    marginTop: 5,
+  selectedUserItem: {
+    backgroundColor: '#4A90E2',
   },
   closeButton: {
     backgroundColor: '#f5f5f5',
@@ -750,7 +966,6 @@ const styles = StyleSheet.create({
   },
   closeButtonText: {
     color: '#666',
-    fontWeight: 'bold',
   },
 });
 

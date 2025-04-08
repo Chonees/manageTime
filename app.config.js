@@ -32,7 +32,7 @@ module.exports = {
   },
   extra: {
     // Configuración para diferentes entornos
-    apiUrl: "http://192.168.0.148:5000/api",
+    apiUrl: "http://192.168.31.174:5555/api",
     // Tiempo de espera para solicitudes API (en milisegundos)
     apiTimeout: 15000,
     // Habilitar logs detallados para depuración
