@@ -7,9 +7,12 @@ import {
   Text
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useLanguage } from '../../context/LanguageContext';
 import AdminActivityList from '../../components/AdminActivityList';
 
 const AdminActivitiesScreen = ({ navigation }) => {
+  const { t } = useLanguage();
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
@@ -19,7 +22,7 @@ const AdminActivitiesScreen = ({ navigation }) => {
         >
           <Ionicons name="arrow-back" size={24} color="#ffffff" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Actividades de Usuarios</Text>
+        <Text style={styles.headerTitle}>{t('viewAllActivities')}</Text>
       </View>
       
       <AdminActivityList />

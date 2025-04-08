@@ -16,6 +16,7 @@ import MapView, { Marker, Circle, PROVIDER_GOOGLE } from 'react-native-maps';
 import { Ionicons } from '@expo/vector-icons';
 import { mapConfig } from '../services/platform-config';
 import * as Location from 'expo-location';
+import { useLanguage } from '../context/LanguageContext';
 
 const { width, height } = Dimensions.get('window');
 const ASPECT_RATIO = width / height;
@@ -30,6 +31,7 @@ const LocationRadiusSelector = ({
   initialRadius = 1.0,
   initialLocationName = ''
 }) => {
+  const { t } = useLanguage();
   const mapRef = useRef(null);
   const [location, setLocation] = useState(initialLocation || {
     latitude: -34.603722,
@@ -61,7 +63,7 @@ const LocationRadiusSelector = ({
     try {
       let { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
-        console.log('Permiso de ubicación denegado');
+        console.log(t('locationPermissionDenied'));
         setLoading(false);
         return;
       }
@@ -88,13 +90,13 @@ const LocationRadiusSelector = ({
             address.district
           ].filter(Boolean).join(', ');
           
-          setLocationName(locationText || 'Ubicación actual');
+          setLocationName(locationText || t('currentLocation'));
         }
       } catch (error) {
-        console.error('Error al obtener nombre de ubicación:', error);
+        console.error(t('errorGettingLocationName'), error);
       }
     } catch (error) {
-      console.error('Error al obtener ubicación:', error);
+      console.error(t('errorGettingLocation'), error);
     } finally {
       setLoading(false);
     }
@@ -137,10 +139,10 @@ const LocationRadiusSelector = ({
   const formatDistance = (distance) => {
     if (distance < 1) {
       // Si es menos de 1 km, mostrar en metros
-      return `${Math.round(distance * 1000)} m`;
+      return `${Math.round(distance * 1000)} ${t('meters')}`;
     } else {
       // Si es 1 km o más, mostrar en km con un decimal
-      return `${distance.toFixed(1)} km`;
+      return `${distance.toFixed(1)} ${t('kilometers')}`;
     }
   };
 
@@ -168,9 +170,9 @@ const LocationRadiusSelector = ({
           <TouchableOpacity onPress={onClose} style={styles.closeButton}>
             <Ionicons name="arrow-back" size={24} color="#333" />
           </TouchableOpacity>
-          <Text style={styles.title}>Añadir ubicación</Text>
+          <Text style={styles.title}>{t('addLocation')}</Text>
           <TouchableOpacity onPress={handleSave} style={styles.saveButton}>
-            <Text style={styles.saveButtonText}>Aplicar</Text>
+            <Text style={styles.saveButtonText}>{t('apply')}</Text>
           </TouchableOpacity>
         </View>
 
@@ -178,7 +180,7 @@ const LocationRadiusSelector = ({
           <Ionicons name="search" size={20} color="#999" style={styles.searchIcon} />
           <TextInput
             style={styles.searchInput}
-            placeholder="Buscar"
+            placeholder={t('search')}
             value={locationName}
             onChangeText={setLocationName}
           />
@@ -188,7 +190,7 @@ const LocationRadiusSelector = ({
           {loading ? (
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="large" color="#4A90E2" />
-              <Text style={styles.loadingText}>Cargando mapa...</Text>
+              <Text style={styles.loadingText}>{t('loadingMap')}</Text>
             </View>
           ) : (
             <MapView
@@ -233,9 +235,9 @@ const LocationRadiusSelector = ({
         </View>
 
         <View style={styles.radiusContainer}>
-          <Text style={styles.radiusTitle}>Radio personalizado</Text>
+          <Text style={styles.radiusTitle}>{t('customRadius')}</Text>
           <Text style={styles.radiusSubtitle}>
-            Mostrarme únicamente publicaciones dentro de una distancia específica.
+            {t('radiusDescription')}
           </Text>
           
           <View style={styles.sliderContainer}>
@@ -260,7 +262,7 @@ const LocationRadiusSelector = ({
             onPress={placeMarkerAtCenter}
           >
             <Ionicons name="locate-outline" size={24} color="#4A90E2" />
-            <Text style={styles.mapActionButtonText}>Colocar aquí</Text>
+            <Text style={styles.mapActionButtonText}>{t('placeHere')}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity 
@@ -268,7 +270,7 @@ const LocationRadiusSelector = ({
             onPress={getCurrentLocation}
           >
             <Ionicons name="locate" size={24} color="#4A90E2" />
-            <Text style={styles.mapActionButtonText}>Mi ubicación</Text>
+            <Text style={styles.mapActionButtonText}>{t('myLocation')}</Text>
           </TouchableOpacity>
         </View>
 

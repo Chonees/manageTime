@@ -6,14 +6,17 @@ import {
   TouchableOpacity, 
   ScrollView, 
   ActivityIndicator,
-  RefreshControl,
-  Alert
+  Alert,
+  FlatList,
+  RefreshControl
 } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
+import { useLanguage } from '../../context/LanguageContext';
 import * as api from '../../services/api';
 
 const AdminDashboardScreen = ({ navigation }) => {
   const { user, logout } = useAuth();
+  const { t, language } = useLanguage();
   const [stats, setStats] = useState({
     users: { total: 0 },
     tasks: { total: 0, completed: 0, pending: 0, completionRate: 0 },
@@ -22,79 +25,126 @@ const AdminDashboardScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
+  const [recentActivity, setRecentActivity] = useState([]); // Añadir estado para actividades recientes
 
-  // Cargar estadísticas
+  // Load statistics and recent activities
   const loadStats = async () => {
-    setLoading(true);
-    setError(null);
-
     try {
-      // Obtener estadísticas reales desde la API
+      setLoading(true);
+      setError(null);
+      
+      // Load admin stats
       const statsData = await api.getAdminStats();
       setStats(statsData);
+
+      // Load recent activities
+      const activityData = await api.getRecentActivities();
+      setRecentActivity(activityData);
     } catch (error) {
-      setError(error.message || 'Error al cargar datos');
-      console.error('Error loading data:', error);
+      console.error('Error loading stats:', error);
+      setError(error.message || t('errorLoadingStats'));
     } finally {
       setLoading(false);
     }
   };
 
-  // Cargar datos al montar el componente
-  useEffect(() => {
-    loadStats();
-  }, []);
-
-  // Función para refrescar los datos
   const onRefresh = async () => {
     setRefreshing(true);
     await loadStats();
     setRefreshing(false);
   };
 
-  // Función para cerrar sesión
+  useEffect(() => {
+    loadStats();
+  }, []);
+
   const handleLogout = async () => {
     try {
       await logout();
-      // No es necesario navegar, el AppNavigator lo hará automáticamente
     } catch (error) {
-      Alert.alert('Error', 'Error al cerrar sesión');
+      Alert.alert(t('error'), t('error'));
     }
   };
-  
-  // Función para formatear la fecha y hora
-  const formatDateTime = (dateString) => {
-    try {
-      const date = new Date(dateString);
-      return date.toLocaleString();
-    } catch (error) {
-      return 'Fecha desconocida';
-    }
-  };
-  
-  // Función para formatear el tiempo relativo
-  const formatRelativeTime = (dateString) => {
-    try {
-      const date = new Date(dateString);
-      const now = new Date();
-      const diff = now.getTime() - date.getTime();
-      const seconds = Math.floor(diff / 1000);
-      const minutes = Math.floor(seconds / 60);
-      const hours = Math.floor(minutes / 60);
-      const days = Math.floor(hours / 24);
 
-      if (days > 0) {
-        return `${days} días atrás`;
-      } else if (hours > 0) {
-        return `${hours} horas atrás`;
-      } else if (minutes > 0) {
-        return `${minutes} minutos atrás`;
-      } else {
-        return `${seconds} segundos atrás`;
+  const formatDateTime = (timestamp) => {
+    const date = new Date(timestamp);
+    return date.toLocaleString(language === 'es' ? 'es-ES' : 'en-US', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  const formatRelativeTime = (timestamp) => {
+    const now = new Date();
+    const date = new Date(timestamp);
+    const diffInSeconds = Math.floor((now - date) / 1000);
+
+    if (diffInSeconds < 60) return t('justNow');
+    if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)} ${t('minutesAgo')}`;
+    if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)} ${t('hoursAgo')}`;
+    return formatDateTime(timestamp);
+  };
+
+  const renderActivityItem = ({ item }) => {
+    let activityColor = '#4A90E2';
+    let activityText = '';
+
+    if (item.type === 'task') {
+      switch (item.action) {
+        case 'created':
+          activityColor = '#2ecc71';
+          activityText = t('taskCreated', { task: item.title });
+          break;
+        case 'completed':
+          activityColor = '#27ae60';
+          activityText = t('taskCompleted', { task: item.title });
+          break;
+        case 'deleted':
+          activityColor = '#e74c3c';
+          activityText = t('taskDeleted', { task: item.title });
+          break;
+        case 'updated':
+          activityColor = '#f39c12';
+          activityText = t('taskUpdated', { task: item.title });
+          break;
       }
-    } catch (error) {
-      return 'hace un tiempo';
+    } else if (item.type === 'location') {
+      switch (item.action) {
+        case 'started_working':
+          activityColor = '#2ecc71';
+          activityText = t('startedWorkingAt', { location: item.title });
+          break;
+        case 'entered_location':
+          activityColor = '#3498db';
+          activityText = t('enteredLocation', { location: item.title });
+          break;
+        case 'stopped_working':
+          activityColor = '#e74c3c';
+          activityText = t('stoppedWorkingAt', { location: item.title });
+          break;
+        case 'exited_location':
+          activityColor = '#f39c12';
+          activityText = t('exitedLocation', { location: item.title });
+          break;
+      }
     }
+
+    return (
+      <View style={styles.activityItem}>
+        <View style={[styles.activityDot, { backgroundColor: activityColor }]} />
+        <View style={styles.activityContent}>
+          <Text style={styles.activityText}>
+            {item.username} {activityText}
+          </Text>
+          <Text style={styles.activityTime}>
+            {formatRelativeTime(item.timestamp)}
+          </Text>
+        </View>
+      </View>
+    );
   };
 
   return (
@@ -106,90 +156,115 @@ const AdminDashboardScreen = ({ navigation }) => {
     >
       <View style={styles.header}>
         <View>
-          <Text style={styles.welcomeText}>Panel de Administración</Text>
-          <Text style={styles.subHeaderText}>Bienvenido, {user?.username || 'Admin'}</Text>
+          <Text style={styles.welcomeText}>{t('adminDashboard')}</Text>
+          <Text style={styles.subHeaderText}>{t('welcomeAdmin')}, {user?.username || 'Admin'}</Text>
         </View>
         <TouchableOpacity 
           style={styles.logoutButton}
           onPress={handleLogout}
         >
-          <Text style={styles.logoutButtonText}>Cerrar Sesión</Text>
+          <Text style={styles.logoutButtonText}>{t('logOut')}</Text>
         </TouchableOpacity>
       </View>
 
       {error && <Text style={styles.errorText}>{error}</Text>}
 
-      {/* Tarjetas de estadísticas */}
       <View style={styles.statsContainer}>
-        <Text style={styles.sectionTitle}>Estadísticas Generales</Text>
+        <Text style={styles.sectionTitle}>{t('statistics')}</Text>
         
         {loading ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color="#4A90E2" />
-            <Text style={styles.loadingText}>Cargando estadísticas...</Text>
+            <Text style={styles.loadingText}>{t('loading')}</Text>
           </View>
         ) : (
           <View style={styles.statsGrid}>
             <View style={styles.statCard}>
               <Text style={styles.statValue}>{stats.users.total}</Text>
-              <Text style={styles.statLabel}>Usuarios Totales</Text>
+              <Text style={styles.statLabel}>{t('totalUsers')}</Text>
+            </View>
+            
+            <View style={styles.statCard}>
+              <Text style={styles.statValue}>{stats.users.active}</Text>
+              <Text style={styles.statLabel}>{t('activeUsers')}</Text>
             </View>
             
             <View style={styles.statCard}>
               <Text style={styles.statValue}>{stats.tasks.total}</Text>
-              <Text style={styles.statLabel}>Tareas Totales</Text>
+              <Text style={styles.statLabel}>{t('totalTasks')}</Text>
             </View>
             
             <View style={styles.statCard}>
               <Text style={styles.statValue}>{stats.tasks.completed}</Text>
-              <Text style={styles.statLabel}>Tareas Completadas</Text>
+              <Text style={styles.statLabel}>{t('completedTasks')}</Text>
             </View>
             
             <View style={styles.statCard}>
               <Text style={styles.statValue}>{stats.tasks.pending}</Text>
-              <Text style={styles.statLabel}>Tareas Pendientes</Text>
+              <Text style={styles.statLabel}>{t('pendingTasks')}</Text>
             </View>
             
             <View style={styles.statCard}>
               <Text style={styles.statValue}>{stats.tasks.completionRate}%</Text>
-              <Text style={styles.statLabel}>Tasa de Completado</Text>
+              <Text style={styles.statLabel}>{t('completionRate')}</Text>
             </View>
           </View>
         )}
       </View>
 
-      {/* Acciones rápidas */}
       <View style={styles.actionsContainer}>
-        <Text style={styles.sectionTitle}>Acciones Rápidas</Text>
+        <Text style={styles.sectionTitle}>{t('quickActions')}</Text>
         <View style={styles.actionButtonsContainer}>
           <TouchableOpacity 
             style={styles.actionButton}
             onPress={() => navigation.navigate('UserManagement')}
           >
-            <Text style={styles.actionButtonText}>Gestionar Usuarios</Text>
+            <Text style={styles.actionButtonText}>{t('userManagement')}</Text>
           </TouchableOpacity>
           
           <TouchableOpacity 
             style={styles.actionButton}
             onPress={() => navigation.navigate('Tasks')}
           >
-            <Text style={styles.actionButtonText}>Gestionar Tareas</Text>
+            <Text style={styles.actionButtonText}>{t('taskManagement')}</Text>
           </TouchableOpacity>
           
           <TouchableOpacity 
             style={styles.actionButton}
             onPress={() => navigation.navigate('LocationHistory')}
           >
-            <Text style={styles.actionButtonText}>Ver Historial de Ubicaciones</Text>
+            <Text style={styles.actionButtonText}>{t('locationHistory')}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity 
             style={[styles.actionButton, { backgroundColor: '#9c27b0' }]}
             onPress={() => navigation.navigate('AdminActivities')}
           >
-            <Text style={styles.actionButtonText}>Ver Todas las Actividades</Text>
+            <Text style={styles.actionButtonText}>{t('viewAllActivities')}</Text>
           </TouchableOpacity>
         </View>
+      </View>
+
+      <View style={styles.recentActivityContainer}>
+        <Text style={styles.sectionTitle}>{t('recentActivity')}</Text>
+        {loading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#4A90E2" />
+            <Text style={styles.loadingText}>{t('loading')}</Text>
+          </View>
+        ) : (
+          <ScrollView 
+            style={styles.activityList}
+            nestedScrollEnabled={true}
+          >
+            <FlatList
+              data={recentActivity}
+              renderItem={renderActivityItem}
+              keyExtractor={(item) => item.id}
+              scrollEnabled={false}
+            />
+          </ScrollView>
+        )}
       </View>
     </ScrollView>
   );
@@ -302,6 +377,46 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: 'bold',
     fontSize: 16,
+  },
+  recentActivityContainer: {
+    margin: 15,
+    flex: 1,
+  },
+  activityList: {
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    padding: 15,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+    maxHeight: 300,
+  },
+  activityItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  activityDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 10,
+  },
+  activityContent: {
+    flex: 1,
+  },
+  activityText: {
+    fontSize: 14,
+    color: '#333',
+  },
+  activityTime: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 2,
   },
 });
 

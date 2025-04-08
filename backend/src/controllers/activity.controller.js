@@ -13,16 +13,21 @@ exports.createActivity = async (req, res) => {
     const userId = req.user.id;
 
     // Validar el tipo de actividad
-    const validTypes = ['location_enter', 'location_exit', 'task_complete', 'task_create', 'task_update', 'task_delete'];
+    const validTypes = [
+      'location_enter', 'location_exit', 
+      'task_complete', 'task_create', 'task_update', 'task_delete',
+      'started_working', 'stopped_working'
+    ];
+    
     if (!validTypes.includes(type)) {
       return res.status(400).json({ message: 'Tipo de actividad no válido' });
     }
 
-    // Si se proporciona un taskId, verificar que exista y pertenezca al usuario
+    // Si se proporciona un taskId, verificar que exista
     if (taskId) {
-      const task = await Task.findOne({ _id: taskId, userId });
+      const task = await Task.findById(taskId);
       if (!task) {
-        return res.status(404).json({ message: 'Tarea no encontrada o no pertenece al usuario' });
+        return res.status(404).json({ message: 'Tarea no encontrada' });
       }
     }
 
@@ -31,8 +36,9 @@ exports.createActivity = async (req, res) => {
       userId,
       taskId: taskId || null,
       type,
-      message,
-      metadata: metadata || {}
+      message: message || '',
+      metadata: metadata || {},
+      timestamp: new Date()
     });
 
     // Guardar la actividad
@@ -42,7 +48,11 @@ exports.createActivity = async (req, res) => {
     res.status(201).json(activity);
   } catch (error) {
     console.error('Error al crear actividad:', error);
-    res.status(500).json({ message: 'Error al crear actividad', error: error.message });
+    res.status(500).json({ 
+      message: 'Error al crear actividad', 
+      error: error.message,
+      details: error.stack 
+    });
   }
 };
 

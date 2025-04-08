@@ -10,12 +10,14 @@ import {
   RefreshControl
 } from 'react-native';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
 import LocationComponent from '../components/LocationComponent';
 import * as api from '../services/api';
 import { Ionicons } from '@expo/vector-icons';
 
 const DashboardScreen = ({ navigation }) => {
   const { user, logout } = useAuth();
+  const { t } = useLanguage();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -36,7 +38,7 @@ const DashboardScreen = ({ navigation }) => {
       setTasks(userTasks.filter(task => !task.completed).slice(0, 3)); // Only show 3 pending tasks
     } catch (error) {
       console.error('Error loading dashboard data:', error);
-      setError('Could not load data. Please try again.');
+      setError(t('errorLoadingTasks'));
     } finally {
       setLoading(false);
     }
@@ -70,7 +72,7 @@ const DashboardScreen = ({ navigation }) => {
       await logout();
       // No need to navigate, AppNavigator will do it automatically
     } catch (error) {
-      Alert.alert('Error', 'Error logging out');
+      Alert.alert(t('error'), t('errorLoggingOut'));
     }
   };
 
@@ -82,12 +84,12 @@ const DashboardScreen = ({ navigation }) => {
       }
     >
       <View style={styles.header}>
-        <Text style={styles.welcomeText}>Welcome, {user?.username || 'User'}</Text>
+        <Text style={styles.welcomeText}>{t('welcome')}, {user?.username || t('user')}</Text>
         <TouchableOpacity 
           style={styles.logoutButton}
           onPress={handleLogout}
         >
-          <Text style={styles.logoutButtonText}>Log Out</Text>
+          <Text style={styles.logoutButtonText}>{t('logOut')}</Text>
         </TouchableOpacity>
       </View>
 
@@ -102,7 +104,7 @@ const DashboardScreen = ({ navigation }) => {
       {/* Pending tasks summary */}
       <View style={styles.card}>
         <View style={styles.cardHeader}>
-          <Text style={styles.cardTitle}>Pending Tasks</Text>
+          <Text style={styles.cardTitle}>{t('pendingTasks')}</Text>
         </View>
         <View style={styles.cardBody}>
           {loading ? (
@@ -117,7 +119,7 @@ const DashboardScreen = ({ navigation }) => {
                   <View style={styles.taskContent}>
                     <Text style={styles.taskTitle}>{task.title}</Text>
                     <Text style={styles.taskDescription} numberOfLines={1}>
-                      {task.description || 'No description'}
+                      {task.description || t('noDescription')}
                     </Text>
                   </View>
                 </View>
@@ -126,11 +128,11 @@ const DashboardScreen = ({ navigation }) => {
                 style={styles.viewAllButton}
                 onPress={() => navigation.navigate('Tasks')}
               >
-                <Text style={styles.viewAllButtonText}>View all tasks</Text>
+                <Text style={styles.viewAllButtonText}>{t('viewAllTasks')}</Text>
               </TouchableOpacity>
             </>
           ) : (
-            <Text style={styles.emptyText}>You have no pending tasks</Text>
+            <Text style={styles.emptyText}>{t('noPendingTasks')}</Text>
           )}
         </View>
       </View>
@@ -141,7 +143,7 @@ const DashboardScreen = ({ navigation }) => {
           onPress={() => navigation.navigate('Tasks')}
         >
           <Ionicons name="list" size={24} color="#fff" style={styles.buttonIcon} />
-          <Text style={styles.navButtonText}>My Tasks</Text>
+          <Text style={styles.navButtonText}>{t('myTasks')}</Text>
         </TouchableOpacity>
         
         <TouchableOpacity 
@@ -149,7 +151,7 @@ const DashboardScreen = ({ navigation }) => {
           onPress={() => navigation.navigate('LocationHistory')}
         >
           <Ionicons name="map" size={24} color="#fff" style={styles.buttonIcon} />
-          <Text style={styles.navButtonText}>Location History</Text>
+          <Text style={styles.navButtonText}>{t('locationHistory')}</Text>
         </TouchableOpacity>
       </View>
     </ScrollView>

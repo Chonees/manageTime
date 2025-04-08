@@ -32,7 +32,9 @@ module.exports = {
   },
   extra: {
     // Configuración para diferentes entornos
+
     apiUrl: "https://managetime-backend-48f256c2dfe5.herokuapp.com/api",
+
     // Tiempo de espera para solicitudes API (en milisegundos)
     apiTimeout: 60000,
     // Habilitar logs detallados para depuración

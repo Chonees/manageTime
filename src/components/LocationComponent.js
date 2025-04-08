@@ -3,12 +3,14 @@ import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Dimensions
 import * as Location from 'expo-location';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
 import * as api from '../services/api';
 import { mapConfig } from '../services/platform-config';
 import VerificationPrompt from './VerificationPrompt';
 
 const LocationComponent = ({ onLocationChange, showWorkControls = false }) => {
   const { user } = useAuth();
+  const { t } = useLanguage();
   const [location, setLocation] = useState(null);
   const [errorMsg, setErrorMsg] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -33,7 +35,7 @@ const LocationComponent = ({ onLocationChange, showWorkControls = false }) => {
       setPermissionGranted(isGranted);
       
       if (!isGranted) {
-        setErrorMsg('Esta aplicación requiere acceso a tu ubicación para funcionar. Por favor, habilita los servicios de ubicación en la configuración de tu dispositivo.');
+        setErrorMsg(t('locationPermissionRequired'));
         setLoading(false);
         return;
       }
@@ -41,7 +43,7 @@ const LocationComponent = ({ onLocationChange, showWorkControls = false }) => {
       // Verificar si los servicios de ubicación están habilitados
       const enabled = await Location.hasServicesEnabledAsync();
       if (!enabled) {
-        setErrorMsg('Los servicios de ubicación están desactivados. Por favor, actívalos en la configuración de tu dispositivo.');
+        setErrorMsg(t('locationServicesDisabled'));
         setLoading(false);
         return;
       }
@@ -73,7 +75,7 @@ const LocationComponent = ({ onLocationChange, showWorkControls = false }) => {
       if (!currentLocation.coords || 
           typeof currentLocation.coords.latitude !== 'number' || 
           typeof currentLocation.coords.longitude !== 'number') {
-        throw new Error('Coordenadas inválidas o incompletas');
+        throw new Error(t('invalidCoordinates'));
       }
       
       setLocation(currentLocation);
@@ -84,7 +86,7 @@ const LocationComponent = ({ onLocationChange, showWorkControls = false }) => {
       }
     } catch (error) {
       console.error('Location error:', error);
-      setErrorMsg('No se pudo obtener la ubicación: ' + (error.message || 'Error desconocido'));
+      setErrorMsg(t('locationError') + ': ' + (error.message || t('unknownError')));
       
       // Intentar con una precisión menor si falla
       if (error.message && (error.message.includes('timeout') || error.message.includes('location'))) {
@@ -204,13 +206,13 @@ const LocationComponent = ({ onLocationChange, showWorkControls = false }) => {
     console.log('Iniciando trabajo, location:', location);
     
     if (!location) {
-      Alert.alert('Error', 'No se puede iniciar el trabajo sin ubicación');
+      Alert.alert(t('error'), t('noLocationError'));
       return;
     }
     
     if (!location.coords || typeof location.coords.latitude !== 'number' || typeof location.coords.longitude !== 'number') {
       console.error('Coordenadas inválidas:', location.coords);
-      Alert.alert('Error', 'Coordenadas inválidas. Por favor, actualiza tu ubicación e intenta nuevamente.');
+      Alert.alert(t('error'), t('invalidCoordinates'));
       return;
     }
     
@@ -229,10 +231,10 @@ const LocationComponent = ({ onLocationChange, showWorkControls = false }) => {
       setIsWorking(true);
       setWorkStartTime(new Date());
       
-      Alert.alert('Éxito', 'Has iniciado tu jornada de trabajo');
+      Alert.alert(t('success'), t('workStarted'));
     } catch (error) {
       console.error('Error al iniciar trabajo:', error);
-      Alert.alert('Error', error.message || 'No se pudo iniciar el trabajo');
+      Alert.alert(t('error'), error.message || t('errorStartingWork'));
     } finally {
       setLoadingAction(false);
     }
@@ -243,13 +245,13 @@ const LocationComponent = ({ onLocationChange, showWorkControls = false }) => {
     console.log('Finalizando trabajo, location:', location);
     
     if (!location) {
-      Alert.alert('Error', 'No se puede finalizar el trabajo sin ubicación');
+      Alert.alert(t('error'), t('noLocationError'));
       return;
     }
     
     if (!location.coords || typeof location.coords.latitude !== 'number' || typeof location.coords.longitude !== 'number') {
       console.error('Coordenadas inválidas:', location.coords);
-      Alert.alert('Error', 'Coordenadas inválidas. Por favor, actualiza tu ubicación e intenta nuevamente.');
+      Alert.alert(t('error'), t('invalidCoordinates'));
       return;
     }
     
@@ -268,10 +270,10 @@ const LocationComponent = ({ onLocationChange, showWorkControls = false }) => {
       setIsWorking(false);
       setWorkStartTime(null);
       
-      Alert.alert('Éxito', 'Has finalizado tu jornada de trabajo');
+      Alert.alert(t('success'), t('workEnded'));
     } catch (error) {
       console.error('Error al finalizar trabajo:', error);
-      Alert.alert('Error', error.message || 'No se pudo finalizar el trabajo');
+      Alert.alert(t('error'), error.message || t('errorEndingWork'));
     } finally {
       setLoadingAction(false);
     }
@@ -340,7 +342,7 @@ const LocationComponent = ({ onLocationChange, showWorkControls = false }) => {
     content = (
       <View style={styles.messageContainer}>
         <ActivityIndicator size="large" color="#4A90E2" />
-        <Text style={styles.messageText}>Obteniendo tu ubicación...</Text>
+        <Text style={styles.messageText}>{t('loadingLocation')}</Text>
       </View>
     );
   } else if (errorMsg) {
@@ -351,7 +353,7 @@ const LocationComponent = ({ onLocationChange, showWorkControls = false }) => {
           style={[styles.retryButton, {marginTop: 10}]} 
           onPress={getLocation}
         >
-          <Text style={styles.retryButtonText}>Reintentar</Text>
+          <Text style={styles.retryButtonText}>{t('retry')}</Text>
         </TouchableOpacity>
       </View>
     );
@@ -373,32 +375,25 @@ const LocationComponent = ({ onLocationChange, showWorkControls = false }) => {
           </View>
           
           {showWorkControls && (
-            <View style={styles.workControlsContainer}>
+            <View style={styles.workControls}>
               {isWorking ? (
-                <>
-                  <View style={styles.workTimeContainer}>
-                    <Text style={styles.workTimeLabel}>Tiempo de trabajo:</Text>
-                    <Text style={styles.workTimeValue}>{formatWorkTime()}</Text>
-                  </View>
-                  <TouchableOpacity 
-                    style={[styles.workButton, styles.endWorkButton]}
+                <View style={styles.workStatus}>
+                  <Text style={styles.workStatusText}>{t('workingSince')} {formatWorkTime()}</Text>
+                  <TouchableOpacity
+                    style={[styles.workButton, styles.stopButton]}
                     onPress={handleEndWork}
                     disabled={loadingAction}
                   >
-                    <Text style={styles.workButtonText}>
-                      {loadingAction ? 'Finalizando...' : 'Finalizar Trabajo'}
-                    </Text>
+                    <Text style={styles.workButtonText}>{t('endWork')}</Text>
                   </TouchableOpacity>
-                </>
+                </View>
               ) : (
-                <TouchableOpacity 
-                  style={[styles.workButton, styles.startWorkButton]}
+                <TouchableOpacity
+                  style={[styles.workButton, styles.startButton]}
                   onPress={handleStartWork}
                   disabled={loadingAction}
                 >
-                  <Text style={styles.workButtonText}>
-                    {loadingAction ? 'Iniciando...' : 'Iniciar Trabajo'}
-                  </Text>
+                  <Text style={styles.workButtonText}>{t('startWork')}</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -432,40 +427,32 @@ const LocationComponent = ({ onLocationChange, showWorkControls = false }) => {
                     latitude: latitude,
                     longitude: longitude,
                   }}
-                  title="Mi ubicación"
-                  description="Estoy aquí"
+                  title={t('yourLocation')}
                 />
               )}
             </MapView>
           </View>
           
           {showWorkControls && (
-            <View style={styles.workControlsContainer}>
+            <View style={styles.workControls}>
               {isWorking ? (
-                <>
-                  <View style={styles.workTimeContainer}>
-                    <Text style={styles.workTimeLabel}>Tiempo de trabajo:</Text>
-                    <Text style={styles.workTimeValue}>{formatWorkTime()}</Text>
-                  </View>
-                  <TouchableOpacity 
-                    style={[styles.workButton, styles.endWorkButton]}
+                <View style={styles.workStatus}>
+                  <Text style={styles.workStatusText}>{t('workingSince')} {formatWorkTime()}</Text>
+                  <TouchableOpacity
+                    style={[styles.workButton, styles.stopButton]}
                     onPress={handleEndWork}
                     disabled={loadingAction}
                   >
-                    <Text style={styles.workButtonText}>
-                      {loadingAction ? 'Finalizando...' : 'Finalizar Trabajo'}
-                    </Text>
+                    <Text style={styles.workButtonText}>{t('endWork')}</Text>
                   </TouchableOpacity>
-                </>
+                </View>
               ) : (
-                <TouchableOpacity 
-                  style={[styles.workButton, styles.startWorkButton]}
+                <TouchableOpacity
+                  style={[styles.workButton, styles.startButton]}
                   onPress={handleStartWork}
                   disabled={loadingAction}
                 >
-                  <Text style={styles.workButtonText}>
-                    {loadingAction ? 'Iniciando...' : 'Iniciar Trabajo'}
-                  </Text>
+                  <Text style={styles.workButtonText}>{t('startWork')}</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -476,12 +463,12 @@ const LocationComponent = ({ onLocationChange, showWorkControls = false }) => {
   } else {
     content = (
       <View style={styles.messageContainer}>
-        <Text style={styles.messageText}>No se pudo obtener la ubicación.</Text>
+        <Text style={styles.messageText}>{t('noLocationError')}</Text>
         <TouchableOpacity 
           style={[styles.retryButton, {marginTop: 10}]} 
           onPress={getLocation}
         >
-          <Text style={styles.retryButtonText}>Reintentar</Text>
+          <Text style={styles.retryButtonText}>{t('retry')}</Text>
         </TouchableOpacity>
       </View>
     );
@@ -491,7 +478,7 @@ const LocationComponent = ({ onLocationChange, showWorkControls = false }) => {
     <View style={styles.container}>
       <View style={styles.card}>
         <View style={styles.cardHeader}>
-          <Text style={styles.cardTitle}>Mi Ubicación</Text>
+          <Text style={styles.cardTitle}>{t('myLocation')}</Text>
         </View>
         {content}
         {user?.isAdmin && (
@@ -501,7 +488,7 @@ const LocationComponent = ({ onLocationChange, showWorkControls = false }) => {
             disabled={loading}
           >
             <Text style={styles.refreshButtonText}>
-              {loading ? 'Actualizando...' : 'Actualizar Ubicación'}
+              {loading ? t('updating') : t('updateLocation')}
             </Text>
           </TouchableOpacity>
         )}
@@ -609,7 +596,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
   },
-  workControlsContainer: {
+  workControls: {
     marginTop: 10,
   },
   workButton: {
@@ -617,10 +604,10 @@ const styles = StyleSheet.create({
     borderRadius: 5,
     alignItems: 'center',
   },
-  startWorkButton: {
+  startButton: {
     backgroundColor: '#2ecc71',
   },
-  endWorkButton: {
+  stopButton: {
     backgroundColor: '#e74c3c',
   },
   workButtonText: {
@@ -628,7 +615,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
   },
-  workTimeContainer: {
+  workStatus: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -637,14 +624,9 @@ const styles = StyleSheet.create({
     padding: 10,
     borderRadius: 5,
   },
-  workTimeLabel: {
+  workStatusText: {
     fontSize: 16,
     color: '#333',
-    fontWeight: 'bold',
-  },
-  workTimeValue: {
-    fontSize: 16,
-    color: '#e74c3c',
     fontWeight: 'bold',
   },
 });
