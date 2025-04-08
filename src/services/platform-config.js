@@ -113,17 +113,17 @@ function detectTunnelUrl() {
   try {
     // Forzar el uso de la URL de Heroku para dispositivos móviles
     if (Platform.OS === 'ios' || Platform.OS === 'android') {
-      const herokuUrl = process.env.API_URL ;
+      const herokuUrl = 'https://managetime-backend-48f256c2dfe5.herokuapp.com';
       console.log('Forzando URL de Heroku para dispositivo móvil:', herokuUrl);
       return herokuUrl;
     }
     
     // Para desarrollo web, también usar Heroku
     console.log('Usando URL de Heroku para web');
-    return process.env.API_URL ;
+    return 'https://managetime-backend-48f256c2dfe5.herokuapp.com';
   } catch (error) {
     console.error('Error al detectar modo:', error);
-    return process.env.API_URL ;
+    return 'https://managetime-backend-48f256c2dfe5.herokuapp.com';
   }
 }
 
