@@ -130,41 +130,56 @@ exports.getActiveLocations = async (req, res) => {
     // Importar el modelo de Location
     const Location = require('../models/location.model');
     
-    // Obtener la fecha de hoy (inicio del día)
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    
     // Obtener usuarios activos
     const activeUsers = await User.find({ isActive: true }).select('_id username');
-    console.log(`Usuarios activos encontrados: ${activeUsers.length}`);
     
-    // Lista para almacenar usuarios que han iniciado trabajo
+    // Para cada usuario activo, buscar su ubicación más reciente
     const activeLocations = [];
     
     for (const user of activeUsers) {
-      // Buscar la ubicación más reciente del usuario
+      // Buscar la ubicación más reciente (independientemente del tipo)
       const latestLocation = await Location.findOne({ 
         userId: user._id 
       }).sort({ timestamp: -1 }).limit(1);
       
-      // Solo mostrar usuarios cuya última ubicación sea de tipo "start"
-      if (latestLocation && latestLocation.type === 'start') {
+      // Si existe una ubicación para este usuario, añadirla al resultado
+      if (latestLocation) {
         activeLocations.push({
           userId: user._id,
           username: user.username,
           latitude: latestLocation.latitude,
           longitude: latestLocation.longitude,
           timestamp: latestLocation.timestamp,
-          type: latestLocation.type,
-          isWorking: true
+          type: latestLocation.type
         });
       }
     }
     
-    console.log(`Enviando ${activeLocations.length} ubicaciones de usuarios con inicio de trabajo`);
     res.status(200).json({ locations: activeLocations });
   } catch (error) {
     console.error('Error al obtener ubicaciones en tiempo real:', error);
     res.status(500).json({ message: 'Error al obtener ubicaciones en tiempo real' });
+  }
+};
+
+// Resetear todos los usuarios a inactivo (solo admin)
+exports.resetAllUsersToInactive = async (req, res) => {
+  try {
+    // Solo administradores pueden resetear el estado de los usuarios
+    if (!req.user.isAdmin) {
+      return res.status(403).json({ 
+        message: 'No tienes permiso para realizar esta acción' 
+      });
+    }
+    
+    // Actualizar todos los usuarios a inactivo
+    const result = await User.updateMany({}, { isActive: false });
+    
+    res.status(200).json({ 
+      message: `${result.modifiedCount} usuarios actualizados a estado inactivo` 
+    });
+  } catch (error) {
+    console.error('Error al resetear usuarios:', error);
+    res.status(500).json({ message: 'Error al resetear usuarios' });
   }
 };
