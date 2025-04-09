@@ -135,17 +135,29 @@ exports.checkToken = async (req, res) => {
   }
 };
 
-// Controlador para cerrar sesión
+// Cierre de sesión (logout) de usuario
 exports.logout = async (req, res) => {
   try {
+    console.log('Intentando cerrar sesión para el usuario ID:', req.userId);
+    
     // Verificar que el usuario está autenticado
     if (!req.userId) {
       return res.status(401).json({ message: 'No autenticado' });
     }
     
     // Actualizar el estado del usuario a inactivo
-    await User.findByIdAndUpdate(req.userId, { isActive: false });
+    const result = await User.findByIdAndUpdate(
+      req.userId, 
+      { isActive: false },
+      { new: true }
+    );
     
+    if (!result) {
+      console.log('No se encontró el usuario para ID:', req.userId);
+      return res.status(404).json({ message: 'Usuario no encontrado' });
+    }
+    
+    console.log('Usuario desactivado correctamente:', result.username);
     res.status(200).json({ message: 'Sesión cerrada correctamente' });
   } catch (error) {
     console.error('Error al cerrar sesión:', error);
