@@ -25,7 +25,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Wait for Heroku deployment
-        run: sleep 60  # Espera 60 segundos para que se complete el despliegueee
+        run: sleep 60  # Espera 60 segundos para que se complete el despliegue
         
       - name: Check Heroku status
         run: |
@@ -44,12 +44,19 @@ jobs:
           # Instalar Heroku CLI
           curl https://cli-assets.heroku.com/install.sh | sh
           
+          # Verificar que la aplicación existe
+          if ! heroku apps:info -a managetime-backend-48f256c2dfe5 &> /dev/null; then
+            echo "Error: No se puede encontrar la aplicación en Heroku"
+            heroku apps
+            exit 1
+          fi
+          
           # Obtener logs recientes y buscar errores
-          ERRORS=$(heroku logs --app managetime-backend-48f256c2dfe5 --num 50 | grep -i "error\|exception\|fatal" | wc -l)
+          ERRORS=$(heroku logs -a managetime-backend-48f256c2dfe5 --num 50 | grep -i "error\|exception\|fatal" | wc -l)
           
           if [ "$ERRORS" -gt 5 ]; then
             echo "Se encontraron $ERRORS errores en los logs de Heroku"
-            heroku logs --app managetime-backend-48f256c2dfe5 --num 20
+            heroku logs -a managetime-backend-48f256c2dfe5 --num 20
             exit 1
           else
             echo "La aplicación está funcionando sin errores significativos"
