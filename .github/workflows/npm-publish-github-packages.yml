@@ -18,3 +18,56 @@ jobs:
       - run: npm ci
       - run: npm run build --if-present
       - run: npm test --if-present
+      
+  # Nuevo job para verificar el despliegue en Heroku
+  check-heroku:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for Heroku deployment
+        run: sleep 60  # Espera 60 segundos para que se complete el despliegue
+        
+      - name: Check API URL
+        run: |
+          # Verificar que la aplicación responde
+          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" https://managetime-backend-48f256c2dfe5.herokuapp.com/api/auth/check-token || echo "Error en la conexión")
+          echo "Respuesta de la API: $RESPONSE"
+          
+          if [[ "$RESPONSE" != "200" && "$RESPONSE" != "401" ]]; then
+            echo "La API no responde correctamente. Código de estado: $RESPONSE"
+            exit 1
+          else
+            echo "La API responde correctamente con código: $RESPONSE"
+          fi
+          
+      - name: Check Heroku logs for errors
+        env:
+          HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
+        run: |
+          # Instalar Heroku CLI
+          curl https://cli-assets.heroku.com/install.sh | sh
+          
+          # Verificar qué aplicaciones están disponibles
+          echo "Aplicaciones disponibles:"
+          heroku apps
+          
+          # Intentar obtener logs para cada posible nombre de aplicación
+          for APP_NAME in managetime-backend managetime-app-backend pacific-caverns-62231; do
+            echo "Verificando logs para $APP_NAME..."
+            if heroku logs -a $APP_NAME --num 3 &> /dev/null; then
+              echo "Encontrada aplicación: $APP_NAME"
+              # Obtener logs y buscar errores
+              ERRORS=$(heroku logs -a $APP_NAME --num 50 | grep -i "error\|exception\|fatal" | wc -l)
+              
+              if [ "$ERRORS" -gt 5 ]; then
+                echo "Se encontraron $ERRORS errores en los logs de Heroku"
+                heroku logs -a $APP_NAME --num 20
+                exit 1
+              else
+                echo "La aplicación $APP_NAME está funcionando sin errores significativos"
+                break
+              fi
+            else
+              echo "No se pudo acceder a logs de $APP_NAME"
+            fi
+          done

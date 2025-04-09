@@ -7,8 +7,15 @@ const styles = StyleSheet.create({
   },
   scrollContainer: {
     flexGrow: 1,
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
     padding: 20,
+  },
+  headerContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    width: '100%',
+    marginBottom: 20,
   },
   formContainer: {
     backgroundColor: '#fff',
@@ -19,6 +26,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+    marginTop: 10,
   },
   languageToggleContainer: {
     alignItems: 'flex-end',
@@ -37,11 +45,9 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   appTitle: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: 'bold',
     color: '#333',
-    marginBottom: 10,
-    textAlign: 'center',
   },
   title: {
     fontSize: 24,
@@ -109,6 +115,9 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  centered: {
+    alignSelf: 'center',
   },
 });
 

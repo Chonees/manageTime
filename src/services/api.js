@@ -16,88 +16,42 @@ export const getApiUrl = () => {
 
 // Helper function to handle fetch errors
 export const handleResponse = async (response) => {
-  console.log(`Respuesta recibida con status: ${response.status}`);
-  
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
-    console.log('Error en la respuesta:', errorData);
     throw new Error(errorData.message || `Error ${response.status}: ${response.statusText}`);
   }
   
-  const data = await response.json().catch(() => ({}));
-  console.log('Datos recibidos:', JSON.stringify(data).substring(0, 100) + '...');
-  return data;
+  return await response.json().catch(() => ({}));
 };
 
-// Función para realizar peticiones con reintentos automáticos
+// Función simplificada para realizar peticiones sin reintentos
 export const fetchWithRetry = async (url, options, maxRetries = null) => {
-  // Obtener configuración según la plataforma
-  const config = getPlatformConfig(Platform.OS);
-  
-  // Usar maxRetries pasado como parámetro o el de la configuración
-  const retries = maxRetries || config.config.maxRetries || 2;
-  const retryDelay = config.config.retryDelay || 1000;
-  const timeout = getTimeout();
-  
-  console.log(`Configuración de red: timeout=${timeout}ms, maxRetries=${retries}, retryDelay=${retryDelay}ms`);
-  console.log(`Realizando petición a: ${url}`);
-  
-  let lastError;
-  
-  for (let attempt = 0; attempt <= retries; attempt++) {
-    try {
-      // Si no es el primer intento, esperar antes de reintentar
-      if (attempt > 0) {
-        const delay = retryDelay * Math.pow(2, attempt - 1);
-        console.log(`Reintentando petición (${attempt}/${retries}) después de ${delay}ms...`);
-        // Esperar un tiempo exponencial entre reintentos (1s, 2s, 4s, etc.)
-        await new Promise(resolve => setTimeout(resolve, delay));
-      }
-      
-      // Crear un nuevo AbortController para este intento
-      const controller = new AbortController();
-      
-      // Establecer un timeout para este intento
-      const timeoutId = setTimeout(() => {
-        console.log(`Timeout alcanzado (${timeout}ms) en intento ${attempt+1}/${retries+1}`);
-        controller.abort();
-      }, timeout);
-      
-      console.log(`Intento ${attempt+1}/${retries+1} - Iniciando petición...`);
-      
-      // Combinar las opciones pasadas con la señal del AbortController
-      const fetchOptions = {
-        ...options,
-        signal: controller.signal
-      };
-      
-      // Realizar la petición
-      const response = await fetch(url, fetchOptions);
-      
-      // Limpiar el timeout si la petición se completó
-      clearTimeout(timeoutId);
-      
-      console.log(`Intento ${attempt+1}/${retries+1} - Respuesta recibida con status: ${response.status}`);
-      
-      // Devolver la respuesta si se completó correctamente
-      return response;
-    } catch (error) {
-      console.error(`Error en intento ${attempt+1}/${retries+1}:`, error);
-      lastError = error;
-      
-      // Si el error no es por timeout o es el último intento, no reintentar
-      if (error.name !== 'AbortError' || attempt >= retries) {
-        console.log(`No se reintentará: ${error.name !== 'AbortError' ? 'No es un error de timeout' : 'Se agotaron los reintentos'}`);
-        throw error;
-      }
-      
-      console.log(`Error de timeout, se reintentará...`);
-    }
+  try {
+    // Crear un nuevo AbortController
+    const controller = new AbortController();
+    
+    // Establecer un timeout
+    const timeout = getTimeout();
+    const timeoutId = setTimeout(() => {
+      controller.abort();
+    }, timeout);
+    
+    // Combinar las opciones pasadas con la señal del AbortController
+    const fetchOptions = {
+      ...options,
+      signal: controller.signal
+    };
+    
+    // Realizar la petición sin reintentos
+    const response = await fetch(url, fetchOptions);
+    
+    // Limpiar el timeout si la petición se completó
+    clearTimeout(timeoutId);
+    
+    return response;
+  } catch (error) {
+    throw error;
   }
-  
-  // Si llegamos aquí, es porque se agotaron los reintentos
-  console.error(`Se agotaron todos los reintentos (${retries+1} intentos)`);
-  throw new Error(lastError?.message || 'Tiempo de espera agotado después de varios intentos');
 };
 
 // Helper function to get auth header
@@ -393,7 +347,29 @@ export const checkToken = async () => {
 // Logout function
 export const logout = async () => {
   try {
-    // Remove token and user data
+    // Obtener el token antes de eliminarlo
+    const token = await AsyncStorage.getItem('token');
+    
+    if (token) {
+      // Notificar al backend para actualizar el estado del usuario a inactivo
+      try {
+        const options = {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          }
+        };
+        
+        // Llamar al endpoint de logout
+        await fetchWithRetry(`${getApiUrl()}/api/auth/logout`, options);
+      } catch (logoutError) {
+        console.warn('Error al notificar logout al servidor:', logoutError);
+        // Continuamos con el logout local incluso si falla la notificación al servidor
+      }
+    }
+    
+    // Remove token and user data from local storage
     await AsyncStorage.removeItem('token');
     await AsyncStorage.removeItem('user');
     
@@ -1304,38 +1280,60 @@ export const saveActivity = async (activityData) => {
  */
 export const getAdminActivities = async (options = {}) => {
   try {
-    const token = await AsyncStorage.getItem('token');
+    const token = await getAuthHeader();
     
     if (!token) {
-      throw new Error('No hay token de autenticación disponible');
+      throw new Error('No hay token de autenticación');
     }
     
     // Construir la URL con parámetros de paginación
-    const limit = options.limit || 20;
-    const page = options.page || 1;
-    const url = `${API_URL}/api/activities/admin/all?limit=${limit}&page=${page}`;
+    const queryParams = new URLSearchParams();
+    if (options.limit) queryParams.append('limit', options.limit);
+    if (options.page) queryParams.append('page', options.page);
+
+    const url = `${getApiUrl()}/activities${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+    console.log(`Obteniendo actividades de administrador: ${url}`);
+
+    const options = createFetchOptions('GET');
     
-    // Utilizar fetchWithRetry para manejar posibles problemas de conexión
-    const response = await fetchWithRetry(url, {
+    const response = await fetchWithRetry(url, options);
+    const data = await handleResponse(response);
+    console.log(`Actividades obtenidas: ${data.activities?.length || 0}`);
+    resolve(data);
+  } catch (error) {
+    console.error('Error al obtener actividades de administrador:', error);
+    reject(error);
+  }
+};
+
+// Obtener ubicaciones en tiempo real de todos los usuarios (solo administradores)
+// @returns {Promise<Array>} Lista de usuarios con sus ubicaciones actuales
+export const getRealTimeLocations = async () => {
+  try {
+    // Obtener el token directamente del AsyncStorage
+    const token = await AsyncStorage.getItem('token');
+    
+    if (!token) {
+      throw new Error('No se proporcionó token de autenticación');
+    }
+    
+    // Usar getApiUrl para mantener centralizada la URL base
+    const url = `${getApiUrl()}/api/users/active-locations`;
+    
+    // Crear opciones con el token de autorización
+    const options = {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`
       }
-    });
+    };
     
-    if (!response.ok) {
-      // Si es un error 403, significa que no es administrador
-      if (response.status === 403) {
-        throw new Error('No tienes permisos de administrador para ver estas actividades');
-      }
-      throw new Error(`Error al obtener actividades: ${response.status}`);
-    }
-    
-    // Devolver los datos con actividades y paginación
-    return await response.json();
+    const response = await fetchWithRetry(url, options);
+    const data = await handleResponse(response);
+    return data.locations || [];
   } catch (error) {
-    console.error('Error en getAdminActivities:', error);
+    console.error('Error al obtener ubicaciones en tiempo real:', error);
     throw error;
   }
 };

@@ -97,6 +97,13 @@ exports.changePassword = async (req, res) => {
 // Eliminar un usuario (solo admin)
 exports.deleteUser = async (req, res) => {
   try {
+    // Solo administradores pueden eliminar usuarios
+    if (!req.user.isAdmin) {
+      return res.status(403).json({ 
+        message: 'No tienes permiso para eliminar usuarios' 
+      });
+    }
+    
     const deletedUser = await User.findByIdAndDelete(req.params.id);
     
     if (!deletedUser) {
@@ -107,5 +114,72 @@ exports.deleteUser = async (req, res) => {
   } catch (error) {
     console.error('Error al eliminar usuario:', error);
     res.status(500).json({ message: 'Error al eliminar usuario' });
+  }
+};
+
+// Obtener ubicaciones en tiempo real de los usuarios activos (solo admin)
+exports.getActiveLocations = async (req, res) => {
+  try {
+    // Solo administradores pueden ver ubicaciones en tiempo real
+    if (!req.user.isAdmin) {
+      return res.status(403).json({ 
+        message: 'No tienes permiso para acceder a las ubicaciones en tiempo real' 
+      });
+    }
+
+    // Importar el modelo de Location
+    const Location = require('../models/location.model');
+    
+    // Obtener usuarios activos
+    const activeUsers = await User.find({ isActive: true }).select('_id username');
+    
+    // Para cada usuario activo, buscar su ubicación más reciente
+    const activeLocations = [];
+    
+    for (const user of activeUsers) {
+      // Buscar la ubicación más reciente (independientemente del tipo)
+      const latestLocation = await Location.findOne({ 
+        userId: user._id 
+      }).sort({ timestamp: -1 }).limit(1);
+      
+      // Si existe una ubicación para este usuario, añadirla al resultado
+      if (latestLocation) {
+        activeLocations.push({
+          userId: user._id,
+          username: user.username,
+          latitude: latestLocation.latitude,
+          longitude: latestLocation.longitude,
+          timestamp: latestLocation.timestamp,
+          type: latestLocation.type
+        });
+      }
+    }
+    
+    res.status(200).json({ locations: activeLocations });
+  } catch (error) {
+    console.error('Error al obtener ubicaciones en tiempo real:', error);
+    res.status(500).json({ message: 'Error al obtener ubicaciones en tiempo real' });
+  }
+};
+
+// Resetear todos los usuarios a inactivo (solo admin)
+exports.resetAllUsersToInactive = async (req, res) => {
+  try {
+    // Solo administradores pueden resetear el estado de los usuarios
+    if (!req.user.isAdmin) {
+      return res.status(403).json({ 
+        message: 'No tienes permiso para realizar esta acción' 
+      });
+    }
+    
+    // Actualizar todos los usuarios a inactivo
+    const result = await User.updateMany({}, { isActive: false });
+    
+    res.status(200).json({ 
+      message: `${result.modifiedCount} usuarios actualizados a estado inactivo` 
+    });
+  } catch (error) {
+    console.error('Error al resetear usuarios:', error);
+    res.status(500).json({ message: 'Error al resetear usuarios' });
   }
 };
