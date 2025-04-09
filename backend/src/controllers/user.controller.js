@@ -130,43 +130,44 @@ exports.getActiveLocations = async (req, res) => {
     // Importar el modelo de Location
     const Location = require('../models/location.model');
     
+    // Obtener la fecha de hoy (inicio del día)
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
     // Obtener usuarios activos
     const activeUsers = await User.find({ isActive: true }).select('_id username');
+    console.log(`Usuarios activos encontrados: ${activeUsers.length}`);
     
-    // Para cada usuario activo, buscar su ubicación más reciente
+    // Para cada usuario activo, buscar su ubicación más reciente de hoy
     const activeLocations = [];
     
     for (const user of activeUsers) {
-      // Buscar la ubicación más reciente (independientemente del tipo)
+      // Buscar la ubicación más reciente del día de hoy
       const latestLocation = await Location.findOne({ 
-        userId: user._id 
+        userId: user._id,
+        timestamp: { $gte: today } // Solo ubicaciones de hoy
       }).sort({ timestamp: -1 }).limit(1);
       
-      // Verificar si hay una ubicación de tipo 'start' sin una ubicación 'end' posterior
-      // Esto indica que el usuario tiene un trabajo iniciado
-      const hasActiveWork = latestLocation && latestLocation.type === 'start';
-      
-      // Calcular si el usuario está "online" (ubicación reciente, menos de 5 minutos)
-      const isRecent = latestLocation && 
-                     (new Date() - new Date(latestLocation.timestamp) < 5 * 60 * 1000);
-      
-      console.log(`Usuario ${user.username}: hasActiveWork=${hasActiveWork}, isRecent=${isRecent}, type=${latestLocation?.type}`);
-      
-      // Si existe una ubicación para este usuario, añadirla al resultado
+      // Si existe una ubicación para este usuario de hoy, añadirla al resultado
       if (latestLocation) {
-        activeLocations.push({
-          userId: user._id,
-          username: user.username,
-          latitude: latestLocation.latitude,
-          longitude: latestLocation.longitude,
-          timestamp: latestLocation.timestamp,
-          type: latestLocation.type,
-          hasActiveWork: hasActiveWork,
-          isOnline: hasActiveWork && isRecent
-        });
+        // Verificar si la ubicación es reciente (últimos 10 minutos)
+        const isRecent = (new Date() - new Date(latestLocation.timestamp)) < (10 * 60 * 1000); // 10 minutos
+        
+        if (isRecent) {
+          activeLocations.push({
+            userId: user._id,
+            username: user.username,
+            latitude: latestLocation.latitude,
+            longitude: latestLocation.longitude,
+            timestamp: latestLocation.timestamp,
+            type: latestLocation.type,
+            isOnline: true
+          });
+        }
       }
     }
     
+    console.log(`Enviando ${activeLocations.length} ubicaciones activas`);
     res.status(200).json({ locations: activeLocations });
   } catch (error) {
     console.error('Error al obtener ubicaciones en tiempo real:', error);
