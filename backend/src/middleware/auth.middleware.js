@@ -27,10 +27,16 @@ const verifyToken = async (req, res, next) => {
       return res.status(404).json({ message: 'Usuario no encontrado' });
     }
     
-    // Verificar si la ruta es de logout, si es así permitirle continuar aunque esté inactivo
-    const isLogoutRequest = req.path === '/logout' && req.method === 'POST';
+    // Lista de rutas permitidas incluso para usuarios inactivos
+    const allowedPathsForInactiveUsers = [
+      '/logout', // Para permitir logout
+      '/tasks/my-tasks' // Para permitir cargar tareas
+    ];
     
-    if (!user.isActive && !isLogoutRequest) {
+    // Verificar si la ruta actual está en la lista de permitidas
+    const isAllowedPath = allowedPathsForInactiveUsers.some(path => req.path.endsWith(path));
+    
+    if (!user.isActive && !isAllowedPath) {
       return res.status(403).json({ message: 'Cuenta de usuario desactivada' });
     }
     
