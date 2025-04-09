@@ -29,7 +29,7 @@ jobs:
         
       - name: Check Heroku status
         run: |
-          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" https://managetime-backend-48f256c2dfe5.herokuapp.com/api/auth/check-token)
+          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" https://managetime-backend.herokuapp.com/api/auth/check-token)
           if [ "$RESPONSE" != "200" ] && [ "$RESPONSE" != "401" ]; then
             echo "La API no responde correctamente. Código de estado: $RESPONSE"
             exit 1
@@ -44,19 +44,12 @@ jobs:
           # Instalar Heroku CLI
           curl https://cli-assets.heroku.com/install.sh | sh
           
-          # Verificar que la aplicación existe
-          if ! heroku apps:info -a managetime-backend-48f256c2dfe5 &> /dev/null; then
-            echo "Error: No se puede encontrar la aplicación en Heroku"
-            heroku apps
-            exit 1
-          fi
-          
           # Obtener logs recientes y buscar errores
-          ERRORS=$(heroku logs -a managetime-backend-48f256c2dfe5 --num 50 | grep -i "error\|exception\|fatal" | wc -l)
+          ERRORS=$(heroku logs -a managetime-backend --num 50 | grep -i "error\|exception\|fatal" | wc -l)
           
           if [ "$ERRORS" -gt 5 ]; then
             echo "Se encontraron $ERRORS errores en los logs de Heroku"
-            heroku logs -a managetime-backend-48f256c2dfe5 --num 20
+            heroku logs -a managetime-backend --num 20
             exit 1
           else
             echo "La aplicación está funcionando sin errores significativos"
