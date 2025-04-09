@@ -142,6 +142,16 @@ exports.getActiveLocations = async (req, res) => {
         userId: user._id 
       }).sort({ timestamp: -1 }).limit(1);
       
+      // Verificar si hay una ubicación de tipo 'start' sin una ubicación 'end' posterior
+      // Esto indica que el usuario tiene un trabajo iniciado
+      const hasActiveWork = latestLocation && latestLocation.type === 'start';
+      
+      // Calcular si el usuario está "online" (ubicación reciente, menos de 5 minutos)
+      const isRecent = latestLocation && 
+                     (new Date() - new Date(latestLocation.timestamp) < 5 * 60 * 1000);
+      
+      console.log(`Usuario ${user.username}: hasActiveWork=${hasActiveWork}, isRecent=${isRecent}, type=${latestLocation?.type}`);
+      
       // Si existe una ubicación para este usuario, añadirla al resultado
       if (latestLocation) {
         activeLocations.push({
@@ -150,7 +160,9 @@ exports.getActiveLocations = async (req, res) => {
           latitude: latestLocation.latitude,
           longitude: latestLocation.longitude,
           timestamp: latestLocation.timestamp,
-          type: latestLocation.type
+          type: latestLocation.type,
+          hasActiveWork: hasActiveWork,
+          isOnline: hasActiveWork && isRecent
         });
       }
     }
