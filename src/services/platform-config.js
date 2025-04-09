@@ -1,6 +1,9 @@
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 
+// URL base para el backend en producción
+const BACKEND_URL = 'https://managetime-backend-48f256c2dfe5.herokuapp.com';
+
 // Configuración específica para cada plataforma
 const platformConfig = {
   // Configuración del mapa
@@ -40,7 +43,10 @@ const platformConfig = {
     // Edad máxima aceptable para una ubicación (en ms)
     maximumAge: 10000,
     
-    // Opciones específicas por plataforma
+    // Distancia mínima entre actualizaciones (en metros)
+    distanceFilter: 10,
+    
+    // Opciones específicas para cada plataforma
     options: {
       android: {
         enableHighAccuracy: true,
@@ -53,51 +59,52 @@ const platformConfig = {
       },
       ios: {
         enableHighAccuracy: true,
-        distanceFilter: 10,
-        activityType: 'other'
+        distanceFilter: 5,
+        timeInterval: 5000
       }
     }
   },
   
-  // Configuración base
-  config: {
-    // URL de Heroku (producción)
-    apiUrl: detectTunnelUrl() || process.env.API_URL , 
-    
-    // Configuración optimizada para redes móviles
-    timeout: 90000, // 90 segundos
-    maxRetries: 5,  // Aumentar reintentos para redes móviles
-    retryDelay: 2000, // Retraso base entre reintentos (ms)
-  },
-  
-  // Configuración específica para Android
+  // Configuración específica para cada sistema operativo
   android: {
-    // En Android, a veces hay problemas con la conexión a localhost o IPs locales
-    // Podemos necesitar ajustes específicos
+    // Configuración específica para Android
     config: {
-      // Aumentar el timeout para Android ya que puede ser más lento
-      timeout: 90000, // 90 segundos
-      maxRetries: 5,  // Más reintentos para Android
+      // Tiempo de espera para peticiones (en ms)
+      timeout: 90000,
       
-      // Opciones adicionales para fetch en Android
+      // Número máximo de reintentos para peticiones
+      maxRetries: 5,
+      
+      // Tiempo de espera entre reintentos (en ms)
+      retryDelay: 1000,
+      
+      // URL de la API
+      apiUrl: BACKEND_URL,
+      
+      // Opciones de fetch para Android
       fetchOptions: {
-        // Desactivar cache para evitar problemas
-        cache: 'no-store',
-        // Asegurarse de que las credenciales no se envían automáticamente
-        credentials: 'omit',
-        // Modo de solicitud (no-cors puede ayudar en algunos casos)
-        mode: 'cors',
-        // Prioridad alta para las solicitudes
-        priority: 'high',
-        // No redirigir automáticamente
-        redirect: 'manual'
+        cache: 'no-cache',
+        credentials: 'same-origin',
+        mode: 'cors'
       }
     }
   },
   
-  // Configuración para iOS
   ios: {
+    // Configuración específica para iOS
     config: {
+      // Tiempo de espera para peticiones (en ms)
+      timeout: 30000,
+      
+      // Número máximo de reintentos para peticiones
+      maxRetries: 3,
+      
+      // Tiempo de espera entre reintentos (en ms)
+      retryDelay: 2000,
+      
+      // URL de la API
+      apiUrl: BACKEND_URL,
+      
       // iOS suele funcionar bien con la configuración predeterminada
       fetchOptions: {
         cache: 'default',
@@ -113,17 +120,14 @@ function detectTunnelUrl() {
   try {
     // Forzar el uso de la URL de Heroku para dispositivos móviles
     if (Platform.OS === 'ios' || Platform.OS === 'android') {
-      const herokuUrl = 'https://managetime-backend-48f256c2dfe5.herokuapp.com';
-      console.log('Forzando URL de Heroku para dispositivo móvil:', herokuUrl);
-      return herokuUrl;
+      return BACKEND_URL;
     }
     
     // Para desarrollo web, también usar Heroku
-    console.log('Usando URL de Heroku para web');
-    return 'https://managetime-backend-48f256c2dfe5.herokuapp.com';
+    return BACKEND_URL;
   } catch (error) {
     console.error('Error al detectar modo:', error);
-    return 'https://managetime-backend-48f256c2dfe5.herokuapp.com';
+    return BACKEND_URL;
   }
 }
 
@@ -153,13 +157,11 @@ export const getApiBaseUrl = () => {
   // Primero intentar detectar si estamos en modo túnel
   const tunnelUrl = detectTunnelUrl();
   if (tunnelUrl) {
-    console.log('Usando URL del túnel:', tunnelUrl);
     return tunnelUrl;
   }
   
   // Si no estamos en modo túnel, usar la URL de Heroku
   const config = getPlatformConfig('config');
-  console.log('Usando URL de la API estándar:', config.apiUrl);
   return config.apiUrl;
 };
 

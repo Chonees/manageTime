@@ -61,18 +61,18 @@ const LoginScreen = ({ navigation }) => {
     style={styles.container}
     >
       <ScrollView contentContainerStyle={styles.scrollContainer}>
-        <View style={styles.formContainer}>
-          <View style={styles.languageToggleContainer}>
-            <TouchableOpacity onPress={toggleLanguage} style={styles.languageToggle}>
-              <Ionicons 
-                name={language === 'es' ? 'language' : 'language-outline'} 
-                size={24} 
-                color="#4A90E2" 
-              />
-              <Text style={styles.languageText}>{language.toUpperCase()}</Text>
-            </TouchableOpacity>
-          </View>
+        <View style={styles.headerContainer}>
           <Text style={styles.appTitle}>Work Proof</Text>
+          <TouchableOpacity onPress={toggleLanguage} style={styles.languageToggle}>
+            <Ionicons 
+              name={language === 'es' ? 'language' : 'language-outline'} 
+              size={24} 
+              color="#4A90E2" 
+            />
+            <Text style={styles.languageText}>{language.toUpperCase()}</Text>
+          </TouchableOpacity>
+        </View>
+        <View style={styles.formContainer}>
           <Text style={styles.title}>{t('login')}</Text>
           
           {error && <Text style={styles.errorText}>{error}</Text>}

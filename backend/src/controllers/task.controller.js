@@ -222,42 +222,12 @@ exports.getMyTasks = async (req, res) => {
 // Obtener todas las tareas (solo admin)
 exports.getAllTasks = async (req, res) => {
   try {
-    // Construir el filtro basado en los parámetros de consulta
-    const filter = {};
-    
-    // Filtro por estado (completado/pendiente)
-    if (req.query.status === 'completed') {
-      filter.completed = true;
-    } else if (req.query.status === 'pending') {
-      filter.completed = false;
-    }
-    
-    // Filtro por usuario
-    if (req.query.userId) {
-      filter.userId = req.query.userId;
-    }
-    
-    // Opciones de paginación
-    const options = {
-      sort: { createdAt: -1 },
-      populate: { path: 'userId', select: 'username email isActive isOnline' }
-    };
-    
-    // Configurar límite y página si están presentes
-    if (req.query.limit) {
-      options.limit = parseInt(req.query.limit);
-    }
-    
-    if (req.query.page) {
-      options.skip = (parseInt(req.query.page) - 1) * (options.limit || 10);
-    }
-    
-    // Obtener las tareas con los filtros aplicados
-    console.log('Filtros aplicados:', JSON.stringify(filter));
-    const tasks = await Task.find(filter, null, options);
+    const tasks = await Task.find()
+                           .sort({ createdAt: -1 })
+                           .populate('userId', 'username email');
     
     console.log(`Admin ${req.user.username} obtuvo ${tasks.length} tareas`);
-    res.status(200).json({ tasks });
+    res.status(200).json(tasks);
   } catch (error) {
     console.error('Error al obtener todas las tareas:', error);
     res.status(500).json({ message: 'Error al obtener todas las tareas' });
