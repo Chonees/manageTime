@@ -18,3 +18,39 @@ jobs:
       - run: npm ci
       - run: npm run build --if-present
       - run: npm test --if-present
+      
+  # Nuevo job para verificar el despliegue en Heroku
+  check-heroku:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for Heroku deployment
+        run: sleep 60  # Espera 60 segundos para que se complete el despliegue
+        
+      - name: Check Heroku status
+        run: |
+          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" https://managetime-backend-48f256c2dfe5.herokuapp.com/api/auth/check-token)
+          if [ "$RESPONSE" != "200" ] && [ "$RESPONSE" != "401" ]; then
+            echo "La API no responde correctamente. Código de estado: $RESPONSE"
+            exit 1
+          else
+            echo "La API responde correctamente con código: $RESPONSE"
+          fi
+          
+      - name: Check Heroku logs for errors
+        env:
+          HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
+        run: |
+          # Instalar Heroku CLI
+          curl https://cli-assets.heroku.com/install.sh | sh
+          
+          # Obtener logs recientes y buscar errores
+          ERRORS=$(heroku logs --app managetime-backend-48f256c2dfe5 --num 50 | grep -i "error\|exception\|fatal" | wc -l)
+          
+          if [ "$ERRORS" -gt 5 ]; then
+            echo "Se encontraron $ERRORS errores en los logs de Heroku"
+            heroku logs --app managetime-backend-48f256c2dfe5 --num 20
+            exit 1
+          else
+            echo "La aplicación está funcionando sin errores significativos"
+          fi
