@@ -138,63 +138,30 @@ exports.getActiveLocations = async (req, res) => {
     const activeUsers = await User.find({ isActive: true }).select('_id username');
     console.log(`Usuarios activos encontrados: ${activeUsers.length}`);
     
-    // Para cada usuario activo, verificar si está trabajando actualmente
+    // Lista para almacenar usuarios que han iniciado trabajo
     const activeLocations = [];
     
     for (const user of activeUsers) {
-      // Buscar la ubicación más reciente del día de hoy
-      const locations = await Location.find({ 
-        userId: user._id,
-        timestamp: { $gte: today } // Solo ubicaciones de hoy
-      }).sort({ timestamp: -1 }).limit(10); // Obtenemos las últimas 10 para analizar
+      // Buscar la ubicación más reciente del usuario
+      const latestLocation = await Location.findOne({ 
+        userId: user._id 
+      }).sort({ timestamp: -1 }).limit(1);
       
-      if (locations.length > 0) {
-        // Verificar si el usuario está trabajando actualmente
-        // Esto significa que su registro más reciente es de tipo "start" o
-        // que tiene un "start" más reciente que su último "end"
-        
-        let isWorking = false;
-        let lastLocation = null;
-        
-        // Si el último registro es de tipo "start", está trabajando
-        if (locations[0].type === 'start') {
-          isWorking = true;
-          lastLocation = locations[0];
-        } else {
-          // Si el último es "end", buscamos si hay un "start" sin su correspondiente "end"
-          const lastEndTime = locations.find(loc => loc.type === 'end')?.timestamp;
-          const lastStartAfterEnd = locations.find(
-            loc => loc.type === 'start' && 
-            (!lastEndTime || new Date(loc.timestamp) > new Date(lastEndTime))
-          );
-          
-          if (lastStartAfterEnd) {
-            isWorking = true;
-            lastLocation = lastStartAfterEnd;
-          }
-        }
-        
-        // Si está trabajando, añadir su ubicación a la lista
-        if (isWorking && lastLocation) {
-          // Verificar si la ubicación es reciente (últimos 30 minutos)
-          const isRecent = (new Date() - new Date(lastLocation.timestamp)) < (30 * 60 * 1000); // 30 minutos
-          
-          if (isRecent) {
-            activeLocations.push({
-              userId: user._id,
-              username: user.username,
-              latitude: lastLocation.latitude,
-              longitude: lastLocation.longitude,
-              timestamp: lastLocation.timestamp,
-              type: lastLocation.type,
-              isWorking: true
-            });
-          }
-        }
+      // Solo mostrar usuarios cuya última ubicación sea de tipo "start"
+      if (latestLocation && latestLocation.type === 'start') {
+        activeLocations.push({
+          userId: user._id,
+          username: user.username,
+          latitude: latestLocation.latitude,
+          longitude: latestLocation.longitude,
+          timestamp: latestLocation.timestamp,
+          type: latestLocation.type,
+          isWorking: true
+        });
       }
     }
     
-    console.log(`Enviando ${activeLocations.length} ubicaciones de usuarios trabajando`);
+    console.log(`Enviando ${activeLocations.length} ubicaciones de usuarios con inicio de trabajo`);
     res.status(200).json({ locations: activeLocations });
   } catch (error) {
     console.error('Error al obtener ubicaciones en tiempo real:', error);
