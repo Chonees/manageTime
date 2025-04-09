@@ -25,7 +25,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Wait for Heroku deployment
-        run: sleep 60  # Espera 60 segundos para que se complete el despliegue
+        run: sleep 60  # Espera 60 segundos para que se complete el despliegueee
         
       - name: Check Heroku status
         run: |
