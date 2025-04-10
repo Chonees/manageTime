@@ -275,24 +275,13 @@ const TaskScreen = ({ navigation }) => {
         return;
       }
 
+      // Eliminar la tarea - el backend registrará la actividad automáticamente
       await api.deleteTask(taskId);
       
-      // Save activity for task deletion
-      try {
-        await api.saveActivity({
-          type: 'task_delete',
-          taskId,
-          message: t('taskDeletedActivity', { title: taskToDelete.title }),
-          metadata: {
-            title: taskToDelete.title,
-            deletedAt: new Date().toISOString()
-          }
-        });
-      } catch (error) {
-        console.error('Error saving activity:', error);
-      }
-      
+      // Actualizar la UI después de eliminar
       setTasks(tasks.filter(task => task._id !== taskId));
+      
+      // No es necesario registrar la actividad manualmente, el backend ya lo hace
     } catch (error) {
       console.error('Error deleting task:', error);
       Alert.alert('Error', error.message || t('errorDeletingTask'));

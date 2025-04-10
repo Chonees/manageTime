@@ -15,7 +15,6 @@ import { Ionicons } from '@expo/vector-icons';
 import MapView, { Marker, Circle } from 'react-native-maps';
 import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { startRouteTracking, stopRouteTracking, saveTrackingPoint } from '../services/location-service';
 
 const TaskDetailsScreen = ({ route, navigation }) => {
   const { taskId } = route.params;
@@ -419,58 +418,6 @@ const TaskDetailsScreen = ({ route, navigation }) => {
       setTask(updatedTask);
       setTaskStarted(true);
 
-      // Save location data
-      if (userLocation) {
-        try {
-          // First, save location point to location history
-          await saveTrackingPoint({
-            latitude: userLocation.latitude,
-            longitude: userLocation.longitude,
-            type: 'tracking',
-            description: `Started task: ${task.title}`
-          });
-          
-          // Then save activity
-        await api.saveActivity({
-            type: 'task_update',
-          taskId: taskId,
-            userId: user._id,
-          title: task.title,
-            description: t('taskStartedAt', { title: task.title }),
-          message: t('taskStartedAt', { title: task.title }),
-            metadata: {
-              status: 'in-progress',
-              timestamp: new Date().toISOString(),
-          location: {
-            type: 'Point',
-            coordinates: [userLocation.longitude, userLocation.latitude]
-              }
-            }
-          });
-        } catch (activityError) {
-          console.error('Error saving activity:', activityError);
-          // Continue even if activity saving fails
-        }
-      } else {
-        // Even without location, we should still create the activity
-        try {
-          await api.saveActivity({
-            type: 'task_update',
-            taskId: taskId,
-            userId: user._id,
-            title: task.title,
-            description: t('taskStartedAt', { title: task.title }),
-            message: t('taskStartedAt', { title: task.title }),
-            metadata: {
-              status: 'in-progress',
-              timestamp: new Date().toISOString()
-            }
-          });
-        } catch (activityError) {
-          console.error('Error saving activity without location:', activityError);
-        }
-      }
-
       Alert.alert(t('success'), t('taskStarted'));
     } catch (error) {
       console.error('Error starting task:', error);
@@ -487,56 +434,6 @@ const TaskDetailsScreen = ({ route, navigation }) => {
       });
       setTask(updatedTask);
       setTaskStarted(false);
-
-      // Save location data
-      if (userLocation) {
-        try {
-          // First, save location point to location history
-          await saveTrackingPoint({
-            latitude: userLocation.latitude,
-            longitude: userLocation.longitude,
-            type: 'tracking',
-            description: `Completed task: ${task.title}`
-          });
-          
-          // Then save activity
-        await api.saveActivity({
-            type: 'task_complete',
-          taskId: taskId,
-            userId: user._id,
-          title: task.title,
-            description: t('taskCompletedAt', { title: task.title }),
-          message: t('taskCompletedAt', { title: task.title }),
-            metadata: {
-              timestamp: new Date().toISOString(),
-          location: {
-            type: 'Point',
-            coordinates: [userLocation.longitude, userLocation.latitude]
-              }
-            }
-          });
-        } catch (activityError) {
-          console.error('Error saving activity:', activityError);
-          // Continue even if activity saving fails
-        }
-      } else {
-        // Even without location, we should still create the activity
-        try {
-          await api.saveActivity({
-            type: 'task_complete',
-            taskId: taskId,
-            userId: user._id,
-            title: task.title,
-            description: t('taskCompletedAt', { title: task.title }),
-            message: t('taskCompletedAt', { title: task.title }),
-            metadata: {
-              timestamp: new Date().toISOString()
-            }
-          });
-        } catch (activityError) {
-          console.error('Error saving activity without location:', activityError);
-        }
-      }
 
       Alert.alert(t('success'), t('taskCompleted'));
     } catch (error) {
@@ -559,7 +456,10 @@ const TaskDetailsScreen = ({ route, navigation }) => {
           style: 'destructive',
           onPress: async () => {
             try {
+              // Eliminar la tarea - el backend registrará la actividad automáticamente
               await api.deleteTask(taskId);
+              
+              // Notificar al usuario y volver a la pantalla anterior
               Alert.alert(t('success'), t('taskDeleted'));
               navigation.goBack();
             } catch (error) {

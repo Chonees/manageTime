@@ -337,6 +337,19 @@ const LocationComponent = ({ onLocationChange, showWorkControls = false }) => {
     handleEndWork();
   };
 
+  // Validate coordinates to ensure they are valid numbers
+  const validateCoordinates = (coords) => {
+    if (!coords) return false;
+    const lat = coords.latitude || coords.coords?.latitude;
+    const lng = coords.longitude || coords.coords?.longitude;
+    return (
+      typeof lat === 'number' && 
+      !isNaN(lat) && 
+      typeof lng === 'number' && 
+      !isNaN(lng)
+    );
+  };
+
   // Render different content based on state
   let content;
   
@@ -361,8 +374,8 @@ const LocationComponent = ({ onLocationChange, showWorkControls = false }) => {
     );
   } else if (location) {
     // Ensure location coordinates are valid numbers
-    const latitude = typeof location.coords.latitude === 'number' ? location.coords.latitude : 0;
-    const longitude = typeof location.coords.longitude === 'number' ? location.coords.longitude : 0;
+    const latitude = Number(location.coords?.latitude) || 0;
+    const longitude = Number(location.coords?.longitude) || 0;
     
     // Si hay un error con el mapa, mostrar la vista alternativa
     if (mapError) {
@@ -407,32 +420,66 @@ const LocationComponent = ({ onLocationChange, showWorkControls = false }) => {
         <View style={styles.locationInfoContainer}>
           {/* Renderizado del mapa para ambas plataformas */}
           <View style={styles.mapContainer}>
-            <MapView 
-              style={styles.map}
-              provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : null}
-              initialRegion={{
-                latitude: latitude,
-                longitude: longitude,
-                latitudeDelta: 0.0922,
-                longitudeDelta: 0.0421,
-              }}
-              showsUserLocation={mapConfig.showsUserLocation}
-              showsMyLocationButton={mapConfig.showsMyLocationButton}
-              toolbarEnabled={Platform.OS === 'android' ? mapConfig.toolbarEnabled : undefined}
-              showsCompass={Platform.OS === 'ios' ? mapConfig.showsCompass : undefined}
-              onMapReady={() => setMapReady(true)}
-              onError={handleMapError}
-            >
-              {mapReady && (
-                <Marker
-                  coordinate={{
-                    latitude: latitude,
-                    longitude: longitude,
-                  }}
-                  title={t('yourLocation')}
-                />
-              )}
-            </MapView>
+            {Platform.OS === 'ios' ? (
+              // iOS specific rendering to avoid undefined errors
+              <MapView 
+                style={styles.map}
+                initialRegion={{
+                  latitude: Number(latitude) || 0,
+                  longitude: Number(longitude) || 0,
+                  latitudeDelta: 0.0922,
+                  longitudeDelta: 0.0421,
+                }}
+                region={{
+                  latitude: Number(latitude) || 0,
+                  longitude: Number(longitude) || 0,
+                  latitudeDelta: 0.0922,
+                  longitudeDelta: 0.0421,
+                }}
+                showsUserLocation={true}
+                showsMyLocationButton={true}
+                showsCompass={true}
+                onMapReady={() => setMapReady(true)}
+                onError={handleMapError}
+              >
+                {mapReady && validateCoordinates({latitude, longitude}) && (
+                  <Marker
+                    coordinate={{
+                      latitude: Number(latitude),
+                      longitude: Number(longitude),
+                    }}
+                    title={t('yourLocation')}
+                  />
+                )}
+              </MapView>
+            ) : (
+              // Android rendering
+              <MapView 
+                style={styles.map}
+                provider={PROVIDER_GOOGLE}
+                initialRegion={{
+                  latitude: latitude,
+                  longitude: longitude,
+                  latitudeDelta: 0.0922,
+                  longitudeDelta: 0.0421,
+                }}
+                showsUserLocation={mapConfig.showsUserLocation}
+                showsMyLocationButton={mapConfig.showsMyLocationButton}
+                toolbarEnabled={mapConfig.toolbarEnabled}
+                onMapReady={() => setMapReady(true)}
+                onError={handleMapError}
+              >
+                {mapReady && (
+                  <Marker
+                    coordinate={{
+                      latitude: latitude,
+                      longitude: longitude,
+                    }}
+                    title={t('yourLocation')}
+                  />
+                )}
+              </MapView>
+            )}
           </View>
           
           {showWorkControls && (

@@ -406,18 +406,6 @@ export const startWork = async (coords) => {
       body: JSON.stringify(payload)
     });
     
-    // Iniciar el seguimiento de ruta si está disponible
-    try {
-      const locationService = require('./location-service');
-      if (locationService && typeof locationService.startRouteTracking === 'function') {
-        await locationService.startRouteTracking();
-        console.log('Seguimiento de ruta iniciado con éxito');
-      }
-    } catch (trackingError) {
-      console.warn('No se pudo iniciar el seguimiento de ruta:', trackingError);
-      // No interrumpimos el flujo principal si falla el seguimiento
-    }
-    
     return await handleResponse(response);
   } catch (error) {
     console.error('Error al iniciar trabajo:', error);
@@ -432,18 +420,6 @@ export const endWork = async (coords) => {
     
     if (!coords || typeof coords.latitude !== 'number' || typeof coords.longitude !== 'number') {
       throw new Error('Coordenadas inválidas');
-    }
-    
-    // Detener el seguimiento de ruta si está disponible
-    try {
-      const locationService = require('./location-service');
-      if (locationService && typeof locationService.stopRouteTracking === 'function') {
-        locationService.stopRouteTracking();
-        console.log('Seguimiento de ruta detenido con éxito');
-      }
-    } catch (trackingError) {
-      console.warn('No se pudo detener el seguimiento de ruta:', trackingError);
-      // No interrumpimos el flujo principal si falla
     }
     
     // Asegurarnos de que las coordenadas sean strings para evitar problemas de serialización
@@ -1203,9 +1179,14 @@ export const saveActivity = async (activityData) => {
   try {
     console.log('Saving activity data:', JSON.stringify(activityData));
     
-    // Ensure required fields are present - removed action field requirement
-    if (!activityData.type || !activityData.taskId) {
-      throw new Error('Activity data missing required fields: type or taskId');
+    // Ensure required fields are present - taskId no es requerido para task_delete
+    if (!activityData.type) {
+      throw new Error('Activity data missing required fields: type');
+    }
+    
+    // Para actividades que no son de eliminación, se requiere taskId
+    if (activityData.type !== 'task_delete' && !activityData.taskId) {
+      throw new Error('Activity data missing required field: taskId');
     }
     
     // Valid activity types according to the backend
@@ -1239,6 +1220,19 @@ export const saveActivity = async (activityData) => {
       delete dataToSend.action;
     }
     
+    // Para actividades de eliminación de tareas, si no hay un campo dedicado para el taskDeleted,
+    // guardar el ID en metadata antes de eliminarlo del campo principal
+    if (activityData.type === 'task_delete' && activityData.taskId) {
+      if (!dataToSend.metadata) {
+        dataToSend.metadata = {};
+      }
+      // Guardar el ID de la tarea eliminada en los metadatos
+      dataToSend.metadata.deletedTaskId = activityData.taskId;
+      
+      // Para el endpoint de actividades, no enviar taskId para evitar el error 404
+      delete dataToSend.taskId;
+    }
+    
     // Obtener el token directly, no the header object
     const token = await AsyncStorage.getItem('token');
     
@@ -1257,6 +1251,13 @@ export const saveActivity = async (activityData) => {
     if (!response.ok) {
       const errorText = await response.text().catch(() => 'No error details available');
       console.error(`Activity save failed with status ${response.status}:`, errorText);
+      
+      // Si es un error 404 para una actividad de eliminación de tarea, registrarlo pero no lanzar excepción
+      if (activityData.type === 'task_delete' && response.status === 404) {
+        console.warn('No se pudo guardar la actividad de eliminación, pero la tarea fue eliminada correctamente');
+        return { success: true, activitySaved: false, message: 'Tarea eliminada pero no se pudo registrar la actividad' };
+      }
+      
       throw new Error(`Error al guardar actividad: ${response.status} - ${errorText}`);
     }
 
@@ -1265,6 +1266,13 @@ export const saveActivity = async (activityData) => {
     return responseData;
   } catch (error) {
     console.error('Error en saveActivity:', error);
+    
+    // Para errores con task_delete, manejar sin propagar el error
+    if (activityData && activityData.type === 'task_delete') {
+      console.warn('Error al guardar actividad de eliminación, pero la tarea fue eliminada correctamente');
+      return { success: true, activitySaved: false, message: 'Tarea eliminada pero no se pudo registrar la actividad' };
+    }
+    
     throw error;
   }
 };
@@ -1667,20 +1675,5 @@ const getActionFromType = (type) => {
       return 'stopped_working';
     default:
       return 'unknown';
-  }
-};
-
-export const getRealTimeLocations = async () => {
-  try {
-    const url = `${getApiUrl()}/api/locations/realtime`;
-    const options = await createFetchOptions('GET');
-    
-    const response = await fetchWithRetry(url, options);
-    const data = await handleResponse(response);
-    
-    return data.locations || [];
-  } catch (error) {
-    console.error('Error al obtener ubicaciones en tiempo real:', error);
-    throw error;
   }
 };

@@ -137,23 +137,6 @@ const createActivity = async (taskId, action, coords) => {
     // Save the activity
     await saveActivity(activityData);
     console.log(t('activitySaved', { action, taskId }));
-    
-    // Also save the location point to location history if we have coordinates
-    if (coords) {
-      try {
-        await saveTrackingPoint({
-          latitude: coords.latitude,
-          longitude: coords.longitude,
-          type: 'tracking',
-          description: action === 'enter' 
-            ? `Entered task area: ${taskId}`
-            : `Exited task area: ${taskId}`
-        });
-        console.log('Location point saved for activity:', action);
-      } catch (locationError) {
-        console.error('Error saving location point:', locationError);
-      }
-    }
   } catch (error) {
     console.error(t('errorCreatingActivity'), error);
   }
@@ -455,10 +438,25 @@ const tryUseLastKnownLocation = async () => {
 
 // Iniciar el monitoreo de ubicación
 export let locationMonitoringInterval = null;
-// Variable para el seguimiento de ruta
-export let routeTrackingInterval = null;
-export let isTracking = false;
 
+// Detener monitoreo de ubicación
+export const stopLocationMonitoring = () => {
+  console.log('Stopping location monitoring');
+  
+  // Detener monitoreo constante
+  if (locationMonitoringInterval) {
+    clearInterval(locationMonitoringInterval);
+    locationMonitoringInterval = null;
+    console.log(t('location Monitoring Stopped'));
+  }
+  
+  // Resetear el estado
+  tasksInRange = {};
+  
+  return true;
+};
+
+// Iniciar el monitoreo de ubicación
 export const startLocationMonitoring = async () => {
   try {
     // Verificar si los servicios de ubicación están habilitados
@@ -533,133 +531,3 @@ export const startLocationMonitoring = async () => {
     return false;
   }
 };
-
-// Detener el monitoreo de ubicación
-export const stopLocationMonitoring = () => {
-  if (locationMonitoringInterval) {
-    clearInterval(locationMonitoringInterval);
-    locationMonitoringInterval = null;
-    console.log(t('location Monitoring Stopped'));
-  }
-  
-  // Detener también el seguimiento de ruta si está activo
-  stopRouteTracking();
-  
-  // Resetear el estado
-  tasksInRange = {};
-  
-  return true;
-};
-
-// Iniciar el seguimiento de ruta (para rastrear ubicaciones durante el trabajo)
-export const startRouteTracking = async () => {
-
-  if (isTracking) {
-    console.log('Location tracking is already active');
-    return true;
-  }
-  
-  try {
-
-    const { status } = await Location.requestForegroundPermissionsAsync();
-    
-    if (status !== 'granted') {
-      console.log('No se otorgaron permisos de ubicación para seguimiento');
-      return false;
-    }
-    
-    console.log('Iniciando seguimiento de ruta...');
-    isTracking = true;
-    
-
-    // Get initial location
-    const initialLocation = await Location.getCurrentPositionAsync({
-      accuracy: Location.Accuracy.High
-    });
-    
-    // Save initial tracking point
-    const saved = await saveTrackingPoint(initialLocation.coords);
-    if (!saved) {
-      console.error('Failed to save initial tracking point');
-      return false;
-    }
-    
-    // Start periodic tracking
-    routeTrackingInterval = setInterval(async () => {
-      try {
-        const location = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.High,
-          timeInterval: 30000,
-          distanceInterval: 5
-        });
-        
-        await saveTrackingPoint(location.coords);
-      } catch (error) {
-        console.error('Error al guardar punto de seguimiento:', error);
-      }
-    }, 30000); // Every 30 seconds
-
-    
-    return true;
-  } catch (error) {
-    console.error('Error al iniciar seguimiento de ruta:', error);
-    isTracking = false;
-    return false;
-  }
-};
-
-// Detener el seguimiento de ruta
-export const stopRouteTracking = () => {
-  if (routeTrackingInterval) {
-    clearInterval(routeTrackingInterval);
-    routeTrackingInterval = null;
-  }
-  
-  if (isTracking) {
-    console.log('Deteniendo seguimiento de ruta');
-    isTracking = false;
-    return true;
-  } else {
-    console.log('El seguimiento de ruta no estaba activo');
-    return false;
-  }
-};
-
-// Function to save a tracking point
-const saveTrackingPoint = async (coords) => {
-  try {
-    const token = await AsyncStorage.getItem('token');
-    if (!token) {
-      console.error('No authentication token found');
-      return false;
-    }
-
-    const response = await fetch(`${API_URL}/tracking`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify({
-        latitude: coords.latitude,
-        longitude: coords.longitude,
-        timestamp: new Date().toISOString(),
-        description: 'Location tracking point'
-      })
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      console.error('Error response:', errorData);
-      throw new Error(`Error al guardar punto de seguimiento: ${response.status} ${errorData.message || ''}`);
-    }
-
-    const responseData = await response.json();
-    console.log('Tracking point saved successfully:', responseData);
-    return true;
-  } catch (error) {
-    console.error('Error al guardar punto de seguimiento:', error);
-    return false;
-  }
-};
-

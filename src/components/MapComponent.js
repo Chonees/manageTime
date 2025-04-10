@@ -157,6 +157,86 @@ const MapComponent = ({ locations, currentLocation, isLoading, selectedUserName,
     );
   };
 
+  // Validar coordenadas para asegurar que sean números válidos
+  const validateCoordinates = (coords) => {
+    if (!coords) return false;
+    const lat = coords.latitude;
+    const lng = coords.longitude;
+    return (
+      typeof lat === 'number' && 
+      !isNaN(lat) && 
+      typeof lng === 'number' && 
+      !isNaN(lng)
+    );
+  };
+
+  // Parse safe location - asegura que todas las propiedades existan y sean válidas
+  const parseSafeLocation = (location) => {
+    if (!location) return null;
+    
+    // Extraer coordenadas de diferentes estructuras posibles
+    const lat = location.latitude || 
+               (location.location && location.location.coordinates ? 
+                location.location.coordinates[1] : null);
+    const lng = location.longitude || 
+               (location.location && location.location.coordinates ? 
+                location.location.coordinates[0] : null);
+    
+    // Validar y convertir a números
+    if (typeof lat !== 'number' || isNaN(lat) || typeof lng !== 'number' || isNaN(lng)) {
+      return null;
+    }
+    
+    // Crear un objeto de ubicación seguro con valores por defecto para cada propiedad
+    return {
+      ...location,
+      latitude: Number(lat),
+      longitude: Number(lng),
+      type: location.type || 'unknown',
+      timestamp: location.timestamp || new Date().toISOString(),
+      title: location.title || '',
+      description: location.description || ''
+    };
+  };
+
+  // Validate polyline points
+  const validatePolylinePoints = (points) => {
+    if (!points || !Array.isArray(points) || points.length < 2) return false;
+    return points.every(point => validateCoordinates(point));
+  };
+
+  // Safe render callout - soluciona el error "Cannot convert undefined value to object"
+  const renderSafeCallout = (title, description, time) => {
+    // En iOS, asegurarse que todos los valores sean seguros
+    if (Platform.OS === 'ios') {
+      // Siempre proporcionar valores por defecto para evitar undefined
+      const safeTitle = (title && typeof title === 'string') ? title : '';
+      const safeDescription = (description && typeof description === 'string') ? description : '';
+      const safeTime = (time && typeof time === 'string') ? time : '';
+      
+      return (
+        <Callout tooltip>
+          <View style={styles.calloutView}>
+            {safeTitle !== '' && <Text style={styles.calloutTitle}>{safeTitle}</Text>}
+            {safeDescription !== '' && <Text style={styles.calloutDescription}>{safeDescription}</Text>}
+            {safeTime !== '' && <Text style={styles.calloutTime}>{safeTime}</Text>}
+          </View>
+        </Callout>
+      );
+    }
+    
+    // Para Android, implementación más estándar
+    return (
+      <Callout>
+        <View style={styles.calloutView}>
+          <Text style={styles.calloutTitle}>{title || ''}</Text>
+          {description && <Text style={styles.calloutDescription}>{description}</Text>}
+          {time && <Text style={styles.calloutTime}>{time}</Text>}
+        </View>
+      </Callout>
+    );
+  };
+
   // Get session color
   const getSessionColor = (index) => {
     const colors = ['#4CAF50', '#2196F3', '#9C27B0', '#FF9800', '#795548', '#607D8B'];
@@ -238,36 +318,91 @@ const MapComponent = ({ locations, currentLocation, isLoading, selectedUserName,
     );
   }
 
-  // Return MapView for both iOS and Android
-  return (
-    <View style={styles.container}>
+  // Renderizar el mapa para iOS con validación adicional
+  const renderIOSMap = () => {
+    // Filtrar y validar ubicaciones para iOS
+    const validLocations = locations
+      .map(parseSafeLocation)
+      .filter(location => location !== null);
+      
+    // Filtrar y validar eventos de tareas para iOS
+    const validTaskEvents = taskEvents
+      .map(event => {
+        if (!event) return null;
+        
+        // Extraer coordenadas
+        const lat = event.latitude || 
+                   (event.location && event.location.coordinates ? 
+                    event.location.coordinates[1] : null);
+        const lng = event.longitude || 
+                   (event.location && event.location.coordinates ? 
+                    event.location.coordinates[0] : null);
+                    
+        if (typeof lat !== 'number' || isNaN(lat) || typeof lng !== 'number' || isNaN(lng)) {
+          return null;
+        }
+        
+        return {
+          ...event,
+          latitude: Number(lat),
+          longitude: Number(lng),
+          title: event.title || '',
+          message: event.message || '',
+          action: event.action || 'unknown',
+          timestamp: event.timestamp || new Date().toISOString()
+        };
+      })
+      .filter(event => event !== null);
+    
+    // Validar currentLocation para iOS
+    let safeCurrentLocation = null;
+    if (currentLocation) {
+      if (validateCoordinates({
+        latitude: Number(currentLocation.latitude),
+        longitude: Number(currentLocation.longitude)
+      })) {
+        safeCurrentLocation = {
+          latitude: Number(currentLocation.latitude),
+          longitude: Number(currentLocation.longitude)
+        };
+      }
+    }
+    
+    return (
       <MapView
         style={styles.map}
-        region={region}
-        provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
+        provider={null} // Use native iOS maps
+        initialRegion={{
+          latitude: currentLocation ? Number(currentLocation.latitude) : -34.603722,
+          longitude: currentLocation ? Number(currentLocation.longitude) : -58.381592,
+          latitudeDelta: 0.0922,
+          longitudeDelta: 0.0421,
+        }}
+        onMapReady={() => setMapReady(true)}
         showsUserLocation={true}
         showsMyLocationButton={true}
-        toolbarEnabled={true}
-        showsCompass={true}
-        onMapReady={() => setMapReady(true)}
-        onError={handleMapError}
+        scrollEnabled={true}
+        zoomEnabled={true}
+        pitchEnabled={true}
+        rotateEnabled={true}
       >
-        {mapReady && workSessions.map((session, sessionIndex) => (
-          <React.Fragment key={`session-${sessionIndex}`}>
-            {/* Session path line */}
-            {session.points.length >= 2 && (
-              <Polyline
-                coordinates={session.points.map(point => ({
-                  latitude: point.latitude,
-                  longitude: point.longitude,
-                }))}
-                strokeColor={getSessionColor(sessionIndex)}
-                strokeWidth={4}
-              />
-            )}
-            
-            {/* Start marker */}
-            {session.startLocation && (
+        {validLocations.map((location, index) => {
+          // Solo renderizar si hay ubicaciones de sesión válidas
+          // y se pueden validar sus coordenadas
+          if (!location || !location.startLocation) return null;
+          
+          const session = {
+            startLocation: parseSafeLocation(location.startLocation),
+            endLocation: parseSafeLocation(location.endLocation),
+            startTime: location.startLocation?.timestamp || new Date().toISOString(),
+            endTime: location.endLocation?.timestamp || new Date().toISOString(),
+          };
+          
+          if (!session.startLocation) return null;
+          
+          return (
+            <React.Fragment key={`location-${index}`}>
+              {/* Start marker */}
               <Marker
                 coordinate={{
                   latitude: session.startLocation.latitude,
@@ -277,53 +412,38 @@ const MapComponent = ({ locations, currentLocation, isLoading, selectedUserName,
                 description={formatDate(session.startLocation.timestamp)}
                 pinColor={markerColors.start}
               >
-                <Callout>
-                  <View style={styles.calloutView}>
-                    <Text style={styles.calloutTitle}>{t('workStarted')}</Text>
-                    <Text style={styles.calloutTime}>
-                      {formatDate(session.startLocation.timestamp)}
-                    </Text>
-                  </View>
-                </Callout>
+                {renderSafeCallout(
+                  t('workStarted'), 
+                  null, 
+                  formatDate(session.startLocation.timestamp)
+                )}
               </Marker>
-            )}
-            
-            {/* End marker */}
-            {session.endLocation && (
-              <Marker
-                coordinate={{
-                  latitude: session.endLocation.latitude,
-                  longitude: session.endLocation.longitude,
-                }}
-                title={t('workEnded')}
-                description={formatDate(session.endLocation.timestamp)}
-                pinColor={markerColors.end}
-              >
-                <Callout>
-                  <View style={styles.calloutView}>
-                    <Text style={styles.calloutTitle}>{t('workEnded')}</Text>
-                    <Text style={styles.calloutDescription}>
-                      {t('duration')}: {calculateDuration(session.startTime, session.endTime)}
-                    </Text>
-                    <Text style={styles.calloutTime}>
-                      {formatDate(session.endLocation.timestamp)}
-                    </Text>
-                  </View>
-                </Callout>
-              </Marker>
-            )}
-          </React.Fragment>
-        ))}
+              
+              {/* End marker - solo si existe */}
+              {session.endLocation && (
+                <Marker
+                  coordinate={{
+                    latitude: session.endLocation.latitude,
+                    longitude: session.endLocation.longitude,
+                  }}
+                  title={t('workEnded')}
+                  description={formatDate(session.endLocation.timestamp)}
+                  pinColor={markerColors.end}
+                >
+                  {renderSafeCallout(
+                    t('workEnded'),
+                    `${t('duration')}: ${calculateDuration(session.startTime, session.endTime)}`,
+                    formatDate(session.endLocation.timestamp)
+                  )}
+                </Marker>
+              )}
+            </React.Fragment>
+          );
+        })}
         
         {/* Task markers */}
-        {mapReady && taskEvents.map((taskEvent, index) => {
-          // Get coordinates correctly
-          const latitude = taskEvent.latitude || 0;
-          const longitude = taskEvent.longitude || 0;
-          
-          if (!latitude || !longitude) return null;
-          
-          // Title based on task action
+        {mapReady && validTaskEvents.map((taskEvent, index) => {
+          // Title based on task action (con validación)
           const title = taskEvent.action === 'started' 
             ? `${t('taskStarted')}: ${taskEvent.title || ''}` 
             : taskEvent.action === 'completed'
@@ -332,45 +452,44 @@ const MapComponent = ({ locations, currentLocation, isLoading, selectedUserName,
           
           return (
             <Marker
-              key={`task-${index}-${taskEvent._id || ''}`}
+              key={`task-${index}-${taskEvent._id || Math.random().toString()}`}
               coordinate={{
-                latitude: latitude,
-                longitude: longitude,
+                latitude: taskEvent.latitude,
+                longitude: taskEvent.longitude,
               }}
               title={title}
               description={formatDate(taskEvent.timestamp)}
               pinColor={getTaskMarkerColor(taskEvent)}
             >
-              <Callout tooltip>
-                <View style={styles.calloutView}>
-                  <Text style={styles.calloutTitle}>{title}</Text>
-                  <Text style={styles.calloutDescription}>
-                    {taskEvent.message || ''}
-                  </Text>
-                  <Text style={styles.calloutTime}>
-                    {formatDate(taskEvent.timestamp)}
-                  </Text>
-                </View>
-              </Callout>
+              {renderSafeCallout(
+                title,
+                taskEvent.message || '',
+                formatDate(taskEvent.timestamp)
+              )}
             </Marker>
           );
         })}
         
         {/* Current location marker */}
-        {currentLocation && currentLocation.latitude && currentLocation.longitude && (
+        {safeCurrentLocation && (
           <Marker
             coordinate={{
-              latitude: currentLocation.latitude,
-              longitude: currentLocation.longitude,
+              latitude: safeCurrentLocation.latitude,
+              longitude: safeCurrentLocation.longitude,
             }}
             title={t('yourLocation')}
             description={t('currentPosition')}
             pinColor={markerColors.current}
           >
+            {renderSafeCallout(
+              t('yourLocation'),
+              t('currentPosition'),
+              null
+            )}
             <Circle
               center={{
-                latitude: currentLocation.latitude,
-                longitude: currentLocation.longitude,
+                latitude: safeCurrentLocation.latitude,
+                longitude: safeCurrentLocation.longitude,
               }}
               radius={50}
               fillColor="rgba(33, 150, 243, 0.2)"
@@ -379,6 +498,145 @@ const MapComponent = ({ locations, currentLocation, isLoading, selectedUserName,
           </Marker>
         )}
       </MapView>
+    );
+  };
+
+  // Return MapView for both iOS and Android
+  return (
+    <View style={styles.container}>
+      {Platform.OS === 'ios' ? (
+        renderIOSMap()
+      ) : (
+        // Android rendering
+        <MapView
+          style={styles.map}
+          region={region}
+          provider={PROVIDER_GOOGLE}
+          showsUserLocation={true}
+          showsMyLocationButton={true}
+          toolbarEnabled={true}
+          showsCompass={true}
+          onMapReady={() => setMapReady(true)}
+          onError={handleMapError}
+        >
+          {mapReady && workSessions.map((session, sessionIndex) => (
+            <React.Fragment key={`session-${sessionIndex}`}>
+              {/* Session path line */}
+              {session.points.length >= 2 && (
+                <Polyline
+                  coordinates={session.points.map(point => ({
+                    latitude: point.latitude,
+                    longitude: point.longitude,
+                  }))}
+                  strokeColor={getSessionColor(sessionIndex)}
+                  strokeWidth={4}
+                />
+              )}
+              
+              {/* Start marker */}
+              {session.startLocation && (
+                <Marker
+                  coordinate={{
+                    latitude: session.startLocation.latitude,
+                    longitude: session.startLocation.longitude,
+                  }}
+                  title={t('workStarted')}
+                  description={formatDate(session.startLocation.timestamp)}
+                  pinColor={markerColors.start}
+                >
+                  {renderSafeCallout(
+                    t('workStarted'), 
+                    null, 
+                    formatDate(session.startLocation.timestamp)
+                  )}
+                </Marker>
+              )}
+              
+              {/* End marker */}
+              {session.endLocation && (
+                <Marker
+                  coordinate={{
+                    latitude: session.endLocation.latitude,
+                    longitude: session.endLocation.longitude,
+                  }}
+                  title={t('workEnded')}
+                  description={formatDate(session.endLocation.timestamp)}
+                  pinColor={markerColors.end}
+                >
+                  {renderSafeCallout(
+                    t('workEnded'),
+                    `${t('duration')}: ${calculateDuration(session.startTime, session.endTime)}`,
+                    formatDate(session.endLocation.timestamp)
+                  )}
+                </Marker>
+              )}
+            </React.Fragment>
+          ))}
+          
+          {/* Task markers and current location marker - using the same code as in the original implementation */}
+          {mapReady && taskEvents.map((taskEvent, index) => {
+            // Get coordinates correctly
+            const latitude = taskEvent.latitude || 0;
+            const longitude = taskEvent.longitude || 0;
+            
+            if (!latitude || !longitude) return null;
+            
+            // Title based on task action
+            const title = taskEvent.action === 'started' 
+              ? `${t('taskStarted')}: ${taskEvent.title || ''}` 
+              : taskEvent.action === 'completed'
+              ? `${t('taskCompleted')}: ${taskEvent.title || ''}`
+              : `${t('taskActivity')}: ${taskEvent.title || ''}`;
+            
+            return (
+              <Marker
+                key={`task-${index}-${taskEvent._id || ''}`}
+                coordinate={{
+                  latitude: latitude,
+                  longitude: longitude,
+                }}
+                title={title}
+                description={formatDate(taskEvent.timestamp)}
+                pinColor={getTaskMarkerColor(taskEvent)}
+              >
+                {renderSafeCallout(
+                  title,
+                  taskEvent.message || '',
+                  formatDate(taskEvent.timestamp)
+                )}
+              </Marker>
+            );
+          })}
+          
+          {/* Current location marker */}
+          {currentLocation && currentLocation.latitude && currentLocation.longitude && (
+            <Marker
+              coordinate={{
+                latitude: currentLocation.latitude,
+                longitude: currentLocation.longitude,
+              }}
+              title={t('yourLocation')}
+              description={t('currentPosition')}
+              pinColor={markerColors.current}
+            >
+              {renderSafeCallout(
+                t('yourLocation'),
+                t('currentPosition'),
+                null
+              )}
+              <Circle
+                center={{
+                  latitude: currentLocation.latitude,
+                  longitude: currentLocation.longitude,
+                }}
+                radius={50}
+                fillColor="rgba(33, 150, 243, 0.2)"
+                strokeColor="rgba(33, 150, 243, 0.5)"
+              />
+            </Marker>
+          )}
+        </MapView>
+      )}
     </View>
   );
 };

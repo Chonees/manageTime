@@ -56,6 +56,60 @@ const LocationHistoryView = ({
   const { t } = useLanguage();
   const [mapError, setMapError] = useState(false);
 
+  // Validar coordenadas para evitar errores en iOS
+  const validateCoordinates = (coords) => {
+    if (!coords) return false;
+    const lat = coords.latitude || coords.coords?.latitude;
+    const lng = coords.longitude || coords.coords?.longitude;
+    return (
+      typeof lat === 'number' && 
+      !isNaN(lat) && 
+      typeof lng === 'number' && 
+      !isNaN(lng)
+    );
+  };
+
+  // Validar y formatear todas las ubicaciones para iOS
+  const safeLocations = React.useMemo(() => {
+    if (!locations || !Array.isArray(locations)) return [];
+    
+    return locations.map(location => {
+      // Si estamos en iOS, asegurémonos de que las coordenadas son números válidos
+      if (Platform.OS === 'ios') {
+        const lat = location.latitude || 
+          (location.location && location.location.coordinates ? 
+            location.location.coordinates[1] : null);
+            
+        const lng = location.longitude || 
+          (location.location && location.location.coordinates ? 
+            location.location.coordinates[0] : null);
+            
+        return {
+          ...location,
+          latitude: lat ? Number(lat) : 0,
+          longitude: lng ? Number(lng) : 0
+        };
+      }
+      return location;
+    });
+  }, [locations]);
+
+  // Validar current location para iOS
+  const safeCurrentLocation = React.useMemo(() => {
+    if (!currentLocation) return null;
+    
+    if (Platform.OS === 'ios') {
+      if (!validateCoordinates(currentLocation)) return null;
+      
+      return {
+        latitude: Number(currentLocation.latitude) || 0,
+        longitude: Number(currentLocation.longitude) || 0
+      };
+    }
+    
+    return currentLocation;
+  }, [currentLocation]);
+
   // Function to run map diagnostics
   const runDiagnostics = async () => {
     try {
@@ -98,8 +152,8 @@ Current Location: ${results.currentLocation.success ? 'Available' : 'Unavailable
           </Text>
         </View>
         <MapComponent 
-          locations={locations}
-          currentLocation={currentLocation}
+          locations={safeLocations}
+          currentLocation={safeCurrentLocation}
           isLoading={loading}
           selectedUserName={selectedUserName}
           onError={() => setMapError(true)}

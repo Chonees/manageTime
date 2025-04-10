@@ -146,6 +146,19 @@ const LocationRadiusSelector = ({
     }
   };
 
+  // Validar coordenadas para evitar errores en iOS
+  const validateCoordinates = (coords) => {
+    if (!coords) return false;
+    const lat = coords.latitude;
+    const lng = coords.longitude;
+    return (
+      typeof lat === 'number' && 
+      !isNaN(lat) && 
+      typeof lng === 'number' && 
+      !isNaN(lng)
+    );
+  };
+
   // Aplicar selección y cerrar el modal
   const handleSave = () => {
     onSave({
@@ -193,44 +206,99 @@ const LocationRadiusSelector = ({
               <Text style={styles.loadingText}>{t('loadingMap')}</Text>
             </View>
           ) : (
-            <MapView
-              ref={mapRef}
-              style={styles.map}
-              provider={PROVIDER_GOOGLE}
-              onMapReady={() => setMapReady(true)}
-              onPress={(e) => {
-                const { latitude, longitude } = e.nativeEvent.coordinate;
-                setLocation(prev => ({
-                  ...prev,
-                  latitude,
-                  longitude
-                }));
-              }}
-              {...mapConfig}
-            >
-              {mapReady && (
-                <>
-                  <Marker
-                    coordinate={{
-                      latitude: location.latitude,
-                      longitude: location.longitude
-                    }}
-                    draggable
-                    onDragEnd={handleMarkerDragEnd}
-                  />
-                  <Circle
-                    center={{
-                      latitude: location.latitude,
-                      longitude: location.longitude
-                    }}
-                    radius={getRadiusInMeters()}
-                    fillColor="rgba(74, 144, 226, 0.2)"
-                    strokeColor="rgba(74, 144, 226, 0.8)"
-                    strokeWidth={2}
-                  />
-                </>
-              )}
-            </MapView>
+            Platform.OS === 'ios' ? (
+              // Renderizado específico para iOS
+              <MapView
+                ref={mapRef}
+                style={styles.map}
+                initialRegion={{
+                  latitude: Number(location.latitude) || 0,
+                  longitude: Number(location.longitude) || 0,
+                  latitudeDelta: LATITUDE_DELTA,
+                  longitudeDelta: LONGITUDE_DELTA,
+                }}
+                region={{
+                  latitude: Number(location.latitude) || 0,
+                  longitude: Number(location.longitude) || 0,
+                  latitudeDelta: LATITUDE_DELTA,
+                  longitudeDelta: LONGITUDE_DELTA,
+                }}
+                onMapReady={() => setMapReady(true)}
+                onPress={(e) => {
+                  const { latitude, longitude } = e.nativeEvent.coordinate;
+                  setLocation(prev => ({
+                    ...prev,
+                    latitude: Number(latitude),
+                    longitude: Number(longitude)
+                  }));
+                }}
+              >
+                {mapReady && validateCoordinates(location) && (
+                  <>
+                    <Marker
+                      coordinate={{
+                        latitude: Number(location.latitude),
+                        longitude: Number(location.longitude)
+                      }}
+                      draggable
+                      onDragEnd={handleMarkerDragEnd}
+                    />
+                    {validateCoordinates(location) && (
+                      <Circle
+                        center={{
+                          latitude: Number(location.latitude),
+                          longitude: Number(location.longitude)
+                        }}
+                        radius={getRadiusInMeters()}
+                        fillColor="rgba(74, 144, 226, 0.2)"
+                        strokeColor="rgba(74, 144, 226, 0.8)"
+                        strokeWidth={2}
+                      />
+                    )}
+                  </>
+                )}
+              </MapView>
+            ) : (
+              // Renderizado para Android
+              <MapView
+                ref={mapRef}
+                style={styles.map}
+                provider={PROVIDER_GOOGLE}
+                onMapReady={() => setMapReady(true)}
+                onPress={(e) => {
+                  const { latitude, longitude } = e.nativeEvent.coordinate;
+                  setLocation(prev => ({
+                    ...prev,
+                    latitude,
+                    longitude
+                  }));
+                }}
+                {...mapConfig}
+              >
+                {mapReady && (
+                  <>
+                    <Marker
+                      coordinate={{
+                        latitude: location.latitude,
+                        longitude: location.longitude
+                      }}
+                      draggable
+                      onDragEnd={handleMarkerDragEnd}
+                    />
+                    <Circle
+                      center={{
+                        latitude: location.latitude,
+                        longitude: location.longitude
+                      }}
+                      radius={getRadiusInMeters()}
+                      fillColor="rgba(74, 144, 226, 0.2)"
+                      strokeColor="rgba(74, 144, 226, 0.8)"
+                      strokeWidth={2}
+                    />
+                  </>
+                )}
+              </MapView>
+            )
           )}
         </View>
 

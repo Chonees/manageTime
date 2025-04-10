@@ -9,7 +9,7 @@ router.use(verifyToken);
 // Rutas para registrar ubicaciones
 router.post('/start', locationController.startWork);
 router.post('/end', locationController.endWork);
-router.post('/tracking', locationController.saveTrackingPoint); // Nueva ruta para puntos de seguimiento
+// Ruta de puntos de seguimiento eliminada
 
 // Rutas para obtener historial
 router.get('/my-history', locationController.getMyLocationHistory);

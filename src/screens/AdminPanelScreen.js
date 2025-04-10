@@ -69,8 +69,43 @@ const AdminPanelScreen = () => {
           style: 'destructive',
           onPress: async () => {
             try {
+              // Encontrar la tarea antes de eliminarla
+              const taskToDelete = tasks.find(task => task._id === taskId);
+              if (!taskToDelete) {
+                console.error('Tarea no encontrada:', taskId);
+                return;
+              }
+              
+              // Guardar información de la tarea antes de eliminarla
+              const taskInfo = {
+                title: taskToDelete.title,
+                id: taskId,
+                deletedAt: new Date().toISOString()
+              };
+              
+              // Primero eliminar la tarea
               await api.deleteTask(taskId);
+              
+              // Actualizar la UI inmediatamente
               setTasks(tasks.filter(task => task._id !== taskId));
+              
+              // Registrar la actividad sin incluir taskId (que ya no existe)
+              try {
+                await api.saveActivity({
+                  type: 'task_delete',
+                  // No incluir taskId ya que la tarea ya no existe
+                  message: t('taskDeletedActivity', { title: taskInfo.title }),
+                  metadata: {
+                    title: taskInfo.title,
+                    deletedTaskId: taskInfo.id, // Guardar el ID en metadata
+                    deletedAt: taskInfo.deletedAt
+                  }
+                });
+              } catch (activityError) {
+                // Solo registrar el error en la consola
+                console.error('Error al registrar actividad de eliminación:', activityError);
+              }
+              
               Alert.alert(t('success'), t('taskDeleted'));
             } catch (error) {
               console.error('Error deleting task:', error);
