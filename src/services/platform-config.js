@@ -145,7 +145,14 @@ export const getPlatformOptions = (section) => {
 export const mapConfig = {
   provider: Platform.OS === 'android' ? 'google' : null,
   apiKey: platformConfig.map.googleMapsApiKey,
-  ...getPlatformOptions('map')
+  showsUserLocation: true,
+  showsMyLocationButton: true,
+  toolbarEnabled: Platform.OS === 'android' ? true : undefined,
+  showsCompass: true,
+  rotateEnabled: true,
+  scrollEnabled: true,
+  zoomEnabled: true,
+  zoomControlEnabled: true,
 };
 
 // Función para obtener la URL de la API según la plataforma

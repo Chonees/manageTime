@@ -226,6 +226,7 @@ const LocationComponent = ({ onLocationChange, showWorkControls = false }) => {
       
       console.log('Enviando coordenadas al servidor:', coords);
       
+      // Start work and location tracking
       await api.startWork(coords);
       
       setIsWorking(true);
@@ -265,6 +266,7 @@ const LocationComponent = ({ onLocationChange, showWorkControls = false }) => {
       
       console.log('Enviando coordenadas al servidor:', coords);
       
+      // End work and stop location tracking
       await api.endWork(coords);
       
       setIsWorking(false);

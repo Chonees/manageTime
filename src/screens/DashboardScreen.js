@@ -14,6 +14,12 @@ import { useLanguage } from '../context/LanguageContext';
 import LocationComponent from '../components/LocationComponent';
 import * as api from '../services/api';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
+import { useTheme } from '../context/ThemeContext';
+import { startLocationMonitoring, stopLocationMonitoring } from '../services/location-service';
+import { startWork, endWork } from '../services/api';
+import { formatDistanceToNow } from 'date-fns';
+import { es } from 'date-fns/locale';
 
 const DashboardScreen = ({ navigation }) => {
   const { user, logout } = useAuth();
@@ -23,6 +29,7 @@ const DashboardScreen = ({ navigation }) => {
   const [refreshing, setRefreshing] = useState(false);
   const [position, setPosition] = useState(null);
   const [tasks, setTasks] = useState([]);
+  const theme = useTheme();
 
   // Load initial data
   useEffect(() => {
@@ -78,22 +85,31 @@ const DashboardScreen = ({ navigation }) => {
 
   return (
     <ScrollView 
-      style={styles.container}
+      style={[styles.container, { backgroundColor: theme.colors.background }]}
       refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          colors={[theme.colors.primary]}
+          tintColor={theme.colors.primary}
+        />
       }
     >
-      <View style={styles.header}>
-        <Text style={styles.welcomeText}>{t('welcome')}, {user?.username || t('user')}</Text>
+      <View style={[styles.header, { backgroundColor: theme.colors.card }]}>
+        <Text style={[styles.welcomeText, { color: theme.colors.text }]}>
+          {t('welcome')}, {user?.username || t('user')}
+        </Text>
         <TouchableOpacity 
-          style={styles.logoutButton}
+          style={[styles.logoutButton, { backgroundColor: theme.colors.card }]}
           onPress={handleLogout}
         >
-          <Text style={styles.logoutButtonText}>{t('logOut')}</Text>
+          <Text style={[styles.logoutButtonText, { color: theme.colors.notification }]}>
+            {t('logOut')}
+          </Text>
         </TouchableOpacity>
       </View>
 
-      {error && <Text style={styles.errorText}>{error}</Text>}
+      {error && <Text style={[styles.errorText, { color: theme.colors.notification }]}>{error}</Text>}
 
       {/* Location component with work controls */}
       <LocationComponent 
@@ -102,56 +118,64 @@ const DashboardScreen = ({ navigation }) => {
       />
 
       {/* Pending tasks summary */}
-      <View style={styles.card}>
-        <View style={styles.cardHeader}>
+      <View style={[styles.card, { backgroundColor: theme.colors.card }]}>
+        <View style={[styles.cardHeader, { backgroundColor: theme.colors.primary }]}>
           <Text style={styles.cardTitle}>{t('pendingTasks')}</Text>
         </View>
         <View style={styles.cardBody}>
           {loading ? (
-            <ActivityIndicator size="small" color="#4A90E2" />
+            <ActivityIndicator size="small" color={theme.colors.primary} />
           ) : tasks.length > 0 ? (
             <>
               {tasks.map((task, index) => (
-                <View key={task.id} style={styles.taskItem}>
+                <TouchableOpacity 
+                  key={task.id} 
+                  style={[styles.taskItem, { borderBottomColor: theme.colors.border }]}
+                  onPress={() => navigation.navigate('TaskDetails', { taskId: task._id })}
+                >
                   <View style={styles.taskIconContainer}>
-                    <Ionicons name="checkmark-circle-outline" size={24} color="#4A90E2" />
+                    <Ionicons name="checkmark-circle-outline" size={24} color={theme.colors.primary} />
                   </View>
                   <View style={styles.taskContent}>
-                    <Text style={styles.taskTitle}>{task.title}</Text>
-                    <Text style={styles.taskDescription} numberOfLines={1}>
+                    <Text style={[styles.taskTitle, { color: theme.colors.text }]}>{task.title}</Text>
+                    <Text style={[styles.taskDescription, { color: theme.colors.text }]} numberOfLines={1}>
                       {task.description || t('noDescription')}
                     </Text>
                   </View>
-                </View>
+                </TouchableOpacity>
               ))}
               <TouchableOpacity 
-                style={styles.viewAllButton}
-                onPress={() => navigation.navigate('Tasks')}
+                style={[styles.viewAllButton, { backgroundColor: theme.colors.primary }]}
+                onPress={() => navigation.navigate('TaskScreen')}
               >
-                <Text style={styles.viewAllButtonText}>{t('viewAllTasks')}</Text>
+                <Text style={[styles.viewAllButtonText, { color: theme.colors.background }]}>
+                  {t('viewAllTasks')}
+                </Text>
               </TouchableOpacity>
             </>
           ) : (
-            <Text style={styles.emptyText}>{t('noPendingTasks')}</Text>
+            <Text style={[styles.emptyText, { color: theme.colors.text }]}>{t('noPendingTasks')}</Text>
           )}
         </View>
       </View>
 
       <View style={styles.buttonsContainer}>
         <TouchableOpacity 
-          style={styles.navButton}
-          onPress={() => navigation.navigate('Tasks')}
+          style={[styles.navButton, { backgroundColor: theme.colors.primary }]}
+          onPress={() => navigation.navigate('TaskScreen')}
         >
-          <Ionicons name="list" size={24} color="#fff" style={styles.buttonIcon} />
-          <Text style={styles.navButtonText}>{t('myTasks')}</Text>
+          <Ionicons name="list" size={24} color={theme.colors.background} style={styles.buttonIcon} />
+          <Text style={[styles.navButtonText, { color: theme.colors.background }]}>{t('myTasks')}</Text>
         </TouchableOpacity>
         
-        <TouchableOpacity 
-          style={styles.navButton}
+        <TouchableOpacity
+          style={[styles.navButton, { backgroundColor: theme.colors.primary }]}
           onPress={() => navigation.navigate('LocationHistory')}
         >
-          <Ionicons name="map" size={24} color="#fff" style={styles.buttonIcon} />
-          <Text style={styles.navButtonText}>{t('locationHistory')}</Text>
+          <Ionicons name="location" size={24} color={theme.colors.background} style={styles.buttonIcon} />
+          <Text style={[styles.navButtonText, { color: theme.colors.background }]}>
+            {t('locationHistory')}
+          </Text>
         </TouchableOpacity>
       </View>
     </ScrollView>
@@ -161,38 +185,31 @@ const DashboardScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 15,
-    backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#ddd',
   },
   welcomeText: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#333',
   },
   logoutButton: {
     padding: 8,
-    backgroundColor: '#f8f8f8',
     borderRadius: 5,
   },
   logoutButtonText: {
-    color: '#e74c3c',
     fontWeight: 'bold',
   },
   errorText: {
-    color: '#e74c3c',
     padding: 10,
     textAlign: 'center',
   },
   card: {
-    backgroundColor: '#fff',
     borderRadius: 8,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -204,7 +221,6 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   cardHeader: {
-    backgroundColor: '#4A90E2',
     padding: 15,
   },
   cardTitle: {
@@ -219,7 +235,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
   },
   taskIconContainer: {
     marginRight: 10,
@@ -231,57 +246,46 @@ const styles = StyleSheet.create({
   taskTitle: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#333',
   },
   taskDescription: {
     fontSize: 14,
-    color: '#666',
-    marginTop: 2,
-  },
-  emptyText: {
-    textAlign: 'center',
-    color: '#666',
-    padding: 10,
+    opacity: 0.7,
   },
   viewAllButton: {
-    marginTop: 15,
+    marginTop: 10,
     padding: 10,
-    backgroundColor: '#f8f8f8',
     borderRadius: 5,
     alignItems: 'center',
   },
   viewAllButtonText: {
-    color: '#4A90E2',
     fontWeight: 'bold',
+  },
+  emptyText: {
+    textAlign: 'center',
+    padding: 20,
   },
   buttonsContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginHorizontal: 15,
-    marginVertical: 15,
+    justifyContent: 'space-around',
+    padding: 15,
+    marginTop: 10,
   },
   navButton: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#4A90E2',
-    borderRadius: 8,
     padding: 15,
-    flex: 0.48,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    borderRadius: 8,
+    marginHorizontal: 5,
   },
   buttonIcon: {
     marginRight: 8,
   },
   navButtonText: {
-    color: '#fff',
-    fontWeight: 'bold',
     fontSize: 16,
-  }
+    fontWeight: 'bold',
+  },
 });
 
 export default DashboardScreen;

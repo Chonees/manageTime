@@ -13,6 +13,8 @@ router.post('/tracking', locationController.saveTrackingPoint); // Nueva ruta pa
 
 // Rutas para obtener historial
 router.get('/my-history', locationController.getMyLocationHistory);
+router.get('/history-with-tasks', locationController.getMyLocationHistoryWithTasks);
+router.get('/history-with-tasks/:userId', isAdmin, locationController.getUserLocationHistoryWithTasks);
 
 // Rutas para administradores
 router.get('/user/:userId', isAdmin, locationController.getUserLocationHistory);
