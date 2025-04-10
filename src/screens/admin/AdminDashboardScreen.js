@@ -351,7 +351,10 @@ const AdminDashboardScreen = ({ navigation }) => {
       {/* Sección de Ubicaciones en Tiempo Real */}
       <View style={styles.realTimeLocationsContainer}>
         <View style={styles.sectionHeader}>
+
           <Text style={styles.sectionTitle}>{t('Real Time Location Of Users')}</Text>
+
+
           <TouchableOpacity 
             style={styles.refreshButton}
             onPress={() => loadRealTimeLocations(false)}

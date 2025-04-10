@@ -5,7 +5,7 @@ import { ActivityIndicator, View, StyleSheet, Text } from 'react-native';
 import { startLocationMonitoring, stopLocationMonitoring } from '../services/location-service';
 
 // Pantallas de autenticación
-import LoginScreen from '../screens/auth/LoginScreen';
+import LoginScreen from '../screens/auth/loginScreen1/LoginScreen';
 import RegisterScreen from '../screens/auth/RegisterScreen';
 import DiagnosticScreen from '../screens/DiagnosticScreen';
 

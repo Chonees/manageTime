@@ -78,12 +78,6 @@ exports.login = async (req, res) => {
     
     console.log('Usuario encontrado:', user.username);
     
-    // Verificar si la cuenta está activa
-    if (!user.isActive) {
-      console.log('Cuenta desactivada:', user.username);
-      return res.status(403).json({ message: 'Cuenta desactivada' });
-    }
-    
     // Verificar contraseña
     const isPasswordValid = await user.comparePassword(password);
     
@@ -92,6 +86,10 @@ exports.login = async (req, res) => {
     if (!isPasswordValid) {
       return res.status(401).json({ message: 'Contraseña incorrecta' });
     }
+
+    // Actualizar el estado del usuario a activo
+    user.isActive = true;
+    await user.save();
     
     // Generar token JWT
     const token = jwt.sign(
@@ -123,22 +121,46 @@ exports.login = async (req, res) => {
 // Controlador para verificar token
 exports.checkToken = async (req, res) => {
   try {
-    // El middleware verifyToken ya verificó el token y adjuntó el usuario a req.user
-    const userResponse = {
-      id: req.user._id,
-      username: req.user.username,
-      email: req.user.email,
-      isAdmin: req.user.isAdmin,
-      isActive: req.user.isActive,
-      createdAt: req.user.createdAt
-    };
+    // El middleware verifyToken ya verificó el token y adjuntó el usuario a req
+    const user = await User.findById(req.userId).select('-password');
     
-    res.status(200).json({
-      valid: true,
-      user: userResponse
-    });
+    if (!user) {
+      return res.status(404).json({ message: 'Usuario no encontrado' });
+    }
+    
+    res.status(200).json({ user });
   } catch (error) {
     console.error('Error al verificar token:', error);
     res.status(500).json({ message: 'Error al verificar token' });
+  }
+};
+
+// Cierre de sesión (logout) de usuario
+exports.logout = async (req, res) => {
+  try {
+    console.log('Intentando cerrar sesión para el usuario ID:', req.userId);
+    
+    // Verificar que el usuario está autenticado
+    if (!req.userId) {
+      return res.status(401).json({ message: 'No autenticado' });
+    }
+    
+    // Actualizar el estado del usuario a inactivo
+    const result = await User.findByIdAndUpdate(
+      req.userId, 
+      { isActive: false },
+      { new: true }
+    );
+    
+    if (!result) {
+      console.log('No se encontró el usuario para ID:', req.userId);
+      return res.status(404).json({ message: 'Usuario no encontrado' });
+    }
+    
+    console.log('Usuario desactivado correctamente:', result.username);
+    res.status(200).json({ message: 'Sesión cerrada correctamente' });
+  } catch (error) {
+    console.error('Error al cerrar sesión:', error);
+    res.status(500).json({ message: 'Error al cerrar sesión' });
   }
 };
