@@ -327,7 +327,7 @@ const AdminDashboardScreen = ({ navigation }) => {
           
           <TouchableOpacity 
             style={styles.actionButton}
-            onPress={() => navigation.navigate('Tasks')}
+            onPress={() => navigation.navigate('TaskScreen')}
           >
             <Text style={styles.actionButtonText}>{t('taskManagement')}</Text>
           </TouchableOpacity>
@@ -351,7 +351,10 @@ const AdminDashboardScreen = ({ navigation }) => {
       {/* Sección de Ubicaciones en Tiempo Real */}
       <View style={styles.realTimeLocationsContainer}>
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>{t('realTimeLocations')}</Text>
+
+          <Text style={styles.sectionTitle}>{t('Real Time Location Of Users')}</Text>
+
+
           <TouchableOpacity 
             style={styles.refreshButton}
             onPress={() => loadRealTimeLocations(false)}

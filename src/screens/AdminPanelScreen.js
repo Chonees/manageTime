@@ -13,6 +13,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 import * as api from '../services/api';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
 
 const AdminPanelScreen = () => {
   const { t } = useLanguage();
@@ -22,6 +23,7 @@ const AdminPanelScreen = () => {
   const [activities, setActivities] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const navigation = useNavigation();
 
   useEffect(() => {
     if (!user || !user.isAdmin) {
@@ -172,11 +174,17 @@ const AdminPanelScreen = () => {
     }
 
     return (
-      <View style={styles.taskItem}>
+      <TouchableOpacity 
+        style={styles.taskItem}
+        onPress={() => navigation.navigate('TaskDetails', { taskId: item._id })}
+      >
         <View style={styles.taskHeader}>
           <Text style={styles.taskTitle}>{item.title || t('noTitle')}</Text>
           <TouchableOpacity 
-            onPress={() => handleDeleteTask(item._id)}
+            onPress={(e) => {
+              e.stopPropagation();
+              handleDeleteTask(item._id);
+            }}
             style={styles.deleteButton}
           >
             <Text style={styles.deleteButtonText}>×</Text>
@@ -200,7 +208,10 @@ const AdminPanelScreen = () => {
                 styles.completeButton,
                 item.completed && styles.completedButton
               ]}
-              onPress={() => handleCompleteTask(item._id)}
+              onPress={(e) => {
+                e.stopPropagation();
+                handleCompleteTask(item._id);
+              }}
             >
               <Text style={styles.completeButtonText}>
                 {item.completed ? '✓' : '○'}
@@ -208,7 +219,7 @@ const AdminPanelScreen = () => {
             </TouchableOpacity>
           </View>
         </View>
-      </View>
+      </TouchableOpacity>
     );
   };
 

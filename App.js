@@ -2,8 +2,10 @@ import React, { useEffect } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider } from './src/context/AuthContext';
 import { LanguageProvider, useLanguage } from './src/context/LanguageContext';
+import { ThemeProvider } from './src/context/ThemeContext';
 import AppNavigator from './src/navigation/AppNavigator';
 import { setLanguage } from './src/services/location-service';
+import { NavigationContainer } from '@react-navigation/native';
 
 // Create a wrapper component to handle language updates
 const LanguageWrapper = ({ children }) => {
@@ -18,15 +20,19 @@ const LanguageWrapper = ({ children }) => {
 
 const App = () => {
   return (
-    <SafeAreaProvider>
-      <LanguageProvider>
-        <LanguageWrapper>
-          <AuthProvider>
-            <AppNavigator />
-          </AuthProvider>
-        </LanguageWrapper>
-      </LanguageProvider>
-    </SafeAreaProvider>
+    <ThemeProvider>
+      <SafeAreaProvider>
+        <LanguageProvider>
+          <LanguageWrapper>
+            <AuthProvider>
+              <NavigationContainer>
+                <AppNavigator />
+              </NavigationContainer>
+            </AuthProvider>
+          </LanguageWrapper>
+        </LanguageProvider>
+      </SafeAreaProvider>
+    </ThemeProvider>
   );
 };
 

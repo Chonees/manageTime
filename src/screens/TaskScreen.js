@@ -400,11 +400,17 @@ const TaskScreen = ({ navigation }) => {
     }
     
     return (
-      <View style={styles.taskItem}>
+      <TouchableOpacity 
+        style={styles.taskItem}
+        onPress={() => navigation.navigate('TaskDetails', { taskId: item._id })}
+      >
         <View style={styles.taskHeader}>
           <Text style={styles.taskTitle}>{item.title || t('noTitle')}</Text>
           <TouchableOpacity 
-            onPress={() => deleteTask(item._id)}
+            onPress={(e) => {
+              e.stopPropagation();
+              deleteTask(item._id);
+            }}
             style={styles.deleteButton}
           >
             <Text style={styles.deleteButtonText}>×</Text>
@@ -430,7 +436,10 @@ const TaskScreen = ({ navigation }) => {
                 styles.completeButton,
                 item.completed && styles.completedButton
               ]}
-              onPress={() => toggleComplete(item._id)}
+              onPress={(e) => {
+                e.stopPropagation();
+                toggleComplete(item._id);
+              }}
             >
               <Text style={styles.completeButtonText}>
                 {item.completed ? '✓' : '○'}
@@ -438,7 +447,7 @@ const TaskScreen = ({ navigation }) => {
             </TouchableOpacity>
           </View>
         </View>
-      </View>
+      </TouchableOpacity>
     );
   };
 

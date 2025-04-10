@@ -470,42 +470,6 @@ export const endWork = async (coords) => {
   }
 };
 
-// Function to save location (tracking point)
-export const saveLocation = async (coords) => {
-  try {
-    console.log('API saveLocation - Enviando coordenadas de seguimiento:', coords);
-    
-    if (!coords || typeof coords.latitude !== 'number' || typeof coords.longitude !== 'number') {
-      throw new Error('Coordenadas inválidas para seguimiento');
-    }
-    
-    // Asegurarnos de que las coordenadas sean strings para evitar problemas de serialización
-    const payload = {
-      latitude: String(coords.latitude),
-      longitude: String(coords.longitude),
-      type: coords.type || 'tracking' // Tipo por defecto: tracking
-    };
-    
-    console.log('API saveLocation - Payload final:', payload);
-    
-    const headers = await getAuthHeader();
-    headers['Content-Type'] = 'application/json';
-    
-    // Usar la ruta existente /api/locations/start en lugar de /api/locations/tracking
-    // ya que el backend en Heroku puede no tener implementada la ruta de tracking
-    const response = await fetchWithRetry(`${getApiUrl()}/api/locations/start`, {
-      method: 'POST',
-      headers: headers,
-      body: JSON.stringify(payload)
-    });
-    
-    return await handleResponse(response);
-  } catch (error) {
-    console.error('Error al guardar punto de seguimiento:', error);
-    throw error;
-  }
-};
-
 // Function to get location history
 export const getLocationHistory = async (userId) => {
   try {
@@ -518,43 +482,30 @@ export const getLocationHistory = async (userId) => {
     
     console.log('Obteniendo historial de ubicaciones desde:', url);
     
-    // Obtenemos el token de autenticación directamente
-    let token;
-    try {
-      token = await AsyncStorage.getItem('token');
-    } catch (storageError) {
-      console.error('Error al obtener token de AsyncStorage:', storageError);
-      throw new Error('No se pudo acceder al token de autenticación');
-    }
-    
+    const token = await AsyncStorage.getItem('token');
     if (!token) {
-      throw new Error('No hay token de autenticación disponible');
+      throw new Error('No authentication token found');
     }
-    
-    // Establecemos un timeout para la solicitud
-    const options = {
+
+    const response = await fetch(url, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`
       }
-    };
-    
-    const response = await fetchWithRetry(url, options);
-    
-    // Si la respuesta no es exitosa, lanzamos un error
+    });
+
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
+      console.error('Error response from location history:', errorData);
       throw new Error(errorData.message || `Error ${response.status}: ${response.statusText}`);
     }
-    
-    // Procesamos la respuesta
+
     const data = await response.json();
-    console.log(`Se obtuvieron ${data.length} registros de ubicación`);
-    
+    console.log('Location history response:', data);
     return data;
   } catch (error) {
-    console.error('Error al obtener historial de ubicaciones:', error);
+    console.error('Error in getLocationHistory:', error);
     throw error;
   }
 };
@@ -1250,23 +1201,68 @@ export const updateTask = async (taskId, taskData) => {
  */
 export const saveActivity = async (activityData) => {
   try {
-    // Obtener el token directamente, no el objeto de cabecera
+    console.log('Saving activity data:', JSON.stringify(activityData));
+    
+    // Ensure required fields are present - removed action field requirement
+    if (!activityData.type || !activityData.taskId) {
+      throw new Error('Activity data missing required fields: type or taskId');
+    }
+    
+    // Valid activity types according to the backend
+    const validTypes = [
+      'location_enter', 'location_exit', 
+      'task_complete', 'task_create', 'task_update', 'task_delete',
+      'started_working', 'stopped_working'
+    ];
+    
+    // Check if type is valid
+    if (!validTypes.includes(activityData.type)) {
+      throw new Error(`Invalid activity type: ${activityData.type}. Valid types: ${validTypes.join(', ')}`);
+    }
+    
+    // If userId is not provided, get it from current user
+    if (!activityData.userId) {
+      try {
+        const userInfo = await AsyncStorage.getItem('userInfo');
+        if (userInfo) {
+          const parsedUserInfo = JSON.parse(userInfo);
+          activityData.userId = parsedUserInfo._id;
+        }
+      } catch (userError) {
+        console.warn('Could not get userId from stored user info');
+      }
+    }
+    
+    // Prepare data for backend - remove action field if it exists
+    const dataToSend = { ...activityData };
+    if (dataToSend.action) {
+      delete dataToSend.action;
+    }
+    
+    // Obtener el token directly, no the header object
     const token = await AsyncStorage.getItem('token');
     
-    const response = await fetch(`${API_URL}/api/activities`, {
+    const url = `${getApiUrl()}/api/activities`;
+    console.log(`Sending activity data to: ${url}`);
+    
+    const response = await fetchWithRetry(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`
       },
-      body: JSON.stringify(activityData)
+      body: JSON.stringify(dataToSend)
     });
 
     if (!response.ok) {
-      throw new Error(`Error al guardar actividad: ${response.status}`);
+      const errorText = await response.text().catch(() => 'No error details available');
+      console.error(`Activity save failed with status ${response.status}:`, errorText);
+      throw new Error(`Error al guardar actividad: ${response.status} - ${errorText}`);
     }
 
-    return await response.json();
+    const responseData = await response.json();
+    console.log('Activity saved successfully:', responseData);
+    return responseData;
   } catch (error) {
     console.error('Error en saveActivity:', error);
     throw error;
@@ -1381,6 +1377,310 @@ export const updateTaskCompletion = async (taskId, completed) => {
     return responseData;
   } catch (error) {
     console.error('Error al actualizar estado de completado:', error);
+    throw error;
+  }
+};
+
+// Get task by ID
+export const getTaskById = async (taskId) => {
+  try {
+    console.log(`Obteniendo tarea con ID: ${taskId}`);
+    
+    // Obtenemos el token de autenticación directamente
+    let token;
+    try {
+      token = await AsyncStorage.getItem('token');
+    } catch (storageError) {
+      console.error('Error al obtener token de AsyncStorage:', storageError);
+      throw new Error('No se pudo acceder al token de autenticación');
+    }
+    
+    if (!token) {
+      throw new Error('No hay token de autenticación disponible');
+    }
+    
+    // Establecemos un timeout para la solicitud
+    const options = {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      }
+    };
+    
+    // Try the standard endpoint first, then try alternative endpoints if that fails
+    let urls = [
+      `${getApiUrl()}/api/tasks/${taskId}`,
+      `${getApiUrl()}/api/tasks/detail/${taskId}`,
+      `${getApiUrl()}/api/tasks/id/${taskId}`
+    ];
+    
+    let lastError = null;
+    
+    for (const url of urls) {
+      try {
+        console.log(`Realizando petición a: ${url}`);
+        const response = await fetchWithRetry(url, options);
+        
+        // Si la respuesta es exitosa, procesamos y devolvemos los datos
+        if (response.ok) {
+          const data = await response.json();
+          console.log('Datos de tarea recibidos:', JSON.stringify(data).substring(0, 100) + '...');
+          return data;
+        }
+        
+        // Si la respuesta no es exitosa, guardamos el error pero continuamos con la siguiente URL
+        const errorData = await response.json().catch(() => ({}));
+        lastError = new Error(errorData.message || `Error ${response.status}: ${response.statusText}`);
+      } catch (err) {
+        console.error(`Error intentando obtener tarea desde ${url}:`, err);
+        lastError = err;
+        // Continuamos con la siguiente URL
+      }
+    }
+    
+    // Si llegamos aquí es porque ninguna URL funcionó
+    throw lastError || new Error(`No se pudo obtener la tarea con ID ${taskId}`);
+  } catch (error) {
+    console.error(`Error al obtener tarea con ID ${taskId}:`, error);
+    throw error;
+  }
+};
+
+// Get user by ID
+export const getUserById = async (userId) => {
+  try {
+    console.log(`Obteniendo usuario con ID: ${userId}`);
+    
+    // Ensure userId is a string (not an object)
+    const userIdString = typeof userId === 'object' && userId._id ? userId._id : String(userId);
+    console.log(`Usando userId normalizado: ${userIdString}`);
+    
+    // Obtenemos el token de autenticación directamente
+    let token;
+    try {
+      token = await AsyncStorage.getItem('token');
+    } catch (storageError) {
+      console.error('Error al obtener token de AsyncStorage:', storageError);
+      throw new Error('No se pudo acceder al token de autenticación');
+    }
+    
+    if (!token) {
+      throw new Error('No hay token de autenticación disponible');
+    }
+    
+    // Establecemos un timeout para la solicitud
+    const options = {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      }
+    };
+    
+    // Try different URL patterns
+    let urls = [
+      `${getApiUrl()}/api/users/${userIdString}`,
+      `${getApiUrl()}/api/users/detail/${userIdString}`,
+      `${getApiUrl()}/api/users/id/${userIdString}`
+    ];
+    
+    let lastError = null;
+    
+    for (const url of urls) {
+      try {
+        console.log(`Realizando petición a: ${url}`);
+        const response = await fetchWithRetry(url, options);
+        
+        // Si la respuesta es exitosa, procesamos y devolvemos los datos
+        if (response.ok) {
+          const data = await response.json();
+          console.log('Datos de usuario recibidos:', JSON.stringify(data).substring(0, 100) + '...');
+          return data;
+        }
+        
+        // Si la respuesta no es exitosa, guardamos el error pero continuamos con la siguiente URL
+        const errorData = await response.json().catch(() => ({}));
+        lastError = new Error(errorData.message || `Error ${response.status}: ${response.statusText}`);
+      } catch (err) {
+        console.error(`Error intentando obtener usuario desde ${url}:`, err);
+        lastError = err;
+        // Continuamos con la siguiente URL
+      }
+    }
+    
+    // Si llegamos aquí es porque ninguna URL funcionó
+    throw lastError || new Error('Error al obtener usuario');
+  } catch (error) {
+    console.error(`Error al obtener usuario con ID ${userId}:`, error);
+    throw error;
+  }
+};
+
+// Function to get location history with task data
+export const getLocationHistoryWithTasks = async (userId) => {
+  try {
+    let url = `${getApiUrl()}/api/locations/history-with-tasks`;
+    
+    // If admin is requesting a specific user's history
+    if (userId) {
+      url = `${getApiUrl()}/api/locations/history-with-tasks/${userId}`;
+    }
+    
+    console.log('Obteniendo historial de ubicaciones con tareas desde:', url);
+    
+    // Obtenemos el token de autenticación directamente
+    let token;
+    try {
+      token = await AsyncStorage.getItem('token');
+    } catch (storageError) {
+      console.error('Error al obtener token de AsyncStorage:', storageError);
+      throw new Error('No se pudo acceder al token de autenticación');
+    }
+    
+    if (!token) {
+      throw new Error('No hay token de autenticación disponible');
+    }
+    
+    // Establecemos un timeout para la solicitud
+    const options = {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      }
+    };
+    
+    const response = await fetchWithRetry(url, options, 3); // Try up to 3 times
+    
+    // Si la respuesta no es exitosa, lanzamos un error
+    if (!response.ok) {
+      let errorMessage = '';
+      try {
+        const errorData = await response.json();
+        errorMessage = errorData.message || '';
+      } catch (e) {
+        // If response can't be parsed as JSON
+        errorMessage = response.statusText || '';
+      }
+      throw new Error(`Error ${response.status}: ${errorMessage}`);
+    }
+    
+    // Procesamos la respuesta
+    const data = await response.json();
+    console.log(`Se obtuvieron ${data.length} registros de ubicación con tareas`);
+    
+    return data;
+  } catch (error) {
+    console.error('Error al obtener historial de ubicaciones con tareas:', error);
+    // If this is a 404, fall back to regular location history
+    if (error.message && error.message.includes('404')) {
+      console.log('Cayendo en fallback de historial simple debido a 404');
+      try {
+        const fallbackData = await (userId ? getUserById(userId) : getLocationHistory());
+        return fallbackData.map(location => ({
+          ...location,
+          nearbyTasks: []
+        }));
+      } catch (fallbackError) {
+        console.error('Error en fallback de historial:', fallbackError);
+      }
+    }
+    throw error;
+  }
+};
+
+/**
+ * Get user activities for activity feed
+ * @param {number} limit - Maximum number of activities to return
+ * @returns {Promise<Array>} Array of user activities
+ */
+export const getUserActivities = async (limit = 10) => {
+  try {
+    const token = await AsyncStorage.getItem('token');
+    
+    if (!token) {
+      throw new Error('No authentication token available');
+    }
+    
+    const url = `${getApiUrl()}/api/activities/user?limit=${limit}`;
+    console.log(`Fetching user activities from: ${url}`);
+    
+    const response = await fetchWithRetry(url, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      console.error('Error response from user activities:', errorData);
+      throw new Error(errorData.message || `Error ${response.status}: ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    
+    if (!data.activities || !Array.isArray(data.activities)) {
+      console.error('Invalid response format:', data);
+      return [];
+    }
+    
+    // Transform to expected format
+    const transformedData = data.activities.map(activity => ({
+      id: activity._id,
+      type: activity.type.includes('task_') ? 'task' : 'location',
+      action: getActionFromType(activity.type),
+      title: activity.taskId?.title || activity.title || '',
+      message: activity.message || '',
+      timestamp: activity.createdAt || activity.timestamp || new Date().toISOString(),
+      metadata: activity.metadata || {}
+    }));
+    
+    console.log(`Retrieved ${transformedData.length} user activities`);
+    return transformedData;
+  } catch (error) {
+    console.error('Error fetching user activities:', error);
+    return [];
+  }
+};
+
+// Helper function to extract action from activity type
+const getActionFromType = (type) => {
+  switch (type) {
+    case 'task_create':
+      return 'created';
+    case 'task_complete':
+      return 'completed';
+    case 'task_update':
+      return 'updated';
+    case 'task_delete':
+      return 'deleted';
+    case 'location_enter':
+      return 'entered_location';
+    case 'location_exit':
+      return 'exited_location';
+    case 'started_working':
+      return 'started_working';
+    case 'stopped_working':
+      return 'stopped_working';
+    default:
+      return 'unknown';
+  }
+};
+
+export const getRealTimeLocations = async () => {
+  try {
+    const url = `${getApiUrl()}/api/locations/realtime`;
+    const options = await createFetchOptions('GET');
+    
+    const response = await fetchWithRetry(url, options);
+    const data = await handleResponse(response);
+    
+    return data.locations || [];
+  } catch (error) {
+    console.error('Error al obtener ubicaciones en tiempo real:', error);
     throw error;
   }
 };

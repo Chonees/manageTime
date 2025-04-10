@@ -12,7 +12,8 @@ import {
   Modal,
   Button,
   Platform,
-  TextInput
+  TextInput,
+  Dimensions
 } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
@@ -20,6 +21,7 @@ import LanguageToggle from '../components/LanguageToggle';
 import * as api from '../services/api';
 import MapComponent from '../components/MapComponent';
 import { Ionicons } from '@expo/vector-icons';
+import * as MapDiagnostics from '../services/map-diagnostic';
 
 // Helper functions
 const formatDate = (dateString) => {
@@ -52,6 +54,28 @@ const LocationHistoryView = ({
   refreshing
 }) => {
   const { t } = useLanguage();
+  const [mapError, setMapError] = useState(false);
+
+  // Function to run map diagnostics
+  const runDiagnostics = async () => {
+    try {
+      Alert.alert("Running Diagnostics", "Checking map services...");
+      const results = await MapDiagnostics.runMapDiagnostics();
+      
+      // Create a readable summary of diagnostic results
+      const summary = `
+Platform: ${results.platform} (${results.version})
+API Key Configured: ${results.apiKey.isConfigured ? 'Yes' : 'No'}
+Location Permissions: ${results.permissions.status}
+Location Services: ${results.locationServices.enabled ? 'Enabled' : 'Disabled'}
+Current Location: ${results.currentLocation.success ? 'Available' : 'Unavailable'}
+      `;
+      
+      Alert.alert("Diagnostic Results", summary);
+    } catch (error) {
+      Alert.alert("Diagnostic Error", `Could not run diagnostics: ${error.message}`);
+    }
+  };
 
   if (loading) {
     return (
@@ -70,7 +94,7 @@ const LocationHistoryView = ({
           selectedUserName ? styles.mapHeaderAdmin : styles.mapHeaderUser
         ]}>
           <Text style={styles.mapTitle}>
-            {t('locationMap')} {selectedUserName || t('locations')}
+            {t('locationMap')} {selectedUserName ? selectedUserName : t('locations')}
           </Text>
         </View>
         <MapComponent 
@@ -78,7 +102,16 @@ const LocationHistoryView = ({
           currentLocation={currentLocation}
           isLoading={loading}
           selectedUserName={selectedUserName}
+          onError={() => setMapError(true)}
         />
+        {mapError && (
+          <TouchableOpacity 
+            style={styles.diagnosticButton}
+            onPress={runDiagnostics}
+          >
+            <Text style={styles.diagnosticButtonText}>{t('runDiagnostics')}</Text>
+          </TouchableOpacity>
+        )}
       </View>
     );
   }
@@ -116,7 +149,8 @@ const LocationHistoryView = ({
                 {formatDate(item.timestamp)}
               </Text>
               <Text style={styles.locationCoords}>
-                {t('latitude')}: {item.latitude.toFixed(6)}, {t('longitude')}: {item.longitude.toFixed(6)}
+                {t('latitude')}: {item.latitude ? item.latitude.toFixed(6) : (item.location?.coordinates?.[1] || 0).toFixed(6)}, 
+                {t('longitude')}: {item.longitude ? item.longitude.toFixed(6) : (item.location?.coordinates?.[0] || 0).toFixed(6)}
               </Text>
             </View>
           </View>
@@ -162,8 +196,9 @@ const LocationHistoryScreen = () => {
     setError(null);
 
     try {
-      const history = await api.getLocationHistory(userId);
-      console.log(`Cargadas ${history.length} ubicaciones`);
+      // Get location history with task data
+      const history = await api.getLocationHistoryWithTasks(userId);
+      console.log(`Cargadas ${history.length} ubicaciones y actividades de tareas`);
       setLocationHistory(history);
       
       // Si hay un filtro de fecha activo, aplicarlo inmediatamente
@@ -174,8 +209,21 @@ const LocationHistoryScreen = () => {
       }
     } catch (error) {
       console.error('Error al cargar el historial de ubicaciones:', error);
-      setError(error.message || 'Error al cargar el historial de ubicaciones');
-      Alert.alert('Error', error.message || 'Error al cargar el historial de ubicaciones');
+      // Fallback to regular location history if the task history endpoint fails
+      try {
+        const regularHistory = await api.getLocationHistory(userId);
+        console.log(`Fallback: Cargadas ${regularHistory.length} ubicaciones regulares`);
+        setLocationHistory(regularHistory);
+        
+        if (dateFilter) {
+          applyDateFilter(regularHistory, dateFilter);
+        } else {
+          setFilteredLocations(regularHistory);
+        }
+      } catch (fallbackError) {
+        setError(fallbackError.message || 'Error al cargar el historial de ubicaciones');
+        Alert.alert('Error', fallbackError.message || 'Error al cargar el historial de ubicaciones');
+      }
     } finally {
       setLoading(false);
     }
@@ -622,32 +670,27 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   mapContainer: {
+    flex: 1,
     backgroundColor: '#fff',
-    borderRadius: 8,
-    overflow: 'hidden',
-    margin: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    height: Dimensions.get('window').height - 180, // Adjusted for header and filters
   },
   mapHeader: {
+    padding: 10,
     backgroundColor: '#4A90E2',
-    padding: 15,
-    flexDirection: 'row',
-    alignItems: 'center',
+    borderTopLeftRadius: 8,
+    borderTopRightRadius: 8,
   },
   mapHeaderAdmin: {
-    justifyContent: 'space-between',
+    backgroundColor: '#673AB7',
   },
   mapHeaderUser: {
-    justifyContent: 'center',
+    backgroundColor: '#4A90E2',
   },
   mapTitle: {
     color: '#fff',
-    fontSize: 18,
     fontWeight: 'bold',
+    fontSize: 16,
+    textAlign: 'center',
   },
   refreshButton: {
     width: 36,
@@ -919,6 +962,24 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   autoRefreshText: {
+    color: '#fff',
+    fontWeight: 'bold',
+  },
+  diagnosticButton: {
+    position: 'absolute',
+    bottom: 20,
+    right: 20,
+    backgroundColor: '#f44336',
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+    borderRadius: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  diagnosticButtonText: {
     color: '#fff',
     fontWeight: 'bold',
   },

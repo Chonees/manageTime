@@ -8,7 +8,7 @@ const locationSchema = new mongoose.Schema({
   },
   type: {
     type: String,
-    enum: ['start', 'end'],
+    enum: ['start', 'end', 'tracking'],
     required: true
   },
   latitude: {
@@ -19,6 +19,10 @@ const locationSchema = new mongoose.Schema({
     type: Number,
     required: true
   },
+  description: {
+    type: String,
+    default: ''
+  },
   timestamp: {
     type: Date,
     default: Date.now
@@ -26,6 +30,11 @@ const locationSchema = new mongoose.Schema({
 }, {
   timestamps: true
 });
+
+// Add index for faster location queries
+locationSchema.index({ userId: 1, timestamp: -1 });
+// Add geospatial index
+locationSchema.index({ longitude: 1, latitude: 1 }, { type: '2d' });
 
 const Location = mongoose.model('Location', locationSchema);
 

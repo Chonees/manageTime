@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
-import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { createStackNavigator } from '@react-navigation/stack';
 import { ActivityIndicator, View, StyleSheet, Text } from 'react-native';
 import { startLocationMonitoring, stopLocationMonitoring } from '../services/location-service';
 
@@ -12,6 +12,7 @@ import DiagnosticScreen from '../screens/DiagnosticScreen';
 // Pantallas de usuario
 import DashboardScreen from '../screens/DashboardScreen';
 import TaskScreen from '../screens/TaskScreen';
+import TaskDetailsScreen from '../screens/TaskDetailsScreen';
 import LocationHistoryScreen from '../screens/LocationHistoryScreen';
 
 // Pantallas de administrador
@@ -21,9 +22,10 @@ import AdminActivitiesScreen from '../screens/admin/AdminActivitiesScreen';
 
 // Contexto de autenticación
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
 
 // Crear navegadores
-const Stack = createNativeStackNavigator();
+const Stack = createStackNavigator();
 
 // Navegador para usuarios no autenticados
 const AuthNavigator = () => (
@@ -57,80 +59,75 @@ const AuthNavigator = () => (
 );
 
 // Navegador para usuarios autenticados (no administradores)
-const UserNavigator = () => (
-  <Stack.Navigator
-    screenOptions={{
-      headerStyle: {
-        backgroundColor: '#4A90E2',
-      },
-      headerTintColor: '#fff',
-      headerTitleStyle: {
-        fontWeight: 'bold',
-      },
-    }}
-  >
-    <Stack.Screen 
-      name="Dashboard" 
-      component={DashboardScreen} 
-      options={{ title: 'Panel de Control' }}
-    />
-    <Stack.Screen 
-      name="Tasks" 
-      component={TaskScreen} 
-      options={{ title: 'Mis Tareas' }}
-    />
-    <Stack.Screen 
-      name="LocationHistory" 
-      component={LocationHistoryScreen} 
-      options={{ title: 'Historial de Ubicaciones' }}
-    />
-  </Stack.Navigator>
-);
+const UserNavigator = () => {
+  return (
+    <Stack.Navigator>
+      <Stack.Screen 
+        name="Dashboard" 
+        component={DashboardScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen 
+        name="TaskScreen" 
+        component={TaskScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen 
+        name="TaskDetails" 
+        component={TaskDetailsScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen 
+        name="LocationHistory" 
+        component={LocationHistoryScreen}
+        options={{ headerShown: false }}
+      />
+    </Stack.Navigator>
+  );
+};
 
 // Navegador para administradores
-const AdminNavigator = () => (
-  <Stack.Navigator
-    screenOptions={{
-      headerStyle: {
-        backgroundColor: '#2c3e50',
-      },
-      headerTintColor: '#fff',
-      headerTitleStyle: {
-        fontWeight: 'bold',
-      },
-    }}
-  >
-    <Stack.Screen 
-      name="AdminDashboard" 
-      component={AdminDashboardScreen} 
-      options={{ title: 'Panel de Administrador' }}
-    />
-    <Stack.Screen 
-      name="UserManagement" 
-      component={UserManagementScreen} 
-      options={{ title: 'Gestión de Usuarios' }}
-    />
-    <Stack.Screen 
-      name="Tasks" 
-      component={TaskScreen} 
-      options={{ title: 'Gestión de Tareas' }}
-    />
-    <Stack.Screen 
-      name="LocationHistory" 
-      component={LocationHistoryScreen} 
-      options={{ title: 'Historial de Ubicaciones' }}
-    />
-    <Stack.Screen 
-      name="AdminActivities" 
-      component={AdminActivitiesScreen} 
-      options={{ title: 'Actividades de Administrador' }}
-    />
-  </Stack.Navigator>
-);
+const AdminNavigator = () => {
+  return (
+    <Stack.Navigator>
+      <Stack.Screen 
+        name="AdminDashboard" 
+        component={AdminDashboardScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen 
+        name="TaskScreen" 
+        component={TaskScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen 
+        name="TaskDetails" 
+        component={TaskDetailsScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen 
+        name="LocationHistory" 
+        component={LocationHistoryScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen 
+        name="UserManagement" 
+        component={UserManagementScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen 
+        name="AdminActivities" 
+        component={AdminActivitiesScreen}
+        options={{ headerShown: false }}
+      />
+    </Stack.Navigator>
+  );
+};
 
 // Navegador principal que decide qué mostrar según el estado de autenticación
 const AppNavigator = () => {
   const { user, loading } = useAuth();
+  const { t } = useLanguage();
 
   // Configurar el monitoreo de ubicación basado en la autenticación
   useEffect(() => {
@@ -156,20 +153,16 @@ const AppNavigator = () => {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#4A90E2" />
-        <Text style={styles.loadingText}>Cargando...</Text>
+        <Text style={styles.loadingText}>{t('loading')}</Text>
       </View>
     );
   }
 
-  return (
-    <NavigationContainer>
-      {user ? (
-        user.isAdmin ? <AdminNavigator /> : <UserNavigator />
-      ) : (
-        <AuthNavigator />
-      )}
-    </NavigationContainer>
-  );
+  if (!user) {
+    return <AuthNavigator />;
+  }
+
+  return user.isAdmin ? <AdminNavigator /> : <UserNavigator />;
 };
 
 const styles = StyleSheet.create({
