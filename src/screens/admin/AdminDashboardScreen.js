@@ -8,7 +8,8 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
-  RefreshControl
+  RefreshControl,
+  Platform
 } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
@@ -250,6 +251,50 @@ const AdminDashboardScreen = ({ navigation }) => {
     );
   };
 
+  // Función para validar coordenadas
+  const parseSafeLocation = (location) => {
+    if (!location) return null;
+    
+    // Validar que las coordenadas existan y sean números válidos
+    const latitude = parseFloat(location.latitude);
+    const longitude = parseFloat(location.longitude);
+    
+    if (isNaN(latitude) || isNaN(longitude)) {
+      console.warn('Coordenadas inválidas:', location);
+      return null;
+    }
+    
+    // Validar que las coordenadas estén en rangos válidos
+    if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
+      console.warn('Coordenadas fuera de rango:', { latitude, longitude });
+      return null;
+    }
+    
+    return {
+      ...location,
+      latitude,
+      longitude
+    };
+  };
+
+  // Función para renderizar de forma segura los marcadores
+  const renderSafeMarker = (location, index) => {
+    const safeLocation = parseSafeLocation(location);
+    if (!safeLocation) return null;
+    
+    return (
+      <Marker
+        key={`user-location-${location.userId}-${index}`}
+        coordinate={{
+          latitude: safeLocation.latitude,
+          longitude: safeLocation.longitude,
+        }}
+        title={location.username || `Usuario ${index + 1}`}
+        description={`Última actualización: ${new Date(location.timestamp).toLocaleString()}`}
+      />
+    );
+  };
+
   return (
     <ScrollView 
       style={styles.container}
@@ -351,10 +396,7 @@ const AdminDashboardScreen = ({ navigation }) => {
       {/* Sección de Ubicaciones en Tiempo Real */}
       <View style={styles.realTimeLocationsContainer}>
         <View style={styles.sectionHeader}>
-
           <Text style={styles.sectionTitle}>{t('Real Time Location Of Users')}</Text>
-
-
           <TouchableOpacity 
             style={styles.refreshButton}
             onPress={() => loadRealTimeLocations(false)}
@@ -373,7 +415,7 @@ const AdminDashboardScreen = ({ navigation }) => {
             <MapView
               ref={mapRef}
               style={styles.map}
-              provider={PROVIDER_GOOGLE}
+              provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
               initialRegion={{
                 latitude: realTimeLocations[0]?.latitude || -34.603722,
                 longitude: realTimeLocations[0]?.longitude || -58.381592,
@@ -382,30 +424,35 @@ const AdminDashboardScreen = ({ navigation }) => {
               }}
               onMapReady={() => setMapReady(true)}
             >
-              {realTimeLocations.map((location, index) => (
-                <Marker
-                  key={`user-location-${location.userId}-${location.timestamp}`}
-                  coordinate={{
-                    latitude: location.latitude,
-                    longitude: location.longitude,
-                  }}
-                  title={location.username || `Usuario ${index + 1}`}
-                  description={`Última actualización: ${formatRelativeTime(location.timestamp)}`}
-                  pinColor="#4A90E2"
-                >
-                  <View style={styles.markerContainer}>
-                    <View style={styles.markerBubble}>
-                      <Text style={styles.markerText}>{location.username?.substring(0, 2).toUpperCase()}</Text>
-                    </View>
-                    <View style={styles.markerArrow} />
-                  </View>
-                </Marker>
-              ))}
+              {realTimeLocations.map((location, index) => 
+                renderSafeMarker(location, index)
+              )}
             </MapView>
+            
             <View style={styles.mapLegend}>
-              <Text style={styles.mapLegendText}>
-                {t('activeUsers')}: {realTimeLocations.length}
-              </Text>
+              <Text style={styles.mapLegendTitle}>{t('locationLegend')}</Text>
+              <FlatList
+                data={realTimeLocations}
+                keyExtractor={(item, index) => `legend-${item.userId}-${index}`}
+                renderItem={({ item }) => {
+                  // Verificar que las coordenadas sean válidas
+                  const safeLocation = parseSafeLocation(item);
+                  if (!safeLocation) return null;
+                  
+                  return (
+                    <View style={styles.legendItem}>
+                      <View style={styles.legendIcon} />
+                      <View style={styles.legendInfo}>
+                        <Text style={styles.legendName}>{item.username}</Text>
+                        <Text style={styles.legendTimestamp}>
+                          {new Date(item.timestamp).toLocaleString()}
+                        </Text>
+                      </View>
+                    </View>
+                  );
+                }}
+                style={styles.legendList}
+              />
             </View>
           </View>
         ) : (
@@ -627,6 +674,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     borderRadius: 20,
   },
+  mapLegendTitle: {
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
   mapLegendText: {
     fontSize: 12,
     fontWeight: 'bold',
@@ -667,6 +718,32 @@ const styles = StyleSheet.create({
   noLocationsText: {
     color: '#6c757d',
     fontSize: 16,
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 5,
+  },
+  legendIcon: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#4A90E2',
+    marginRight: 10,
+  },
+  legendInfo: {
+    flex: 1,
+  },
+  legendName: {
+    fontSize: 14,
+    color: '#333',
+  },
+  legendTimestamp: {
+    fontSize: 12,
+    color: '#666',
+  },
+  legendList: {
+    maxHeight: 150,
   },
 });
 
