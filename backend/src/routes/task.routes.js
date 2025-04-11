@@ -7,8 +7,10 @@ const { verifyToken, isAdmin } = require('../middleware/auth.middleware');
 router.use(verifyToken);
 
 // Rutas accesibles para todos los usuarios autenticados
-router.get('/active', taskController.getActiveTask); // Obtener tarea activa (manos libres)
-router.post('/note', taskController.addTaskNote); // Añadir notas de voz
+router.get('/my-tasks', taskController.getMyTasks);
+router.get('/nearby', taskController.getNearbyTasks);
+router.get('/active', (req, res) => taskController.getActiveTask(req, res)); // Obtener tarea activa (manos libres)
+router.post('/note', (req, res) => taskController.addTaskNote(req, res)); // Añadir notas de voz
 router.get('/:id', taskController.getTaskById); // Obtener una tarea específica
 router.put('/:id', taskController.updateTask); // Actualizar una tarea (si es el propietario)
 router.delete('/:id', taskController.deleteTask); // Eliminar una tarea (si es el propietario)
