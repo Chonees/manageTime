@@ -45,6 +45,13 @@ const taskSchema = new mongoose.Schema({
     type: String,
     trim: true,
     default: ''
+  },
+  handsFreeMode: {
+    type: Boolean,
+    default: false // Por defecto, las tareas no tienen modo manos libres
+  },
+  startedAt: {
+    type: Date
   }
 }, {
   timestamps: true,

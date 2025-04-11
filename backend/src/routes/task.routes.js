@@ -3,18 +3,19 @@ const router = express.Router();
 const taskController = require('../controllers/task.controller');
 const { verifyToken, isAdmin } = require('../middleware/auth.middleware');
 
-// Todas las rutas requieren autenticación
+// Middleware para verificar token
 router.use(verifyToken);
 
-// Rutas para tareas del usuario
-router.get('/my-tasks', taskController.getMyTasks);
-router.get('/nearby', taskController.getNearbyTasks); // Nueva ruta para buscar tareas cercanas
-router.put('/:id', taskController.updateTask);
-router.delete('/:id', taskController.deleteTask);
+// Rutas accesibles para todos los usuarios autenticados
+router.get('/active', taskController.getActiveTask); // Obtener tarea activa (manos libres)
+router.post('/note', taskController.addTaskNote); // Añadir notas de voz
+router.get('/:id', taskController.getTaskById); // Obtener una tarea específica
+router.put('/:id', taskController.updateTask); // Actualizar una tarea (si es el propietario)
+router.delete('/:id', taskController.deleteTask); // Eliminar una tarea (si es el propietario)
 
 // Rutas para administradores
-router.get('/all', isAdmin, taskController.getAllTasks);
-router.post('/', isAdmin, taskController.createTask); // Solo administradores pueden crear tareas
-router.post('/assign', isAdmin, taskController.createAssignedTask); // Nueva ruta para asignar tareas
+router.get('/', taskController.getAllTasks); // Obtener todas las tareas (filtradas según permisos)
+router.post('/', taskController.createTask); // Crear una tarea (todos pueden, pero los admins tienen más opciones)
+router.post('/assign', isAdmin, taskController.createAssignedTask); // Asignar tareas (solo admins)
 
 module.exports = router;

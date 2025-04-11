@@ -380,3 +380,73 @@ exports.deleteTask = async (req, res) => {
     res.status(500).json({ message: 'Error al eliminar tarea' });
   }
 };
+
+/**
+ * Obtiene la tarea activa actual del usuario con modo manos libres
+ * @param {Object} req - Objeto de solicitud
+ * @param {Object} res - Objeto de respuesta
+ */
+exports.getActiveTask = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    
+    // Buscar la tarea más reciente que esté en progreso para este usuario
+    const activeTask = await Task.findOne({
+      assignedTo: userId,
+      status: 'in_progress',
+      handsFreeMode: true // Solo tareas que tengan el modo manos libres
+    }).sort({ startedAt: -1 });
+    
+    if (!activeTask) {
+      return res.status(404).json({ message: 'No hay tareas activas con modo manos libres' });
+    }
+    
+    res.status(200).json(activeTask);
+  } catch (error) {
+    console.error('Error al obtener tarea activa:', error);
+    res.status(500).json({ message: 'Error al obtener la tarea activa' });
+  }
+};
+
+/**
+ * Registra una nota de voz para una tarea
+ * @param {Object} req - Objeto de solicitud
+ * @param {Object} res - Objeto de respuesta
+ */
+exports.addTaskNote = async (req, res) => {
+  try {
+    const { taskId, text, type } = req.body;
+    const userId = req.user.id;
+    
+    // Verificar que la tarea exista y esté asignada al usuario
+    const task = await Task.findOne({ 
+      _id: taskId, 
+      assignedTo: userId
+    });
+    
+    if (!task) {
+      return res.status(404).json({ 
+        message: 'Tarea no encontrada o no asignada a este usuario' 
+      });
+    }
+    
+    // Crear actividad para la nota de voz
+    const activity = new Activity({
+      userId,
+      taskId,
+      type: type || 'voice_note',
+      text,
+      createdAt: new Date()
+    });
+    
+    await activity.save();
+    
+    res.status(201).json({
+      message: 'Nota registrada correctamente',
+      activity
+    });
+  } catch (error) {
+    console.error('Error al registrar nota:', error);
+    res.status(500).json({ message: 'Error al registrar la nota' });
+  }
+};
