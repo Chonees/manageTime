@@ -16,7 +16,7 @@ exports.createActivity = async (req, res) => {
     const validTypes = [
       'location_enter', 'location_exit', 
       'task_complete', 'task_create', 'task_update', 'task_delete',
-      'started_working', 'stopped_working'
+      'started_working', 'stopped_working', 'task_activity'
     ];
     
     if (!validTypes.includes(type)) {
