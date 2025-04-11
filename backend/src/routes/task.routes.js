@@ -16,7 +16,7 @@ router.put('/:id', (req, res) => taskController.updateTask(req, res)); // Actual
 router.delete('/:id', (req, res) => taskController.deleteTask(req, res)); // Eliminar una tarea (si es el propietario)
 
 // Endpoint para notas de voz
-router.post('/tasks/:taskId/note', (req, res) => taskController.addSimpleVoiceNote(req, res));
+router.post('/:taskId/note', (req, res) => taskController.addSimpleVoiceNote(req, res));
 
 // Rutas para administradores
 router.get('/', (req, res) => taskController.getAllTasks(req, res)); // Obtener todas las tareas (filtradas según permisos)
