@@ -1,19 +1,8 @@
 import * as Speech from 'expo-speech';
-// Importamos Voice de manera compatible con la versión actual
-import Voice from '@react-native-voice/voice';
+import * as SpeechRecognition from 'expo-speech-recognition';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as api from './api';
 import { Platform, Alert } from 'react-native';
-
-// Verificar que Voice esté disponible
-let voiceAvailable = false;
-try {
-  // Intentar verificar Voice como un objeto
-  voiceAvailable = Voice && typeof Voice === 'object';
-  console.log("¿Voice está disponible?", voiceAvailable);
-} catch (e) {
-  console.log("Error verificando Voice:", e);
-}
 
 class VoiceAssistantService {
   constructor() {
@@ -22,75 +11,61 @@ class VoiceAssistantService {
     this.recordingState = "idle"; // idle, listening_for_note, confirming
     this.currentNote = "";
     this.activeTask = null;
+    this.recognitionSubscription = null;
     
-    // Configurar los handlers para Voice si está disponible
-    if (voiceAvailable) {
-      try {
-        Voice.onSpeechStart = this.onSpeechStart.bind(this);
-        Voice.onSpeechEnd = this.onSpeechEnd.bind(this);
-        Voice.onSpeechResults = this.onSpeechResults.bind(this);
-        Voice.onSpeechError = this.onSpeechError.bind(this);
-        console.log("Handlers de Voice configurados correctamente");
-      } catch (e) {
-        console.error("Error configurando handlers de Voice:", e);
-      }
-    }
-    
-    // Mantener la simulación como fallback
-    this.simulateVoiceRecognition = this.simulateVoiceRecognition.bind(this);
-    
-    // Indicador de si estamos usando reconocimiento real o simulación
+    // Indicador de reconocimiento activo
     this.usingRealRecognition = false;
     
-    // Control para mostrar o no alertas de inicialización
+    // Control para mostrar o no alertas
     this.showInitAlerts = true;
+    
+    // Temporizador para reintentar escucha
+    this.restartTimer = null;
   }
 
   async initialize() {
     console.log("Inicializando servicio de asistente de voz...");
     
     try {
-      // Cambio importante: forzar modo simulación para evitar errores
-      // Temporalmente deshabilitamos el reconocimiento real
-      const isVoiceAvailable = false; // Fuerza modo simulación
+      // Verificar si el reconocimiento de voz está disponible
+      const available = await this.checkVoiceAvailability();
       
-      // Usar texto a voz para informar al usuario del estado
-      if (isVoiceAvailable) {
+      if (available) {
         this.usingRealRecognition = true;
-        await Speech.speak("Asistente de voz iniciado con reconocimiento real. Diga bitácora para activar.", {
+        console.log("Reconocimiento de voz disponible, iniciando escucha continua");
+        
+        // Iniciar escucha en segundo plano para detectar palabra clave
+        this.startBackgroundListening();
+        
+        // Informar al usuario que el asistente está activo
+        await Speech.speak("Asistente de voz activado. Diga bitácora para activar la grabación de notas.", {
           language: 'es-ES',
           pitch: 1.0,
           rate: 0.9
         });
-        
-        console.log("Reconocimiento de voz real inicializado correctamente");
-        
-        // Iniciar la escucha continua
-        this.startContinuousListening();
       } else {
-        // Fallback a simulación
         this.usingRealRecognition = false;
-        await Speech.speak("Asistente de voz iniciado en modo simulación. Use la pantalla de asistente para probar.", {
+        console.log("Reconocimiento de voz no disponible, usando simulación");
+        
+        // Informar al usuario que el asistente está en modo simulación
+        await Speech.speak("Reconocimiento de voz no disponible. Por favor, use la pantalla de Asistente de Voz para probar la funcionalidad.", {
           language: 'es-ES',
           pitch: 1.0,
           rate: 0.9
         });
         
-        // Solo mostrar alerta si realmente estamos en modo simulación y showInitAlerts está habilitado
         if (this.showInitAlerts) {
-          setTimeout(() => {
-            Alert.alert(
-              "Asistente de Voz",
-              "El reconocimiento de voz está en modo simulación. Use la pantalla del asistente para probar con los botones.",
-              [{ text: "Entendido" }]
-            );
-          }, 1000);
+          Alert.alert(
+            "Asistente de Voz - Modo Simulación",
+            "El reconocimiento de voz no está disponible en este dispositivo. Use la pantalla de Asistente de Voz para probar la funcionalidad.",
+            [{ text: "Entendido" }]
+          );
         }
       }
       
       return true;
     } catch (error) {
-      console.error("[Voz] Error al inicializar el asistente de voz:", error);
+      console.error("Error al inicializar asistente de voz:", error);
       this.usingRealRecognition = false;
       return false;
     }
@@ -98,128 +73,116 @@ class VoiceAssistantService {
   
   async checkVoiceAvailability() {
     try {
-      // Verificar si Voice está disponible como objeto y tiene el método isAvailable
-      if (!voiceAvailable) {
-        console.log("Voice no está disponible como objeto, usando simulación");
+      if (Platform.OS === 'web') {
+        console.log("Reconocimiento de voz no soportado en web");
         return false;
       }
       
-      // No intentar usar isAvailable() ya que parece estar causando problemas
-      // En su lugar, usaremos la verificación previa como única determinación
-      
-      // En iOS y Android necesitamos permisos pero no los verificaremos ahora
-      // para evitar más errores. Los manejaremos más adelante si es necesario.
-      
-      return voiceAvailable;
+      // Verificar si el reconocimiento de voz está disponible en el dispositivo
+      try {
+        // Intentamos acceder a SpeechRecognition de expo
+        if (!SpeechRecognition || typeof SpeechRecognition.requestPermissionsAsync !== 'function') {
+          console.log("SpeechRecognition no está disponible como módulo");
+          return false;
+        }
+        
+        // Solicitar permisos antes de verificar disponibilidad
+        const { granted } = await SpeechRecognition.requestPermissionsAsync();
+        if (!granted) {
+          console.log("Permisos para reconocimiento de voz denegados");
+          return false;
+        }
+        
+        // Verificar disponibilidad
+        const isAvailable = await SpeechRecognition.isAvailableAsync();
+        console.log("SpeechRecognition disponible:", isAvailable);
+        return isAvailable;
+      } catch (error) {
+        console.error("Error verificando disponibilidad:", error);
+        return false;
+      }
     } catch (error) {
-      console.error("Error al verificar disponibilidad de Voice:", error);
+      console.error("Error en checkVoiceAvailability:", error);
       return false;
     }
   }
   
-  // Iniciar escucha continua (llamado desde initialize)
-  async startContinuousListening() {
-    if (!this.usingRealRecognition || !voiceAvailable) {
-      console.log("No se puede iniciar la escucha: reconocimiento real no disponible");
-      return;
-    }
-    
-    if (this.isListening) {
-      console.log("Ya estamos escuchando, no se reinicia la escucha");
+  async startBackgroundListening() {
+    if (!this.usingRealRecognition) {
+      console.log("No se puede iniciar escucha: reconocimiento no disponible");
       return;
     }
     
     try {
-      console.log("Iniciando escucha continua...");
+      if (this.isListening) {
+        console.log("Ya estamos escuchando, no es necesario reiniciar");
+        return;
+      }
+      
+      console.log("Iniciando escucha en segundo plano...");
       this.isListening = true;
       
-      // Iniciar reconocimiento en español
-      await Voice.start('es-ES');
+      // Iniciar reconocimiento
+      this.recognitionSubscription = SpeechRecognition.startListeningAsync({
+        locale: 'es-ES',
+        continuous: true
+      }, this.handleSpeechResults.bind(this));
       
       console.log("Escucha iniciada correctamente");
     } catch (error) {
-      console.error("Error al iniciar escucha continua:", error);
+      console.error("Error al iniciar reconocimiento:", error);
       this.isListening = false;
       this.usingRealRecognition = false;
       
-      // Mostrar error al usuario si showInitAlerts está habilitado
-      if (this.showInitAlerts) {
-        Alert.alert(
-          "Error de reconocimiento de voz",
-          "No se pudo iniciar el reconocimiento de voz. Se usará el modo simulación.",
-          [{ text: "Entendido" }]
-        );
-      }
+      // Reintentar después de un tiempo
+      this.scheduleRecognitionRestart();
     }
   }
   
-  // Detener la escucha (temporal)
+  scheduleRecognitionRestart() {
+    if (this.restartTimer) {
+      clearTimeout(this.restartTimer);
+    }
+    
+    this.restartTimer = setTimeout(() => {
+      console.log("Reintentando iniciar reconocimiento...");
+      this.startBackgroundListening();
+    }, 10000); // Reintentar cada 10 segundos
+  }
+  
   async stopListening() {
-    if (!this.usingRealRecognition || !this.isListening || !voiceAvailable) return;
+    if (!this.isListening || !this.usingRealRecognition) return;
     
     try {
-      await Voice.stop();
+      await SpeechRecognition.stopListeningAsync();
       this.isListening = false;
+      
+      if (this.recognitionSubscription) {
+        this.recognitionSubscription.remove();
+        this.recognitionSubscription = null;
+      }
+      
       console.log("Escucha detenida");
     } catch (error) {
       console.error("Error al detener escucha:", error);
     }
   }
   
-  // Reiniciar escucha después de una pausa
-  async restartListening() {
-    if (!this.usingRealRecognition || !voiceAvailable) return;
-    
-    // Esperar un breve momento para evitar conflictos
-    setTimeout(async () => {
-      try {
-        if (!this.isListening) {
-          await Voice.start('es-ES');
-          this.isListening = true;
-          console.log("Escucha reiniciada");
-        }
-      } catch (error) {
-        console.error("Error al reiniciar escucha:", error);
-        this.usingRealRecognition = false;
-      }
-    }, 1000);
-  }
-  
-  // Callbacks de Voice
-  onSpeechStart() {
-    console.log("Reconocimiento iniciado");
-  }
-  
-  onSpeechEnd() {
-    console.log("Reconocimiento finalizado");
-    
-    // Reiniciar escucha para modo continuo
-    if (this.recordingState === "idle") {
-      this.restartListening();
+  async handleSpeechResults(results) {
+    try {
+      if (!results || !results.value || results.value.length === 0) return;
+      
+      // Tomar la transcripción más probable
+      const transcript = results.value[0].toLowerCase();
+      console.log("Transcripción reconocida:", transcript);
+      
+      // Procesar según el estado
+      await this.processVoiceInput(transcript);
+    } catch (error) {
+      console.error("Error procesando resultados de voz:", error);
     }
   }
   
-  onSpeechResults(event) {
-    if (!event.value || event.value.length === 0) return;
-    
-    // Tomamos la transcripción más probable (la primera)
-    const transcription = event.value[0].toLowerCase();
-    console.log("Transcripción:", transcription);
-    
-    // Procesar según el estado actual
-    this.processVoiceInput(transcription);
-  }
-  
-  onSpeechError(event) {
-    console.error("Error en reconocimiento de voz:", event);
-    
-    // Reintentar escucha si fue un error temporal
-    if (this.recordingState === "idle") {
-      this.restartListening();
-    }
-  }
-  
-  // Procesar entrada de voz (tanto real como simulada)
   async processVoiceInput(text) {
     console.log(`Procesando entrada de voz: "${text}" (Estado: ${this.recordingState})`);
     
@@ -232,13 +195,16 @@ class VoiceAssistantService {
       if (lowerText.includes(this.activationKeyword)) {
         console.log("Palabra clave detectada: bitacora");
         
-        // Si estamos usando reconocimiento real, pausamos brevemente
-        if (this.usingRealRecognition) {
-          await this.stopListening();
-        }
+        // Pausar brevemente la escucha para hablar
+        await this.stopListening();
         
-        // Buscar tarea activa
+        // Buscar tarea activa y continuar flujo
         await this.findActiveTask();
+        
+        // Reiniciar escucha si hemos vuelto a idle
+        if (this.recordingState === "idle") {
+          this.startBackgroundListening();
+        }
       }
     }
     // Estado: grabando nota
@@ -247,59 +213,58 @@ class VoiceAssistantService {
       this.currentNote = text;
       console.log("Nota grabada:", this.currentNote);
       
-      // Si estamos usando reconocimiento real, pausamos brevemente
-      if (this.usingRealRecognition) {
-        await this.stopListening();
-      }
+      // Pausar brevemente la escucha
+      await this.stopListening();
       
       // Solicitar confirmación
       await this.askForConfirmation();
     }
     // Estado: esperando confirmación
     else if (this.recordingState === "confirming") {
-      // Buscar si/no en la respuesta
+      // Buscar confirmación en la respuesta
       if (lowerText.includes("sí") || lowerText.includes("si") || lowerText === "sí" || lowerText === "si") {
         console.log("Confirmación recibida: SÍ");
         
-        // Si estamos usando reconocimiento real, pausamos
-        if (this.usingRealRecognition) {
-          await this.stopListening();
-        }
+        // Pausar la escucha
+        await this.stopListening();
         
         // Guardar la nota
         await this.saveNote();
+        
+        // Reiniciar escucha después de guardar
+        if (this.recordingState === "idle") {
+          this.startBackgroundListening();
+        }
       }
       else if (lowerText.includes("no") || lowerText === "no") {
         console.log("Confirmación recibida: NO");
         
-        // Si estamos usando reconocimiento real, pausamos
-        if (this.usingRealRecognition) {
-          await this.stopListening();
-        }
+        // Pausar la escucha
+        await this.stopListening();
         
         // Cancelar la grabación
         await this.cancelNote();
+        
+        // Reiniciar escucha
+        if (this.recordingState === "idle") {
+          this.startBackgroundListening();
+        }
       }
       else {
         console.log("Respuesta no reconocida como confirmación:", lowerText);
+        
+        // Pausar brevemente la escucha
+        await this.stopListening();
         
         // Repetir la solicitud
         await this.askForConfirmation();
       }
     }
-    
-    // Si estamos usando reconocimiento real y estamos en estado idle,
-    // asegurarnos de que la escucha está activa
-    if (this.usingRealRecognition && this.recordingState === "idle") {
-      this.restartListening();
-    }
   }
-
-  // Esta función mantiene la simulación de reconocimiento como respaldo
+  
+  // Esta función es para la compatibilidad con el simulador
   async simulateVoiceRecognition(simulatedText) {
     console.log("Simulando reconocimiento de voz:", simulatedText);
-    
-    // Procesar de la misma manera que el reconocimiento real
     await this.processVoiceInput(simulatedText);
   }
 
@@ -311,65 +276,50 @@ class VoiceAssistantService {
         rate: 0.9
       });
       
-      // Obtener token
       const token = await AsyncStorage.getItem('token');
-      if (!token) {
-        await Speech.speak("No hay sesión activa. Por favor inicie sesión en la aplicación.", {
-          language: 'es-ES',
-          pitch: 1.0,
-          rate: 0.9
-        });
-        this.recordingState = "idle";
-        return;
-      }
       
-      // Verificar si hay una tarea activa
-      try {
-        const activeTask = await api.getActiveTask(token);
+      // Buscar la tarea activa que tenga modo manos libres
+      const activeTaskResponse = await api.getActiveTask(token);
+      
+      if (activeTaskResponse && activeTaskResponse.id) {
+        this.activeTask = activeTaskResponse;
         
-        if (!activeTask) {
-          await Speech.speak("No hay ninguna tarea activa en este momento. Asegúrate de que la tarea tenga habilitado el modo manos libres y esté en estado en progreso.", {
-            language: 'es-ES',
-            pitch: 1.0,
-            rate: 0.9
-          });
-          this.recordingState = "idle";
-          return;
-        }
+        // Cambiar estado y solicitar la nota
+        this.recordingState = "listening_for_note";
         
-        // Guardar tarea activa
-        this.activeTask = activeTask;
-        
-        // Informar al usuario y comenzar a escuchar la nota
-        await Speech.speak(`Tarea activa: ${activeTask.title}. Por favor, dicte su mensaje después del tono.`, {
+        await Speech.speak(`Tarea activa encontrada: ${this.activeTask.title}. Por favor, dicte su mensaje después del tono.`, {
           language: 'es-ES',
           pitch: 1.0,
           rate: 0.9
         });
         
-        // Reproducir un tono después de una pausa
+        // Reproducir un tono
         setTimeout(async () => {
           await Speech.speak("beep", { pitch: 1.5, rate: 1.2 });
-          this.recordingState = "listening_for_note";
-        }, 2000);
-        
-      } catch (apiError) {
-        console.error("[Voz] Error al obtener tarea activa:", apiError);
-        await Speech.speak("No se pudo obtener la tarea activa. Verifica la conexión con el servidor.", {
+          
+          // Reiniciar escucha para captar la nota
+          if (this.usingRealRecognition) {
+            this.startBackgroundListening();
+          }
+        }, 1000);
+      } else {
+        await Speech.speak("No se encontró ninguna tarea activa con modo manos libres. Por favor, active una tarea primero.", {
           language: 'es-ES',
           pitch: 1.0,
           rate: 0.9
         });
+        
         this.recordingState = "idle";
       }
-      
     } catch (error) {
-      console.error("[Voz] Error general verificando tarea activa:", error);
-      await Speech.speak("Hubo un error al verificar la tarea activa. Intente nuevamente.", {
+      console.error("Error al buscar tarea activa:", error);
+      
+      await Speech.speak("Hubo un error al buscar la tarea activa. Por favor, intente nuevamente.", {
         language: 'es-ES',
         pitch: 1.0,
         rate: 0.9
       });
+      
       this.recordingState = "idle";
     }
   }
@@ -382,6 +332,11 @@ class VoiceAssistantService {
     });
     
     this.recordingState = "confirming";
+    
+    // Reiniciar escucha para captar la confirmación
+    if (this.usingRealRecognition) {
+      setTimeout(() => this.startBackgroundListening(), 500);
+    }
   }
 
   async saveNote() {
@@ -402,7 +357,7 @@ class VoiceAssistantService {
       console.log("ID de tarea que se va a usar:", taskId);
       console.log("Texto de la nota:", this.currentNote);
       
-      // Usar el nuevo método simplificado para guardar la nota
+      // Usar el método simplificado para guardar la nota
       await api.addSimpleVoiceNote(taskId, this.currentNote, token);
       
       // Reproducir confirmación
@@ -439,6 +394,27 @@ class VoiceAssistantService {
 
   stop() {
     this.isListening = false;
+    
+    // Detener cualquier escucha activa
+    if (this.usingRealRecognition) {
+      try {
+        SpeechRecognition.stopListeningAsync();
+        
+        if (this.recognitionSubscription) {
+          this.recognitionSubscription.remove();
+          this.recognitionSubscription = null;
+        }
+      } catch (e) {
+        console.error("Error al detener escucha:", e);
+      }
+    }
+    
+    // Cancelar cualquier temporizador
+    if (this.restartTimer) {
+      clearTimeout(this.restartTimer);
+      this.restartTimer = null;
+    }
+    
     console.log("[Voz] Asistente de voz detenido.");
   }
 }
