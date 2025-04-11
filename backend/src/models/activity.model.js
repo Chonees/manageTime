@@ -21,7 +21,7 @@ const ActivitySchema = new Schema({
   type: {
     type: String,
     required: true,
-    enum: ['location_enter', 'location_exit', 'task_complete', 'task_create', 'task_update', 'task_delete']
+    enum: ['location_enter', 'location_exit', 'task_complete', 'task_create', 'task_update', 'task_delete', 'started_working', 'stopped_working', 'task_activity']
   },
   
   // Mensaje descriptivo de la actividad
