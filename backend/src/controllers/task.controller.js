@@ -412,19 +412,29 @@ exports.getActiveTask = async (req, res) => {
     const userId = req.user.id;
     console.log(`Buscando tarea activa para usuario ID: ${userId}`);
     
+    // Usando una consulta más flexible para considerar diferentes formatos de estado
+    const query = {
+      userId: userId,
+      handsFreeMode: true
+    };
+    
+    // Acepta tanto 'in_progress' como 'in-progress'
+    query.$or = [
+      { status: 'in_progress' },
+      { status: 'in-progress' }
+    ];
+    
+    console.log('Consulta para buscar tarea activa:', JSON.stringify(query, null, 2));
+    
     // Buscar la tarea más reciente que esté en progreso para este usuario
-    const activeTask = await Task.findOne({
-      userId: userId, // Cambiado de assignedTo a userId para coincidir con el modelo
-      status: 'in_progress',
-      handsFreeMode: true // Solo tareas que tengan el modo manos libres
-    }).sort({ createdAt: -1 }); // Cambiado de startedAt a createdAt
+    const activeTask = await Task.findOne(query).sort({ createdAt: -1 });
     
     if (!activeTask) {
       console.log(`No se encontraron tareas activas con modo manos libres para usuario ${userId}`);
       return res.status(404).json({ message: 'No hay tareas activas con modo manos libres' });
     }
     
-    console.log(`Tarea activa encontrada: ${activeTask.title} (ID: ${activeTask.id})`);
+    console.log(`Tarea activa encontrada: ${activeTask.title} (ID: ${activeTask.id}), status: ${activeTask.status}`);
     res.status(200).json(activeTask);
   } catch (error) {
     console.error('Error al obtener tarea activa:', error);
