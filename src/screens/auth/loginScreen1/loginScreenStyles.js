@@ -9,6 +9,12 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: appTheme.colors.darkGrey,
   },
+  languageToggleContainer: {
+    position: 'absolute',
+    top: 60,
+    right: 20,
+    zIndex: 10,
+  },
   scrollContainer: {
     flexGrow: 1,
     justifyContent: 'flex-start',

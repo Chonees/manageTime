@@ -14,8 +14,10 @@ import {
 } from 'react-native';
 import { useAuth } from '../../../context/AuthContext';
 import { useTheme } from '../../../context/ThemeContext';
+import { useLanguage } from '../../../context/LanguageContext';
 import { Ionicons } from '@expo/vector-icons';
 import styles from './loginScreenStyles';
+import LanguageToggle from '../../../components/LanguageToggle';
 
 const LoginScreen = ({ navigation }) => {
   const [email, setEmail] = useState('');
@@ -23,10 +25,11 @@ const LoginScreen = ({ navigation }) => {
   const [showPassword, setShowPassword] = useState(false);
   const { login, loading, error, setLoading, setError } = useAuth();
   const theme = useTheme();
+  const { t } = useLanguage();
 
   const handleLogin = async () => {
     if (!email.trim() || !password.trim()) {
-      Alert.alert('Error', 'Please enter email and password');
+      Alert.alert(t('error'), t('pleaseEnterEmailAndPassword'));
       return;
     }
 
@@ -41,17 +44,17 @@ const LoginScreen = ({ navigation }) => {
       const result = await login(normalizedEmail, password);
       
       if (!result || !result.success) {
-        const errorMessage = result?.error || 'Please try again';
+        const errorMessage = result?.error || t('pleaseTryAgain');
         console.log('Login fallido:', errorMessage);
         setError(errorMessage);
-        Alert.alert('Login Error', errorMessage);
+        Alert.alert(t('loginError'), errorMessage);
       } else {
         console.log('Login exitoso, usuario:', result.user?.username);
       }
     } catch (error) {
       console.error('Error en login:', error);
-      setError('An unexpected error occurred');
-      Alert.alert('Error', 'An unexpected error occurred');
+      setError(t('anUnexpectedErrorOccurred'));
+      Alert.alert(t('error'), t('anUnexpectedErrorOccurred'));
     } finally {
       setLoading(false);
     }
@@ -66,6 +69,9 @@ const LoginScreen = ({ navigation }) => {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={styles.container}
     >
+      <View style={styles.languageToggleContainer}>
+        <LanguageToggle />
+      </View>
       <ScrollView contentContainerStyle={styles.scrollContainer}>
         <View style={styles.headerContainer}>
           <View style={styles.logoContainer}>
@@ -74,15 +80,15 @@ const LoginScreen = ({ navigation }) => {
               style={styles.logo} 
             />
           </View>
-          <Text style={styles.greeting}>Hello.</Text>
-          <Text style={styles.welcomeBack}>Welcome back</Text>
+          <Text style={styles.greeting}>{t('hello')}</Text>
+          <Text style={styles.welcomeBack}>{t('welcomeBack')}</Text>
         </View>
 
         <View style={styles.formContainer}>
           {error && <Text style={styles.errorText}>{error}</Text>}
           
           <View style={styles.inputContainer}>
-            <Text style={styles.fieldLabel}>Email</Text>
+            <Text style={styles.fieldLabel}>{t('email')}</Text>
             <View style={{ position: 'relative' }}>
               <Ionicons 
                 name="mail-outline" 
@@ -92,7 +98,7 @@ const LoginScreen = ({ navigation }) => {
               />
               <TextInput
                 style={styles.input}
-                placeholder="Enter email"
+                placeholder={t('enterEmail')}
                 placeholderTextColor={'rgba(0,0,0,0.5)'}
                 value={email}
                 onChangeText={setEmail}
@@ -103,7 +109,7 @@ const LoginScreen = ({ navigation }) => {
           </View>
           
           <View style={styles.inputContainer}>
-            <Text style={styles.fieldLabel}>Password</Text>
+            <Text style={styles.fieldLabel}>{t('password')}</Text>
             <View style={{ position: 'relative' }}>
               <Ionicons 
                 name="lock-closed-outline" 
@@ -113,7 +119,7 @@ const LoginScreen = ({ navigation }) => {
               />
               <TextInput
                 style={styles.input}
-                placeholder="Enter password"
+                placeholder={t('enterPassword')}
                 placeholderTextColor={'rgba(0,0,0,0.5)'}
                 value={password}
                 onChangeText={setPassword}
@@ -132,42 +138,43 @@ const LoginScreen = ({ navigation }) => {
             </View>
           </View>
           
-          <TouchableOpacity 
-            style={styles.forgotPasswordContainer} 
-            onPress={() => navigation.navigate('ForgotPassword')}
-          >
-            <Text style={styles.forgotPasswordText}>Forgot password?</Text>
-          </TouchableOpacity>
+          <View style={styles.forgotPasswordContainer}>
+            <TouchableOpacity 
+              onPress={() => navigation.navigate('ForgotPassword')}
+            >
+              <Text style={styles.forgotPasswordText}>{t('forgotPassword')}</Text>
+            </TouchableOpacity>
+          </View>
           
-          <TouchableOpacity
+          <TouchableOpacity 
             style={styles.loginButton}
             onPress={handleLogin}
             disabled={loading}
           >
             {loading ? (
-              <ActivityIndicator color={theme.colors.darkGrey} />
+              <ActivityIndicator color="#fff" />
             ) : (
-              <Text style={styles.loginButtonText}>Sign In</Text>
+              <Text style={styles.loginButtonText}>{t('signIn')}</Text>
             )}
           </TouchableOpacity>
           
           <View style={styles.orContainer}>
             <View style={styles.orLine} />
-            <Text style={styles.orText}>OR CONTINUE WITH</Text>
+            <Text style={styles.orText}>{t('or')}</Text>
             <View style={styles.orLine} />
           </View>
           
           <View style={styles.socialButtonsContainer}>
             <TouchableOpacity style={styles.googleButton}>
-              <Ionicons name="logo-google" size={24} color={theme.colors.white} style={styles.googleIcon} />
+              <Ionicons name="logo-google" size={24} color="#fff" style={styles.googleIcon} />
               <Text style={styles.googleText}>Google</Text>
             </TouchableOpacity>
           </View>
           
           <View style={styles.registerContainer}>
-            <Text style={styles.registerText}>Don't have an account?</Text>
+            <Text style={styles.registerText}>{t('dontHaveAccount')}</Text>
             <TouchableOpacity onPress={() => navigation.navigate('Register')}>
-              <Text style={styles.registerLink}>Sign up</Text>
+              <Text style={styles.registerLink}>{t('signUp')}</Text>
             </TouchableOpacity>
           </View>
           

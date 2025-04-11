@@ -345,6 +345,23 @@ export const translations = {
       trackingHistory: 'Tracking History',
     },
     trackingHistory: 'Tracking History',
+    
+    // Login screen
+    hello: 'Hello.',
+    welcomeBack: 'Welcome back',
+    email: 'Email',
+    password: 'Password',
+    enterEmail: 'Enter email',
+    enterPassword: 'Enter password',
+    forgotPassword: 'Forgot password?',
+    signIn: 'Sign In',
+    signUp: 'Sign up',
+    or: 'OR CONTINUE WITH',
+    dontHaveAccount: "Don't have an account?",
+    pleaseEnterEmailAndPassword: 'Please enter email and password',
+    loginError: 'Login Error',
+    anUnexpectedErrorOccurred: 'An unexpected error occurred',
+    pleaseTryAgain: 'Please try again',
   },
   es: {
     login: 'Iniciar Sesión',
@@ -689,6 +706,23 @@ export const translations = {
       trackingHistory: 'Historial de Ubicación',
     },
     trackingHistory: 'Historial de Seguimiento',
+    
+    // Login screen
+    hello: 'Hola.',
+    welcomeBack: 'Bienvenido de nuevo',
+    email: 'Correo',
+    password: 'Contraseña',
+    enterEmail: 'Ingrese correo',
+    enterPassword: 'Ingrese contraseña',
+    forgotPassword: '¿Olvidó su contraseña?',
+    signIn: 'Iniciar Sesión',
+    signUp: 'Registrarse',
+    or: 'O CONTINUAR CON',
+    dontHaveAccount: "¿No tiene una cuenta?",
+    pleaseEnterEmailAndPassword: 'Por favor ingrese correo y contraseña',
+    loginError: 'Error de inicio de sesión',
+    anUnexpectedErrorOccurred: 'Ocurrió un error inesperado',
+    pleaseTryAgain: 'Por favor intente de nuevo',
   }
 };
 
