@@ -97,38 +97,19 @@ class VoiceAssistantService {
   
   async checkVoiceAvailability() {
     try {
-      // Verificar si Voice está disponible en la plataforma
-      // Nota: En algunos casos Voice.isAvailable() puede causar errores
-      // si la API nativa no está disponible
-      try {
-        if (Voice && typeof Voice.isAvailable === 'function') {
-          const isAvailable = await Voice.isAvailable();
-          if (!isAvailable) {
-            console.log("Voice.isAvailable() devolvió false");
-            return false;
-          }
-        } else {
-          console.log("Voice.isAvailable no es una función. Posiblemente no inicializado correctamente");
-          return false;
-        }
-      } catch (error) {
-        console.error("Error al llamar Voice.isAvailable():", error);
+      // Verificar si Voice está disponible como objeto y tiene el método isAvailable
+      if (!voiceAvailable) {
+        console.log("Voice no está disponible como objeto, usando simulación");
         return false;
       }
       
-      // En iOS y Android necesitamos permisos
-      if (Platform.OS !== 'web') {
-        try {
-          // No llamamos directamente a requestPermissions porque
-          // lo manejaremos al iniciar el reconocimiento
-          return true;
-        } catch (error) {
-          console.error("Error al verificar permisos de Voice:", error);
-          return false;
-        }
-      }
+      // No intentar usar isAvailable() ya que parece estar causando problemas
+      // En su lugar, usaremos la verificación previa como única determinación
       
-      return true;
+      // En iOS y Android necesitamos permisos pero no los verificaremos ahora
+      // para evitar más errores. Los manejaremos más adelante si es necesario.
+      
+      return voiceAvailable;
     } catch (error) {
       console.error("Error al verificar disponibilidad de Voice:", error);
       return false;
@@ -137,7 +118,10 @@ class VoiceAssistantService {
   
   // Iniciar escucha continua (llamado desde initialize)
   async startContinuousListening() {
-    if (!this.usingRealRecognition) return;
+    if (!this.usingRealRecognition || !voiceAvailable) {
+      console.log("No se puede iniciar la escucha: reconocimiento real no disponible");
+      return;
+    }
     
     if (this.isListening) {
       console.log("Ya estamos escuchando, no se reinicia la escucha");
@@ -170,7 +154,7 @@ class VoiceAssistantService {
   
   // Detener la escucha (temporal)
   async stopListening() {
-    if (!this.usingRealRecognition || !this.isListening) return;
+    if (!this.usingRealRecognition || !this.isListening || !voiceAvailable) return;
     
     try {
       await Voice.stop();
@@ -183,7 +167,7 @@ class VoiceAssistantService {
   
   // Reiniciar escucha después de una pausa
   async restartListening() {
-    if (!this.usingRealRecognition) return;
+    if (!this.usingRealRecognition || !voiceAvailable) return;
     
     // Esperar un breve momento para evitar conflictos
     setTimeout(async () => {
