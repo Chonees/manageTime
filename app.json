@@ -46,6 +46,14 @@
           "locationAlwaysAndWhenInUsePermission": "Permitir a ManageTime acceder a tu ubicación."
         }
       ]
-    ]
+    ],
+    "packagerOpts": {
+      "config": "metro.config.js",
+      "sourceExts": ["js", "jsx", "ts", "tsx", "json"],
+      "assetExts": ["ttf", "png", "jpg", "jpeg", "mp3", "wav"]
+    },
+    "extra": {
+      "excludeBackend": true
+    }
   }
 }

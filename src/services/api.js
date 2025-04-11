@@ -635,7 +635,7 @@ export const saveTask = async (task) => {
 // Function to get all tasks (admin)
 export const getTasks = async () => {
   try {
-    console.log('Obteniendo todas las tareas desde:', `${getApiUrl()}/api/tasks/all`);
+    console.log('Obteniendo todas las tareas desde:', `${getApiUrl()}/api/tasks`);
     
     // Obtenemos el token de autenticación directamente
     let token;
@@ -659,7 +659,7 @@ export const getTasks = async () => {
       }
     };
     
-    const response = await fetchWithRetry(`${getApiUrl()}/api/tasks/all`, options);
+    const response = await fetchWithRetry(`${getApiUrl()}/api/tasks`, options);
     
     // Si la respuesta no es exitosa, lanzamos un error
     if (!response.ok) {
@@ -1643,7 +1643,7 @@ export const getUserActivities = async (limit = 10) => {
       return [];
     }
     
-    // Transform to expected format
+    // Transform the data to match the expected format
     const transformedData = data.activities.map(activity => ({
       id: activity._id,
       type: activity.type.includes('task_') ? 'task' : 'location',
@@ -1709,6 +1709,161 @@ export const getTaskActivities = async (taskId) => {
     return data;
   } catch (error) {
     console.error('Error fetching task activities:', error);
+    throw error;
+  }
+};
+
+/**
+ * Obtiene la tarea activa actual con modo manos libres
+ * @param {string} token - Token de autenticación
+ * @returns {Promise<Object>} - Tarea activa o null si no hay ninguna
+ */
+export const getActiveTask = async (token) => {
+  try {
+    console.log('[API] Obteniendo tarea activa con modo manos libres...');
+    const apiUrl = `${getApiUrl()}/api/tasks/active`;
+    console.log('[API] URL de petición:', apiUrl);
+    
+    const response = await fetch(apiUrl, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      }
+    });
+
+    const statusCode = response.status;
+    console.log('[API] Status de respuesta:', statusCode);
+    
+    if (!response.ok) {
+      const errorBody = await response.text();
+      console.error('[API] Error obteniendo tarea activa:', errorBody);
+      
+      if (statusCode === 404) {
+        console.log('[API] No se encontró ninguna tarea activa con modo manos libres');
+        return null;
+      }
+      
+      throw new Error(`Error ${statusCode}: ${errorBody}`);
+    }
+
+    const data = await response.json();
+    console.log('[API] Tarea activa encontrada:', JSON.stringify(data, null, 2));
+    return data;
+  } catch (error) {
+    console.error('[API] Error en getActiveTask:', error.message);
+    return null;
+  }
+};
+
+/**
+ * Añade una nota de voz a una tarea
+ * @param {Object} noteData - Datos de la nota (taskId, text, type)
+ * @param {string} token - Token de autenticación
+ * @returns {Promise<Object>} - Resultado de la operación
+ */
+export const addTaskNote = async (noteData, token) => {
+  try {
+    const response = await fetch(`${getApiUrl()}/api/tasks/note`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify(noteData)
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || 'Error al guardar la nota');
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('Error en addTaskNote:', error);
+    throw error;
+  }
+};
+
+/**
+ * Activa el modo manos libres para una tarea específica
+ * @param {string} taskId - ID de la tarea
+ * @returns {Promise<Object>} - Tarea actualizada
+ */
+export const enableHandsFreeMode = async (taskId) => {
+  try {
+    console.log(`Activando modo manos libres para tarea ${taskId}`);
+    
+    const options = await createFetchOptions('PUT', {
+      handsFreeMode: true,
+      status: 'in-progress'
+    });
+    
+    console.log(`Enviando petición PUT a ${getApiUrl()}/api/tasks/${taskId}`);
+    console.log(`Configurando opciones de la petición:`, JSON.stringify(options, null, 2));
+    
+    const response = await fetchWithRetry(`${getApiUrl()}/api/tasks/${taskId}`, options);
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || 'Error al activar modo manos libres');
+    }
+    
+    const updatedTask = await response.json();
+    console.log(`Modo manos libres activado para tarea ${taskId}`);
+    return updatedTask;
+  } catch (error) {
+    console.error('Error al activar modo manos libres:', error);
+    throw error;
+  }
+};
+
+/**
+ * Añade una nota de voz a una tarea - versión directa simplificada
+ * @param {Object} noteData - Datos de la nota (taskId, text)
+ * @param {string} token - Token de autenticación
+ * @returns {Promise<Object>} - Resultado de la operación
+ */
+export const addSimpleVoiceNote = async (taskId, text, token) => {
+  try {
+    console.log(`Guardando nota directa para tarea ${taskId}: "${text}"`);
+    
+    // Construir una URL más directa
+    const url = `${getApiUrl()}/api/tasks/${taskId}/note`;
+    console.log(`URL para guardar nota: ${url}`);
+    
+    // Configurar las opciones de la petición directamente
+    const options = {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({ 
+        text, 
+        type: 'voice_note',
+        timestamp: new Date().toISOString()
+      })
+    };
+    
+    console.log(`Opciones de la petición:`, JSON.stringify(options, null, 2));
+    
+    // Realizar petición sin usar fetchWithRetry para tener control directo
+    const response = await fetch(url, options);
+    console.log(`Respuesta del servidor: ${response.status}`);
+    
+    // Manejar los errores manualmente
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`Error del servidor: ${errorText}`);
+      throw new Error(`Error al guardar nota de voz: ${response.status} ${errorText}`);
+    }
+    
+    const data = await response.json();
+    console.log(`Nota guardada con éxito:`, JSON.stringify(data, null, 2));
+    return data;
+  } catch (error) {
+    console.error('Error en addSimpleVoiceNote:', error);
     throw error;
   }
 };

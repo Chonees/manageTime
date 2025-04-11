@@ -28,6 +28,7 @@
     "expo-location": "~18.0.10",
     "expo-notifications": "^0.29.14",
     "expo-speech": "~13.0.1",
+    "expo-speech-recognition": "^1.1.1",
     "expo-status-bar": "~2.0.1",
     "expo-task-manager": "^12.0.6",
     "mongodb": "^6.15.0",

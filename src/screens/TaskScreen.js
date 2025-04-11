@@ -35,6 +35,7 @@ const TaskScreen = ({ navigation }) => {
   const [taskLocation, setTaskLocation] = useState(null);
   const [taskRadius, setTaskRadius] = useState(1.0);
   const [taskLocationName, setTaskLocationName] = useState('');
+  const [handsFreeMode, setHandsFreeMode] = useState(false);
 
   // Function to handle pull-to-refresh
   const onRefresh = async () => {
@@ -151,7 +152,9 @@ const TaskScreen = ({ navigation }) => {
       const taskData = { 
         title: newTaskTitle,
         description: newTaskDescription,
-        completed: false  
+        completed: false,
+        handsFreeMode: handsFreeMode,  // Añadir opción de manos libres
+        status: handsFreeMode ? 'in_progress' : 'pending'  // Si es manos libres, establecer como in_progress
       };
       
       // Añadir información de ubicación si está configurada
@@ -248,6 +251,7 @@ const TaskScreen = ({ navigation }) => {
         setTaskLocation(null);
         setTaskRadius(1.0);
         setTaskLocationName('');
+        setHandsFreeMode(false); // Restablecer el modo manos libres
         setShowAddForm(false);
         
         console.log(t('taskAddedSuccessfully'));
@@ -533,6 +537,26 @@ const TaskScreen = ({ navigation }) => {
           </Text>
         </TouchableOpacity>
         
+        {/* Opción de Modo Manos Libres */}
+        <View style={styles.handsFreeContainer}>
+          <View style={styles.handsFreeTextContainer}>
+            <Ionicons name="mic-outline" size={20} color="#4A90E2" />
+            <Text style={styles.handsFreeText}>{t('handsFreeMode')}</Text>
+          </View>
+          <TouchableOpacity 
+            style={[
+              styles.handsFreeSwitch, 
+              handsFreeMode ? styles.handsFreeActive : styles.handsFreeInactive
+            ]}
+            onPress={() => setHandsFreeMode(!handsFreeMode)}
+          >
+            <View style={[
+              styles.handsFreeHandle,
+              handsFreeMode ? styles.handsFreeHandleActive : styles.handsFreeHandleInactive
+            ]} />
+          </TouchableOpacity>
+        </View>
+        
         {user?.isAdmin && (
           <TouchableOpacity 
             style={styles.userSelectButton}
@@ -558,6 +582,7 @@ const TaskScreen = ({ navigation }) => {
               setTaskLocation(null);
               setTaskRadius(1.0);
               setTaskLocationName('');
+              setHandsFreeMode(false); // Restablecer el modo manos libres
             }}
           >
             <Text style={styles.cancelButtonText}>{t('cancel')}</Text>
@@ -972,6 +997,47 @@ const styles = StyleSheet.create({
   },
   closeButtonText: {
     color: '#666',
+  },
+  handsFreeContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  handsFreeTextContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  handsFreeText: {
+    fontSize: 16,
+    color: '#333',
+    marginLeft: 5,
+  },
+  handsFreeSwitch: {
+    width: 50,
+    height: 25,
+    borderRadius: 15,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f0f0f0',
+  },
+  handsFreeActive: {
+    backgroundColor: '#4A90E2',
+  },
+  handsFreeInactive: {
+    backgroundColor: '#f0f0f0',
+  },
+  handsFreeHandle: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#fff',
+  },
+  handsFreeHandleActive: {
+    marginLeft: 25,
+  },
+  handsFreeHandleInactive: {
+    marginLeft: 5,
   },
 });
 

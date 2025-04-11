@@ -14,6 +14,7 @@ import DashboardScreen from '../screens/DashboardScreen';
 import TaskScreen from '../screens/TaskScreen';
 import TaskDetailsScreen from '../screens/TaskDetailsScreen';
 import LocationHistoryScreen from '../screens/LocationHistoryScreen';
+import VoiceAssistantScreen from '../screens/VoiceAssistantScreen';
 
 // Pantallas de administrador
 import AdminDashboardScreen from '../screens/admin/AdminDashboardScreen';
@@ -23,6 +24,9 @@ import AdminActivitiesScreen from '../screens/admin/AdminActivitiesScreen';
 // Contexto de autenticación
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
+
+// Componente de servicio de asistente de voz en segundo plano
+import VoiceAssistantBackgroundService from '../components/VoiceAssistantBackgroundService';
 
 // Crear navegadores
 const Stack = createStackNavigator();
@@ -82,6 +86,11 @@ const UserNavigator = () => {
         component={LocationHistoryScreen}
         options={{ headerShown: false }}
       />
+      <Stack.Screen 
+        name="VoiceAssistant" 
+        component={VoiceAssistantScreen}
+        options={{ headerShown: false }}
+      />
     </Stack.Navigator>
   );
 };
@@ -118,6 +127,11 @@ const AdminNavigator = () => {
       <Stack.Screen 
         name="AdminActivities" 
         component={AdminActivitiesScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen 
+        name="VoiceAssistant" 
+        component={VoiceAssistantScreen}
         options={{ headerShown: false }}
       />
     </Stack.Navigator>
@@ -158,11 +172,17 @@ const AppNavigator = () => {
     );
   }
 
-  if (!user) {
-    return <AuthNavigator />;
-  }
-
-  return user.isAdmin ? <AdminNavigator /> : <UserNavigator />;
+  // Renderizar el navegador adecuado según si el usuario está autenticado y su rol
+  return (
+    <>
+      {user && <VoiceAssistantBackgroundService />}
+      {!user ? (
+        <AuthNavigator />
+      ) : (
+        user.isAdmin ? <AdminNavigator /> : <UserNavigator />
+      )}
+    </>
+  );
 };
 
 const styles = StyleSheet.create({

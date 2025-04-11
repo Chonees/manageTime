@@ -611,3 +611,91 @@ exports.addTaskNote = async (req, res) => {
     res.status(500).json({ message: 'Error al registrar la nota' });
   }
 };
+
+/**
+ * Registra una nota de voz simplificada para una tarea
+ * @param {Object} req - Objeto de solicitud
+ * @param {Object} res - Objeto de respuesta
+ */
+exports.addSimpleVoiceNote = async (req, res) => {
+  try {
+    // Extraer datos de la petición
+    const { taskId } = req.params;
+    const { text, type } = req.body;
+    const userId = req.user._id || req.user.id;
+    
+    console.log(`[SIMPLE VOICE NOTE] Recibida petición para añadir nota a tarea ${taskId}`);
+    console.log(`[SIMPLE VOICE NOTE] Texto: "${text}"`);
+    console.log(`[SIMPLE VOICE NOTE] Usuario: ${userId}`);
+    
+    // Verificar que hay texto válido
+    if (!text || text.trim() === '') {
+      console.error('[SIMPLE VOICE NOTE] Texto de nota vacío');
+      return res.status(400).json({ message: 'El texto de la nota no puede estar vacío' });
+    }
+    
+    // Intentar convertir a ObjectId si es necesario
+    const mongoose = require('mongoose');
+    let taskObjectId;
+    
+    try {
+      // Intentar convertir taskId a ObjectId
+      taskObjectId = mongoose.Types.ObjectId.isValid(taskId) 
+        ? new mongoose.Types.ObjectId(taskId) 
+        : taskId;
+        
+      console.log(`[SIMPLE VOICE NOTE] TaskId convertido: ${taskObjectId}`);
+    } catch (err) {
+      console.warn(`[SIMPLE VOICE NOTE] Error al convertir ID: ${err.message}`);
+      taskObjectId = taskId; // Usar el ID original si hay error
+    }
+    
+    // Buscar la tarea (sin validar usuario por ahora)
+    const Task = require('../models/task.model');
+    const task = await Task.findById(taskObjectId);
+    
+    if (!task) {
+      console.error(`[SIMPLE VOICE NOTE] Tarea no encontrada: ${taskId}`);
+      return res.status(404).json({ message: 'Tarea no encontrada' });
+    }
+    
+    console.log(`[SIMPLE VOICE NOTE] Tarea encontrada: ${task.title}`);
+    
+    // Crear la actividad de nota directamente
+    const Activity = require('../models/activity.model');
+    const activity = new Activity({
+      userId,
+      taskId: taskObjectId,
+      type: type || 'voice_note',
+      message: text, // Usar message en lugar de text para el modelo Activity
+      metadata: {
+        source: 'voice_assistant',
+        timestamp: new Date().toISOString()
+      },
+      createdAt: new Date()
+    });
+    
+    // Guardar la actividad
+    await activity.save();
+    console.log(`[SIMPLE VOICE NOTE] Nota guardada correctamente para tarea ${task.title}`);
+    
+    // Enviar respuesta de éxito
+    res.status(201).json({
+      success: true,
+      message: 'Nota de voz guardada correctamente',
+      activity: {
+        id: activity._id,
+        text: activity.message,
+        createdAt: activity.createdAt
+      }
+    });
+    
+  } catch (error) {
+    console.error('[SIMPLE VOICE NOTE] Error al guardar nota:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Error al guardar la nota de voz',
+      error: error.message
+    });
+  }
+};

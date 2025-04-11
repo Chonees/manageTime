@@ -362,6 +362,14 @@ export const translations = {
     loginError: 'Login Error',
     anUnexpectedErrorOccurred: 'An unexpected error occurred',
     pleaseTryAgain: 'Please try again',
+    
+    // Voice assistant
+    voiceAssistant: "Voice Assistant",
+    typeSomething: "Type something...",
+    voiceAssistantHelp: "This simulator lets you test the voice assistant. Type 'bitacora' to start a voice note.",
+    voiceCommandsHelp: "Voice commands available: 'bitacora' (starts recording), 'yes/no' (confirmation)",
+    voiceAssistantActive: "Voice assistant active and listening for 'bitacora'",
+    voiceAssistantError: "Could not activate voice assistant. Check microphone permissions.",
   },
   es: {
     login: 'Iniciar Sesión',
@@ -723,6 +731,14 @@ export const translations = {
     loginError: 'Error de inicio de sesión',
     anUnexpectedErrorOccurred: 'Ocurrió un error inesperado',
     pleaseTryAgain: 'Por favor intente de nuevo',
+    
+    // Voice assistant
+    voiceAssistant: "Asistente de Voz",
+    typeSomething: "Escribe algo...",
+    voiceAssistantHelp: "Este simulador te permite probar el asistente de voz. Escribe 'bitácora' para iniciar una nota de voz.",
+    voiceCommandsHelp: "Comandos de voz disponibles: 'bitácora' (inicia grabación), 'sí/no' (confirmación)",
+    voiceAssistantActive: "Asistente de voz activo y escuchando por 'bitácora'",
+    voiceAssistantError: "No se pudo activar el asistente de voz. Verifica los permisos del micrófono.",
   }
 };
 
