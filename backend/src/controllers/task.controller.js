@@ -409,7 +409,8 @@ exports.deleteTask = async (req, res) => {
  */
 exports.getActiveTask = async (req, res) => {
   try {
-    const userId = req.user.id;
+    // Usar _id en lugar de id para acceder al ID del usuario
+    const userId = req.user._id || req.user.id;
     console.log(`Buscando tarea activa para usuario ID: ${userId}`);
     console.log(`Token decodificado:`, JSON.stringify(req.user, null, 2));
     
