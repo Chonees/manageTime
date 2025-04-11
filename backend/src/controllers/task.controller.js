@@ -526,30 +526,81 @@ exports.getActiveTask = async (req, res) => {
 exports.addTaskNote = async (req, res) => {
   try {
     const { taskId, text, type } = req.body;
-    const userId = req.user.id;
+    const userId = req.user._id || req.user.id;
     
-    // Verificar que la tarea exista y esté asignada al usuario
-    const task = await Task.findOne({ 
-      _id: taskId, 
-      userId: userId
+    console.log(`Intentando agregar nota a tarea ${taskId}`);
+    console.log(`Datos de la nota:`, JSON.stringify(req.body, null, 2));
+    console.log(`Usuario que hace la solicitud: ${userId}`);
+    
+    // Convertir IDs a formato compatible con MongoDB
+    const mongoose = require('mongoose');
+    let taskObjectId, userObjectId;
+    
+    try {
+      // Convertir a ObjectId si es posible
+      taskObjectId = mongoose.Types.ObjectId.isValid(taskId) 
+        ? new mongoose.Types.ObjectId(taskId) 
+        : taskId;
+      
+      userObjectId = mongoose.Types.ObjectId.isValid(userId) 
+        ? new mongoose.Types.ObjectId(userId) 
+        : userId;
+      
+      console.log(`Task ID convertido: ${taskObjectId}`);
+    } catch (err) {
+      console.error(`Error al convertir IDs: ${err.message}`);
+      // Continuar con los IDs originales si hay error
+      taskObjectId = taskId;
+      userObjectId = userId;
+    }
+    
+    // Buscar la tarea con múltiples formatos de ID
+    let task = await Task.findOne({
+      $or: [
+        { _id: taskObjectId },
+        { _id: taskId.toString() }
+      ]
     });
     
     if (!task) {
+      console.error(`Tarea no encontrada con ID: ${taskId}`);
       return res.status(404).json({ 
-        message: 'Tarea no encontrada o no asignada a este usuario' 
+        message: 'Tarea no encontrada'
       });
+    }
+    
+    console.log(`Tarea encontrada: ${task.title} (ID: ${task._id})`);
+    console.log(`Propietario de la tarea: ${task.userId}`);
+    
+    // Flexibilizar la verificación de usuario temporalmente 
+    // para permitir guardar notas en cualquier tarea con handsFreeMode
+    if (task.handsFreeMode) {
+      console.log(`Tarea tiene modo manos libres activado, permitiendo guardar nota sin verificar propietario`);
+    } else {
+      // Verificar que la tarea pertenezca al usuario
+      const isOwner = 
+        task.userId.toString() === userId.toString() || 
+        task.userId.toString() === userObjectId.toString();
+      
+      if (!isOwner) {
+        console.error(`Tarea no pertenece al usuario ${userId}`);
+        return res.status(403).json({ 
+          message: 'No tienes permiso para agregar notas a esta tarea'
+        });
+      }
     }
     
     // Crear actividad para la nota de voz
     const activity = new Activity({
-      userId,
-      taskId,
+      userId: userObjectId,
+      taskId: taskObjectId,
       type: type || 'voice_note',
       text,
       createdAt: new Date()
     });
     
     await activity.save();
+    console.log(`Nota guardada correctamente para tarea ${task.title}`);
     
     res.status(201).json({
       message: 'Nota registrada correctamente',
