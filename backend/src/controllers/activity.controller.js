@@ -184,3 +184,45 @@ exports.getAllActivities = async (req, res) => {
     res.status(500).json({ message: 'Error al obtener todas las actividades', error: error.message });
   }
 };
+
+/**
+ * Obtener actividades específicas de una tarea
+ * @param {Object} req - Objeto de solicitud con taskId como parámetro
+ * @param {Object} res - Objeto de respuesta
+ */
+exports.getTaskActivities = async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    
+    if (!taskId) {
+      return res.status(400).json({ message: 'Se requiere el ID de la tarea' });
+    }
+
+    // Verificar que la tarea existe
+    const task = await Task.findById(taskId);
+    if (!task) {
+      return res.status(404).json({ message: 'Tarea no encontrada' });
+    }
+
+    // Verificar que el usuario tiene acceso a esta tarea
+    // Los administradores pueden ver todas las actividades de cualquier tarea
+    // Los usuarios normales solo pueden ver actividades de tareas asignadas a ellos
+    if (!req.user.isAdmin && String(task.userId) !== String(req.user.id)) {
+      return res.status(403).json({ message: 'No tienes permiso para ver estas actividades' });
+    }
+    
+    // Obtener todas las actividades relacionadas con esta tarea
+    // Ordenar por fecha de creación en orden descendente (más recientes primero)
+    const activities = await Activity.find({ taskId })
+      .sort({ createdAt: -1 })
+      .populate('userId', 'username');
+    
+    res.status(200).json(activities);
+  } catch (error) {
+    console.error('Error al obtener actividades de la tarea:', error);
+    res.status(500).json({ 
+      message: 'Error al obtener actividades de la tarea', 
+      error: error.message 
+    });
+  }
+};

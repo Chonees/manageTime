@@ -6,7 +6,8 @@ import {
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
-  Alert
+  Alert,
+  TextInput
 } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
@@ -31,6 +32,9 @@ const TaskDetailsScreen = ({ route, navigation }) => {
   const [locationWatcher, setLocationWatcher] = useState(null);
   const [isLocationTracking, setIsLocationTracking] = useState(false);
   const [locationSubscription, setLocationSubscription] = useState(null);
+  const [activityInput, setActivityInput] = useState('');
+  const [isSubmittingActivity, setIsSubmittingActivity] = useState(false);
+  const [taskActivities, setTaskActivities] = useState([]);
 
   useEffect(() => {
     loadTaskDetails();
@@ -483,6 +487,75 @@ const TaskDetailsScreen = ({ route, navigation }) => {
     setIsLocationTracking(false);
   };
 
+  // Función para enviar una actividad relacionada con la tarea
+  const submitActivity = async () => {
+    if (!activityInput.trim()) {
+      Alert.alert(t('error'), t('pleaseEnterActivity'));
+      return;
+    }
+
+    if (!taskStarted) {
+      Alert.alert(t('error'), t('startTaskFirst'));
+      return;
+    }
+
+    setIsSubmittingActivity(true);
+
+    try {
+      // Crear objeto de actividad
+      const activityData = {
+        taskId: task._id,
+        description: activityInput.trim(),
+        type: 'task_activity',
+        timestamp: new Date().toISOString()
+      };
+
+      // Enviar al backend
+      const result = await api.saveActivity(activityData);
+      
+      if (result && result.success) {
+        // Añadir la actividad a la lista local
+        const newActivity = {
+          ...activityData,
+          _id: result.activity._id || new Date().getTime().toString(), // Usar ID del servidor o generar uno temporal
+          createdAt: result.activity.createdAt || new Date().toISOString()
+        };
+        
+        setTaskActivities(prevActivities => [newActivity, ...prevActivities]);
+        setActivityInput(''); // Limpiar el input
+        
+        // Mostrar mensaje de éxito
+        Alert.alert(t('success'), t('activityRecorded'));
+      } else {
+        throw new Error(result?.message || 'Error al registrar la actividad');
+      }
+    } catch (error) {
+      console.error('Error al enviar actividad:', error);
+      Alert.alert(t('error'), t('errorSubmittingActivity'));
+    } finally {
+      setIsSubmittingActivity(false);
+    }
+  };
+
+  // Cargar las actividades existentes para esta tarea
+  const loadTaskActivities = async () => {
+    try {
+      const activities = await api.getTaskActivities(taskId);
+      if (activities && Array.isArray(activities)) {
+        setTaskActivities(activities);
+      }
+    } catch (error) {
+      console.error('Error al cargar actividades:', error);
+    }
+  };
+
+  // Cargar actividades cuando se carga la tarea
+  useEffect(() => {
+    if (task && task._id) {
+      loadTaskActivities();
+    }
+  }, [task]);
+
   if (loading) {
     return (
       <View style={styles.centerContainer}>
@@ -680,6 +753,34 @@ const TaskDetailsScreen = ({ route, navigation }) => {
           <Text style={styles.backButtonText}>{t('backToTasks')}</Text>
         </TouchableOpacity>
       </View>
+      
+      <View style={styles.activityContainer}>
+        <TextInput
+          style={styles.activityInput}
+          value={activityInput}
+          onChangeText={setActivityInput}
+          placeholder={t('enterActivity')}
+        />
+        <TouchableOpacity 
+          style={styles.submitActivityButton}
+          onPress={submitActivity}
+          disabled={isSubmittingActivity}
+        >
+          <Text style={styles.submitActivityButtonText}>{t('submitActivity')}</Text>
+        </TouchableOpacity>
+      </View>
+      
+      {taskActivities.length > 0 && (
+        <View style={styles.activitiesContainer}>
+          <Text style={styles.activitiesTitle}>{t('taskActivities')}</Text>
+          {taskActivities.map(activity => (
+            <View key={activity._id} style={styles.activityItem}>
+              <Text style={styles.activityItemText}>{activity.description}</Text>
+              <Text style={styles.activityItemTimestamp}>{new Date(activity.createdAt).toLocaleString()}</Text>
+            </View>
+          ))}
+        </View>
+      )}
     </ScrollView>
   );
 };
@@ -869,6 +970,56 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  activityContainer: {
+    padding: 15,
+    backgroundColor: '#fff',
+    marginBottom: 10,
+  },
+  activityInput: {
+    height: 40,
+    borderColor: '#ccc',
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    fontSize: 16,
+  },
+  submitActivityButton: {
+    backgroundColor: '#4A90E2',
+    padding: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 10,
+  },
+  submitActivityButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  activitiesContainer: {
+    padding: 15,
+    backgroundColor: '#fff',
+    marginBottom: 10,
+  },
+  activitiesTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 10,
+  },
+  activityItem: {
+    padding: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#ddd',
+  },
+  activityItemText: {
+    fontSize: 16,
+    color: '#333',
+  },
+  activityItemTimestamp: {
+    fontSize: 14,
+    color: '#666',
   },
 });
 

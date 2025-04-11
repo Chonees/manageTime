@@ -1677,3 +1677,30 @@ const getActionFromType = (type) => {
       return 'unknown';
   }
 };
+
+/**
+ * Obtener actividades de una tarea específica
+ * @param {string} taskId - ID de la tarea
+ * @returns {Promise<Array>} Lista de actividades de la tarea
+ */
+export const getTaskActivities = async (taskId) => {
+  try {
+    const authHeader = await getAuthHeader();
+    if (!authHeader) {
+      throw new Error('No auth token available');
+    }
+
+    const options = createFetchOptions('GET');
+    const url = `${getApiUrl()}/activities/task/${taskId}`;
+    
+    console.log(`Fetching activities for task: ${taskId}`);
+    const response = await fetchWithRetry(url, options);
+    const data = await handleResponse(response);
+    
+    console.log(`Retrieved ${data.length || 0} activities for task`);
+    return data;
+  } catch (error) {
+    console.error('Error fetching task activities:', error);
+    throw error;
+  }
+};

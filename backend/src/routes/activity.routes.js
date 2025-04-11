@@ -15,6 +15,9 @@ router.get('/', activityController.getUserActivities);
 // Obtener actividades recientes para el dashboard
 router.get('/recent', activityController.getRecentActivities);
 
+// Obtener actividades específicas de una tarea
+router.get('/task/:taskId', activityController.getTaskActivities);
+
 // Obtener todas las actividades de todos los usuarios (admin)
 router.get('/admin/all', activityController.getAllActivities);
 

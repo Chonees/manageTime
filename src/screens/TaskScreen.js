@@ -134,6 +134,12 @@ const TaskScreen = ({ navigation }) => {
 
   // Añadir nueva tarea
   const addTask = async () => {
+    // Verificar que el usuario sea administrador
+    if (!user?.isAdmin) {
+      Alert.alert(t('error'), t('unauthorizedAction'));
+      return;
+    }
+
     if (!newTaskTitle.trim()) {
       Alert.alert(t('error'), t('taskTitleRequired'));
       return;
@@ -612,7 +618,7 @@ const TaskScreen = ({ navigation }) => {
         </View>
       ) : (
         <>
-          {!showAddForm && (
+          {!showAddForm && user?.isAdmin && (
             <TouchableOpacity 
               style={styles.addTaskButton}
               onPress={() => setShowAddForm(true)}
@@ -622,7 +628,7 @@ const TaskScreen = ({ navigation }) => {
             </TouchableOpacity>
           )}
           
-          {showAddForm && renderAddTaskForm()}
+          {showAddForm && user?.isAdmin && renderAddTaskForm()}
           
           {error ? (
             <Text style={styles.errorText}>{error}</Text>

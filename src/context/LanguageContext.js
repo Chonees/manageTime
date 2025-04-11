@@ -285,6 +285,16 @@ export const translations = {
     retry: 'Retry',
     pending: 'Pending',
     completed: 'Completed',
+    noTasksYet: 'No tasks yet. They will appear here when you create them.',
+    enterActivity: 'Enter your activity (e.g. "Emptied tank", "Fixed valve")',
+    submitActivity: 'Submit Activity',
+    activityRecorded: 'Activity recorded successfully',
+    pleaseEnterActivity: 'Please enter an activity',
+    startTaskFirst: 'You need to start the task first',
+    errorSubmittingActivity: 'Error submitting activity',
+    taskActivities: 'Task Activities',
+    noActivitiesYet: 'No activities recorded yet',
+    unauthorizedAction: 'You are not authorized to perform this action',
     
     // Task start/end feature
     startTask: 'Start Task',
@@ -619,6 +629,16 @@ export const translations = {
     retry: 'Reintentar',
     pending: 'Pendiente',
     completed: 'Completada',
+    noTasksYet: 'No hay tareas todavía. Aparecerán aquí cuando las crees.',
+    enterActivity: 'Ingrese su actividad (por ejemplo, "Vacié el tanque", "Arreglé la válvula")',
+    submitActivity: 'Enviar Actividad',
+    activityRecorded: 'Actividad registrada con éxito',
+    pleaseEnterActivity: 'Por favor, ingrese una actividad',
+    startTaskFirst: 'Debes iniciar la tarea primero',
+    errorSubmittingActivity: 'Error al enviar la actividad',
+    taskActivities: 'Actividades de la Tarea',
+    noActivitiesYet: 'No se han registrado actividades todavía',
+    unauthorizedAction: 'No estás autorizado para realizar esta acción',
     
     // Task start/end feature
     startTask: 'Iniciar Tarea',
