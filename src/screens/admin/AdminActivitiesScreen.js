@@ -56,6 +56,43 @@ const AdminActivitiesScreen = ({ navigation }) => {
     }
   };
 
+  const downloadExcelReport = async () => {
+    try {
+      setIsGeneratingPdf(true);
+      
+      // Obtener el token directamente de AsyncStorage
+      const token = await AsyncStorage.getItem('token');
+      
+      if (!token) {
+        throw new Error('No hay token de autenticación disponible');
+      }
+      
+      // URL del endpoint del reporte
+      const reportUrl = `${api.getApiUrl()}/api/reports/activities/excel`;
+      
+      // Abrir URL con el token incluido como parámetro de consulta y encabezado de autorización
+      const fullUrl = `${reportUrl}?token=${encodeURIComponent(token)}`;
+      console.log('Abriendo URL:', fullUrl);
+      
+      // Intentar abrir la URL
+      const canOpen = await Linking.canOpenURL(fullUrl);
+      if (!canOpen) {
+        throw new Error('No se puede abrir la URL del reporte');
+      }
+      
+      await Linking.openURL(fullUrl);
+      
+      setIsGeneratingPdf(false);
+    } catch (error) {
+      console.error('Error al descargar el reporte:', error);
+      Alert.alert(
+        t('error'), 
+        error.message || t('errorDownloadingReport') || 'Error al descargar el reporte',
+        [{ text: 'OK', onPress: () => setIsGeneratingPdf(false) }]
+      );
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
@@ -63,17 +100,26 @@ const AdminActivitiesScreen = ({ navigation }) => {
           style={styles.backButton}
           onPress={() => navigation.goBack()}
         >
-          <Ionicons name="arrow-back" size={24} color="#ffffff" />
+          <Ionicons name="arrow-back" size={24} color="#fff3e5" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>{t('viewAllActivities')}</Text>
-        <TouchableOpacity 
-          style={styles.pdfButton}
-          onPress={downloadActivityReport}
-          disabled={isGeneratingPdf}
-        >
-          <Ionicons name="document-text-outline" size={18} color="#ffffff" />
-          {isGeneratingPdf && <ActivityIndicator size="small" color="#ffffff" style={{marginLeft: 5}} />}
-        </TouchableOpacity>
+        <View style={styles.buttonGroup}>
+          <TouchableOpacity 
+            style={styles.pdfButton}
+            onPress={downloadActivityReport}
+            disabled={isGeneratingPdf}
+          >
+            <Ionicons name="document-text-outline" size={18} color="#fff3e5" />
+            {isGeneratingPdf && <ActivityIndicator size="small" color="#fff3e5" style={{marginLeft: 5}} />}
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={[styles.pdfButton, { marginLeft: 8, backgroundColor: '#1a1a1a' }]}
+            onPress={() => downloadExcelReport()}
+            disabled={isGeneratingPdf}
+          >
+            <Ionicons name="calculator-outline" size={18} color="#fff3e5" />
+          </TouchableOpacity>
+        </View>
       </View>
       
       <AdminActivityList />
@@ -109,6 +155,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  buttonGroup: {
+    flexDirection: 'row',
   },
 });
 
