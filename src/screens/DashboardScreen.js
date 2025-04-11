@@ -159,34 +159,6 @@ const DashboardScreen = ({ navigation }) => {
         </View>
       </View>
 
-      {/* Voice Assistant Card */}
-      <View style={[styles.card, { backgroundColor: theme.colors.card }]}>
-        <View style={[styles.cardHeader, { backgroundColor: '#2e2e2e' }]}>
-          <Text style={styles.cardTitle}>{t('voiceAssistant')}</Text>
-        </View>
-        <View style={styles.cardBody}>
-          <View style={styles.voiceAssistantContainer}>
-            <Ionicons name="mic" size={36} color="#2e2e2e" style={styles.voiceIcon} />
-            <View style={styles.voiceTextContainer}>
-              <Text style={[styles.voiceTitle, { color: theme.colors.text }]}>
-                Asistente de Voz "Bitácora"
-              </Text>
-              <Text style={[styles.voiceDescription, { color: theme.colors.text }]}>
-                Registra notas de voz en tareas sin tocar el teléfono
-              </Text>
-            </View>
-          </View>
-          <TouchableOpacity 
-            style={[styles.viewAllButton, { backgroundColor: '#2e2e2e' }]}
-            onPress={() => navigation.navigate('VoiceAssistant')}
-          >
-            <Text style={[styles.viewAllButtonText, { color: '#fff3e5' }]}>
-              Probar Asistente
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-
       <View style={styles.buttonsContainer}>
         <TouchableOpacity 
           style={[styles.navButton, { backgroundColor: theme.colors.primary }]}
@@ -286,11 +258,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   viewAllButtonText: {
+    color: '#fff',
     fontWeight: 'bold',
+    textAlign: 'center',
   },
   emptyText: {
     textAlign: 'center',
-    padding: 20,
+    fontSize: 16,
+    fontStyle: 'italic',
+    marginVertical: 20,
   },
   buttonsContainer: {
     flexDirection: 'row',
@@ -314,24 +290,16 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
   },
-  voiceAssistantContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 10,
-  },
-  voiceIcon: {
-    marginRight: 10,
-  },
-  voiceTextContainer: {
+  taskTextContainer: {
     flex: 1,
   },
-  voiceTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  voiceDescription: {
+  taskDate: {
     fontSize: 14,
     opacity: 0.7,
+  },
+  taskItemDivider: {
+    borderBottomColor: '#ddd',
+    borderBottomWidth: 1,
   },
 });
 

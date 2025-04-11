@@ -9,7 +9,7 @@ import LoginScreen from '../screens/auth/loginScreen1/LoginScreen';
 import RegisterScreen from '../screens/auth/RegisterScreen';
 import DiagnosticScreen from '../screens/DiagnosticScreen';
 
-// Pantallas de usuario
+// Pantallas principales
 import DashboardScreen from '../screens/DashboardScreen';
 import TaskScreen from '../screens/TaskScreen';
 import TaskDetailsScreen from '../screens/TaskDetailsScreen';
@@ -18,15 +18,12 @@ import VoiceAssistantScreen from '../screens/VoiceAssistantScreen';
 
 // Pantallas de administrador
 import AdminDashboardScreen from '../screens/admin/AdminDashboardScreen';
-import UserManagementScreen from '../screens/admin/UserManagementScreen';
 import AdminActivitiesScreen from '../screens/admin/AdminActivitiesScreen';
+import UserManagementScreen from '../screens/admin/UserManagementScreen';
 
 // Contexto de autenticación
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
-
-// Componente de servicio de asistente de voz en segundo plano
-import VoiceAssistantBackgroundService from '../components/VoiceAssistantBackgroundService';
 
 // Crear navegadores
 const Stack = createStackNavigator();
@@ -175,7 +172,6 @@ const AppNavigator = () => {
   // Renderizar el navegador adecuado según si el usuario está autenticado y su rol
   return (
     <>
-      {user && <VoiceAssistantBackgroundService />}
       {!user ? (
         <AuthNavigator />
       ) : (

@@ -172,6 +172,9 @@ export const getApiBaseUrl = () => {
   return config.apiUrl;
 };
 
+// Alias for getApiBaseUrl to maintain backward compatibility
+export const getApiUrl = getApiBaseUrl;
+
 // Función para obtener opciones de fetch según la plataforma
 export const getFetchOptions = (customOptions = {}) => {
   const config = getPlatformConfig(Platform.OS);

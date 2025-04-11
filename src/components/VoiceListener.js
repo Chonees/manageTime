@@ -4,13 +4,33 @@ import * as Speech from 'expo-speech';
 import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import voiceAssistantService from '../services/VoiceAssistantService';
-import { getApiUrl } from '../services/platform-config';
 
 // Constantes para configuración
-const LISTENING_INTERVAL = 5000; // Intervalo de escucha en ms (5 segundos)
+const LISTENING_INTERVAL = 2000; // Intervalo de escucha en ms (2 segundos)
 const LISTENING_DURATION = 3000; // Duración de cada escucha en ms (3 segundos)
-const ACTIVATION_KEYWORD = 'bitacora'; // Palabra clave de activación (sin tilde)
+const ACTIVATION_KEYWORD = 'hola'; // Palabra clave de activación
+
+const recordingOptions = {
+  android: {
+    extension: '.m4a',
+    outputFormat: Audio.RECORDING_OPTIONS_PRESET_HIGH_QUALITY,
+    audioEncoder: Audio.RECORDING_OPTION_ANDROID_AUDIO_ENCODER_AAC,
+    sampleRate: 44100,
+    numberOfChannels: 2,
+    bitRate: 128000,
+  },
+  ios: {
+    extension: '.m4a',
+    outputFormat: Audio.RECORDING_OPTION_IOS_OUTPUT_FORMAT_MPEG4AAC,
+    audioQuality: Audio.RECORDING_OPTION_IOS_AUDIO_QUALITY_MAX,
+    sampleRate: 44100,
+    numberOfChannels: 2,
+    bitRate: 128000,
+    linearPCMBitDepth: 16,
+    linearPCMIsBigEndian: false,
+    linearPCMIsFloat: false,
+  },
+};
 
 const VoiceListener = ({ isTaskActive = false, taskData = null }) => {
   // Estados
@@ -23,11 +43,35 @@ const VoiceListener = ({ isTaskActive = false, taskData = null }) => {
   const recordingRef = useRef(null);
   const listeningTimerRef = useRef(null);
   const intervalTimerRef = useRef(null);
+  const noteRecordingTimeoutRef = useRef(null);
   
   // Para debug
   const addDebugMessage = (message) => {
     console.log(`[VoiceListener] ${message}`);
     setDebugMessages(prev => [message, ...prev.slice(0, 9)]);
+  };
+  
+  // Asegurarse de que no hay grabaciones activas
+  const ensureNoActiveRecordings = async () => {
+    try {
+      if (recordingRef.current) {
+        addDebugMessage("Eliminando grabación anterior");
+        try {
+          await recordingRef.current.stopAndUnloadAsync();
+        } catch (err) {
+          // Ignorar errores al detener, puede que ya no esté activa
+        }
+        recordingRef.current = null;
+      }
+      
+      // Limpiar cualquier timeout pendiente
+      if (noteRecordingTimeoutRef.current) {
+        clearTimeout(noteRecordingTimeoutRef.current);
+        noteRecordingTimeoutRef.current = null;
+      }
+    } catch (error) {
+      addDebugMessage(`Error limpiando grabaciones: ${error.message}`);
+    }
   };
   
   // Inicializar el sistema de escucha
@@ -38,7 +82,7 @@ const VoiceListener = ({ isTaskActive = false, taskData = null }) => {
       addDebugMessage('Iniciando sistema de escucha continua para tareas');
       
       // Informar brevemente al usuario
-      Speech.speak("Sistema de voz activado. Diga bitácora para tomar notas.", {
+      Speech.speak("Sistema de voz activado. Diga hola para tomar notas.", {
         language: 'es-ES',
         pitch: 1.0,
         rate: 0.9
@@ -57,36 +101,37 @@ const VoiceListener = ({ isTaskActive = false, taskData = null }) => {
   }, [isTaskActive]);
   
   // Función para iniciar el ciclo de escucha
-  const startListeningCycle = () => {
-    // Detener cualquier ciclo existente primero
-    stopListeningCycle();
-    
-    // Iniciar el ciclo con un breve retraso
-    setTimeout(() => {
-      // Verificar permisos de audio primero
-      checkAudioPermissions().then(hasPermissions => {
-        if (hasPermissions) {
-          // Iniciar primer ciclo de escucha
-          startListeningForKeyword();
-          
-          // Establecer intervalos regulares para escuchar
-          intervalTimerRef.current = setInterval(() => {
-            if (!isListening) {
-              startListeningForKeyword();
-            }
-          }, LISTENING_INTERVAL);
-          
-          addDebugMessage('Ciclo de escucha iniciado');
-        } else {
-          addDebugMessage('No se tienen permisos de audio');
-          Alert.alert(
-            "Permiso de audio requerido",
-            "Para usar el asistente de voz, necesitamos permiso para acceder al micrófono.",
-            [{ text: "OK" }]
-          );
+  const startListeningCycle = async () => {
+    try {
+      // Verificar permisos
+      const { status } = await Audio.requestPermissionsAsync();
+      addDebugMessage(`Estado de permisos: ${status}`);
+      
+      if (status !== 'granted') {
+        addDebugMessage('Permisos de audio denegados');
+        return;
+      }
+      
+      // Detener cualquier escucha previa
+      stopListeningCycle();
+      
+      // Limpiar grabaciones previas
+      await ensureNoActiveRecordings();
+      
+      // Iniciar ciclo de escucha
+      addDebugMessage('Ciclo de escucha iniciado');
+      intervalTimerRef.current = setInterval(() => {
+        // Si ya hay una escucha activa, no iniciar otra
+        if (isListening || recordingRef.current) {
+          return;
         }
-      });
-    }, 1000);
+        
+        // Iniciar escucha para palabra clave
+        startListeningForKeyword();
+      }, LISTENING_INTERVAL); // Verificar cada LISTENING_INTERVAL segundos si podemos iniciar una nueva escucha
+    } catch (error) {
+      addDebugMessage(`Error iniciando ciclo de escucha: ${error.message}`);
+    }
   };
   
   // Detener el ciclo de escucha
@@ -115,44 +160,6 @@ const VoiceListener = ({ isTaskActive = false, taskData = null }) => {
     }
   };
   
-  // Asegurarse de que no haya grabaciones activas
-  const ensureNoActiveRecordings = async () => {
-    try {
-      if (recordingRef.current) {
-        addDebugMessage('Deteniendo grabación existente');
-        try {
-          await recordingRef.current.stopAndUnloadAsync();
-        } catch (error) {
-          // Ignorar errores al detener
-        }
-        recordingRef.current = null;
-      }
-      
-      // Para Android, reiniciar completamente el sistema de audio
-      if (Platform.OS === 'android') {
-        await Audio.setIsEnabledAsync(false);
-        await new Promise(resolve => setTimeout(resolve, 300));
-        await Audio.setIsEnabledAsync(true);
-        await new Promise(resolve => setTimeout(resolve, 300));
-      } else {
-        // Para iOS, configuración específica
-        await Audio.setAudioModeAsync({
-          allowsRecordingIOS: true,
-          playsInSilentModeIOS: true,
-          staysActiveInBackground: true,
-          interruptionModeIOS: Audio.INTERRUPTION_MODE_IOS_MIX_WITH_OTHERS,
-          shouldDuckAndroid: true,
-          playThroughEarpieceAndroid: false
-        });
-      }
-      
-      return true;
-    } catch (error) {
-      addDebugMessage(`Error limpiando grabaciones: ${error.message}`);
-      return false;
-    }
-  };
-  
   // Iniciar escucha para detectar palabra clave
   const startListeningForKeyword = async () => {
     // Si ya está escuchando, no hacer nada
@@ -173,7 +180,7 @@ const VoiceListener = ({ isTaskActive = false, taskData = null }) => {
       const recording = new Audio.Recording();
       
       // Configuración simplificada para mayor compatibilidad
-      await recording.prepareToRecordAsync(Audio.RECORDING_OPTIONS_PRESET_HIGH_QUALITY);
+      await recording.prepareToRecordAsync(recordingOptions);
       
       // Guardar referencia
       recordingRef.current = recording;
@@ -188,7 +195,7 @@ const VoiceListener = ({ isTaskActive = false, taskData = null }) => {
       }
       
       listeningTimerRef.current = setTimeout(() => {
-        processRecording();
+        processKeywordRecording();
       }, LISTENING_DURATION);
       
     } catch (error) {
@@ -204,6 +211,77 @@ const VoiceListener = ({ isTaskActive = false, taskData = null }) => {
         }
         recordingRef.current = null;
       }
+    }
+  };
+  
+  // Procesar grabación de palabra clave
+  const processKeywordRecording = async () => {
+    try {
+      if (!recordingRef.current) {
+        addDebugMessage('No hay grabación activa para procesar palabra clave');
+        startListeningCycle();
+        return;
+      }
+      
+      // Detener la grabación
+      try {
+        await recordingRef.current.stopAndUnloadAsync();
+      } catch (stopError) {
+        addDebugMessage(`Error al detener grabación de palabra clave: ${stopError.message}`);
+      }
+      
+      // Obtener URI de la grabación
+      let audioUri = null;
+      try {
+        audioUri = recordingRef.current.getURI();
+      } catch (uriError) {
+        addDebugMessage(`Error obteniendo URI de palabra clave: ${uriError.message}`);
+      }
+      
+      // Limpiar la referencia a la grabación
+      recordingRef.current = null;
+      setIsListening(false);
+      
+      // Si no tenemos URI válido, reiniciar ciclo
+      if (!audioUri) {
+        addDebugMessage('No se pudo obtener URI de audio para palabra clave');
+        startListeningCycle();
+        return;
+      }
+      
+      // Reconocer texto
+      try {
+        const recognizedText = await recognizeWithGoogleSpeech(audioUri);
+        addDebugMessage(`Texto reconocido: "${recognizedText || 'vacío'}"`);
+        
+        // Comprobar si incluye la palabra clave
+        const includesKeyword = recognizedText && 
+                               recognizedText.toLowerCase().includes(ACTIVATION_KEYWORD.toLowerCase());
+        
+        addDebugMessage(`ACTIVATION_KEYWORD: "${ACTIVATION_KEYWORD}"`);
+        addDebugMessage(`Incluye palabra clave: ${includesKeyword}`);
+        
+        if (includesKeyword) {
+          addDebugMessage('¡PALABRA CLAVE DETECTADA! Iniciando flujo de notas.');
+          // Detiene cualquier ciclo de escucha que pueda estar activo
+          stopListeningCycle();
+          
+          // Iniciar el flujo de notas
+          await handleNoteTaking();
+        } else {
+          // Sin palabra clave, mostrar el texto reconocido y continuar escuchando
+          addDebugMessage(`Texto reconocido (sin palabra clave): "${recognizedText || 'vacío'}"`);
+          startListeningCycle();
+        }
+      } catch (error) {
+        addDebugMessage(`Error reconociendo texto de palabra clave: ${error.message}`);
+        startListeningCycle();
+      }
+    } catch (error) {
+      addDebugMessage(`Error general procesando palabra clave: ${error.message}`);
+      recordingRef.current = null;
+      setIsListening(false);
+      startListeningCycle();
     }
   };
   
@@ -248,67 +326,529 @@ const VoiceListener = ({ isTaskActive = false, taskData = null }) => {
     return audioUri;
   };
   
-  // Procesar la grabación
-  const processRecording = async () => {
+  // Manejar todo el flujo de toma de notas
+  const handleNoteTaking = async () => {
     try {
-      // Detener grabación y obtener URI
-      const audioUri = await stopListening();
+      // Pausar el ciclo de escucha mientras se usa el asistente
+      stopListeningCycle();
       
+      // Asegurar que no hay grabaciones activas
+      await ensureNoActiveRecordings();
+      
+      // 1. Verificar tarea activa
+      addDebugMessage('Verificando tarea activa...');
+      
+      // La tarea ya debe estar activa para que este componente funcione
+      if (!isTaskActive || !taskData) {
+        // Usar onDone para esperar a que termine de hablar
+        await new Promise((resolve) => {
+          Speech.speak("No hay tarea activa. Por favor, activa una tarea primero.", {
+            language: 'es-ES',
+            pitch: 1.0,
+            rate: 0.9,
+            onDone: resolve
+          });
+        });
+        
+        setTimeout(() => startListeningCycle(), 1000);
+        return;
+      }
+      
+      // FLUJO ULTRA SIMPLIFICADO:
+      // Solo decir "Te escucho" y esperar a que termine
+      await new Promise((resolve) => {
+        Speech.speak("Te escucho", { 
+          language: 'es-ES',
+          pitch: 1.0,
+          rate: 0.9,
+          onDone: resolve 
+        });
+      });
+      
+      // Pausa más larga antes de iniciar la grabación
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // Comenzar a escuchar la nota (sin anuncios de voz que interfieran)
+      await startListeningForNote();
+      
+    } catch (error) {
+      addDebugMessage(`Error en flujo de notas: ${error.message}`);
+      await ensureNoActiveRecordings();
+      startListeningCycle();
+    }
+  };
+  
+  // Comenzar a escuchar específicamente para la nota
+  const startListeningForNote = async () => {
+    try {
+      addDebugMessage('INICIANDO GRABACIÓN PARA NOTA');
+      
+      // Asegurar que no hay grabaciones activas
+      await ensureNoActiveRecordings();
+      
+      // Configurar la grabación
+      const recording = new Audio.Recording();
+      await recording.prepareToRecordAsync(recordingOptions);
+      
+      // Guardar la referencia a la grabación
+      recordingRef.current = recording;
+      
+      // Iniciar la grabación silenciosamente - sin anuncios de voz
+      await recording.startAsync();
+      addDebugMessage('Grabación de nota INICIADA - espere 6 segundos');
+      setIsListening(true);
+      
+      // Programar la detención de la grabación después de 6 segundos
+      noteRecordingTimeoutRef.current = setTimeout(() => {
+        addDebugMessage('Tiempo de grabación de nota completado');
+        processNoteRecording();
+      }, 6000);
+    } catch (error) {
+      addDebugMessage(`Error iniciando grabación de nota: ${error.message}`);
+      recordingRef.current = null;
+      startListeningCycle();
+    }
+  };
+  
+  // Procesar específicamente la grabación de la nota
+  const processNoteRecording = async () => {
+    addDebugMessage('Procesando grabación de nota...');
+    
+    try {
+      // Si no hay grabación activa, salir
+      if (!recordingRef.current) {
+        addDebugMessage('No hay grabación activa para procesar');
+        startListeningCycle();
+        return;
+      }
+      
+      // Detener la grabación
+      try {
+        await recordingRef.current.stopAndUnloadAsync();
+        addDebugMessage('Grabación detenida correctamente');
+      } catch (stopError) {
+        addDebugMessage(`Error al detener grabación: ${stopError.message}`);
+        recordingRef.current = null;
+        setIsListening(false);
+        startListeningCycle();
+        return;
+      }
+      
+      // Obtener URI de la grabación
+      let audioUri = null;
+      try {
+        audioUri = recordingRef.current.getURI();
+        
+        // Verificar que el archivo exista
+        if (audioUri) {
+          const fileInfo = await FileSystem.getInfoAsync(audioUri);
+          
+          if (!fileInfo.exists) {
+            addDebugMessage('El archivo de audio no existe');
+            audioUri = null;
+          }
+        }
+      } catch (uriError) {
+        addDebugMessage(`Error obteniendo URI: ${uriError.message}`);
+        audioUri = null;
+      }
+      
+      // Limpiar la referencia a la grabación
+      recordingRef.current = null;
+      setIsListening(false);
+      
+      // Si no tenemos URI válido, reiniciar ciclo
       if (!audioUri) {
+        addDebugMessage('No se pudo obtener URI de audio válido');
+        startListeningCycle();
         return;
       }
       
       // Procesar audio con Google Speech-to-Text
       try {
-        const recognizedText = await recognizeWithGoogleSpeech(audioUri);
-        setLastRecognizedText(recognizedText);
+        addDebugMessage('Enviando audio a Google Speech-to-Text...');
+        const noteText = await recognizeWithGoogleSpeech(audioUri);
+        addDebugMessage(`Nota reconocida: "${noteText || 'vacío'}"`);
         
-        // Detectar palabra clave
-        if (recognizedText && recognizedText.toLowerCase().includes(ACTIVATION_KEYWORD)) {
-          addDebugMessage(`¡Palabra clave detectada! "${recognizedText}"`);
+        // Enviar la nota al backend
+        if (noteText && noteText.trim().length > 0) {
+          addDebugMessage('Simulando guardado de nota...');
           
-          // Activar asistente de voz
-          await activateVoiceAssistant();
+          // Decir que se ha entendido la nota y esperar a que termine
+          await new Promise((resolve) => {
+            Speech.speak(`¿Es correcto el mensaje: ${noteText}? Diga sí o no.`, {
+              language: 'es-ES',
+              pitch: 1.0,
+              rate: 0.9,
+              onDone: resolve
+            });
+          });
+          
+          // Guardar la nota temporalmente
+          setLastRecognizedText(noteText);
+          
+          // Tiempo de espera breve de 1 segundo como solicitado por el usuario
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          
+          // Activar escucha para confirmación
+          await startListeningForConfirmation(noteText);
         } else {
-          addDebugMessage(`Texto reconocido (sin palabra clave): "${recognizedText || 'vacío'}"`);
+          addDebugMessage('No se reconoció ninguna nota, reiniciando ciclo');
+          
+          await new Promise((resolve) => {
+            Speech.speak("No he podido entender su nota. Por favor, intente de nuevo.", {
+              language: 'es-ES',
+              pitch: 1.0,
+              rate: 0.9,
+              onDone: resolve
+            });
+          });
+          
+          // Pequeña pausa antes de reiniciar
+          await new Promise(resolve => setTimeout(resolve, 3000));
+          setTimeout(() => startListeningCycle(), 1000);
         }
       } catch (error) {
         addDebugMessage(`Error procesando audio: ${error.message}`);
+        
+        await new Promise((resolve) => {
+          Speech.speak("Ha ocurrido un error. Reiniciando el sistema.", {
+            language: 'es-ES',
+            pitch: 1.0,
+            rate: 0.9,
+            onDone: resolve
+          });
+        });
+        
+        setTimeout(() => startListeningCycle(), 3000);
       }
     } catch (error) {
-      addDebugMessage(`Error general en processRecording: ${error.message}`);
+      addDebugMessage(`Error general en processNoteRecording: ${error.message}`);
+      
+      await new Promise((resolve) => {
+        Speech.speak("Ha ocurrido un error. Reiniciando el sistema.", {
+          language: 'es-ES',
+          pitch: 1.0,
+          rate: 0.9,
+          onDone: resolve
+        });
+      });
+      
+      setTimeout(() => startListeningCycle(), 3000);
     }
   };
   
-  // Activar el asistente de voz
-  const activateVoiceAssistant = async () => {
+  // Comenzar a escuchar específicamente para la confirmación
+  const startListeningForConfirmation = async (noteText) => {
     try {
-      // Pausar el ciclo de escucha mientras se usa el asistente
-      stopListeningCycle();
+      addDebugMessage('INICIANDO GRABACIÓN PARA CONFIRMACIÓN');
       
-      // Enviar al asistente de voz
-      addDebugMessage('Activando asistente de voz');
+      // Asegurar que no hay grabaciones activas
+      await ensureNoActiveRecordings();
       
-      // Usar la simulación para activar el asistente
-      await voiceAssistantService.simulateVoiceRecognition('bitácora');
+      // Configurar la grabación
+      const recording = new Audio.Recording();
+      await recording.prepareToRecordAsync(recordingOptions);
       
-      // Esperar a que el asistente complete su ciclo
-      // Este timeout da tiempo para que el usuario dicte la nota
-      setTimeout(() => {
-        // Reiniciar el ciclo de escucha después de un tiempo
-        if (isTaskActive) {
-          addDebugMessage('Reactivando ciclo de escucha después de usar asistente');
-          startListeningCycle();
+      // Guardar la referencia a la grabación
+      recordingRef.current = recording;
+      
+      // Iniciar la grabación directamente - sin anuncios ni pausas adicionales
+      // Ya se ha esperado 5 segundos después de preguntar
+      await recording.startAsync();
+      addDebugMessage('Grabación de confirmación INICIADA - espere 3 segundos');
+      setIsListening(true);
+      
+      // Programar la detención de la grabación después de 3 segundos
+      noteRecordingTimeoutRef.current = setTimeout(() => {
+        addDebugMessage('Tiempo de grabación de confirmación completado');
+        processConfirmationRecording(noteText);
+      }, 3000);
+    } catch (error) {
+      addDebugMessage(`Error iniciando grabación de confirmación: ${error.message}`);
+      recordingRef.current = null;
+      startListeningCycle();
+    }
+  };
+  
+  // Procesar específicamente la grabación de la confirmación
+  const processConfirmationRecording = async (noteText) => {
+    addDebugMessage('Procesando grabación de confirmación...');
+    
+    try {
+      // Si no hay grabación activa, salir
+      if (!recordingRef.current) {
+        addDebugMessage('No hay grabación activa para procesar confirmación');
+        startListeningCycle();
+        return;
+      }
+      
+      // Detener la grabación
+      try {
+        await recordingRef.current.stopAndUnloadAsync();
+        addDebugMessage('Grabación de confirmación detenida correctamente');
+      } catch (stopError) {
+        addDebugMessage(`Error al detener grabación de confirmación: ${stopError.message}`);
+        recordingRef.current = null;
+        setIsListening(false);
+        startListeningCycle();
+        return;
+      }
+      
+      // Obtener URI de la grabación
+      let audioUri = null;
+      try {
+        audioUri = recordingRef.current.getURI();
+        
+        // Verificar que el archivo exista
+        if (audioUri) {
+          const fileInfo = await FileSystem.getInfoAsync(audioUri);
+          
+          if (!fileInfo.exists) {
+            addDebugMessage('El archivo de audio de confirmación no existe');
+            audioUri = null;
+          }
         }
-      }, 20000); // 20 segundos para permitir el ciclo completo del asistente
+      } catch (uriError) {
+        addDebugMessage(`Error obteniendo URI de confirmación: ${uriError.message}`);
+        audioUri = null;
+      }
+      
+      // Limpiar la referencia a la grabación
+      recordingRef.current = null;
+      setIsListening(false);
+      
+      // Si no tenemos URI válido, reiniciar ciclo
+      if (!audioUri) {
+        addDebugMessage('No se pudo obtener URI de audio de confirmación válido');
+        startListeningCycle();
+        return;
+      }
+      
+      // Procesar audio con Google Speech-to-Text
+      try {
+        addDebugMessage('Enviando audio a Google Speech-to-Text...');
+        const confirmationText = await recognizeWithGoogleSpeech(audioUri);
+        addDebugMessage(`Confirmación reconocida: "${confirmationText || 'vacío'}"`);
+        
+        // Lista de frases del propio sistema que debemos ignorar (ampliada)
+        const systemPhrases = [
+          "dicte su nota",
+          "por favor dicte",
+          "diga sí o no",
+          "es correcto el mensaje",
+          "grabando",
+          "beep",
+          "después del tono",
+          "prepárese para",
+          "dicte su",
+          "nota ahora"
+        ];
+        
+        // Verificar si la respuesta contiene frases del sistema con una verificación más estricta
+        const lowerConfirmation = confirmationText ? confirmationText.toLowerCase() : '';
+        
+        // Comprobar si el texto incluye alguna de las frases del sistema
+        const isSystemResponse = systemPhrases.some(phrase => 
+          lowerConfirmation.includes(phrase.toLowerCase())
+        );
+        
+        addDebugMessage(`¿Es respuesta del sistema? ${isSystemResponse ? 'SÍ' : 'NO'}`);
+        
+        if (isSystemResponse) {
+          addDebugMessage('⚠️ Detectada respuesta del propio sistema - intentando nuevamente');
+          
+          await new Promise((resolve) => {
+            Speech.speak("No escuché su respuesta. Diga sí para guardar o no para cancelar.", {
+              language: 'es-ES',
+              pitch: 1.0,
+              rate: 0.9,
+              onDone: resolve
+            });
+          });
+          
+          // Pausa mucho más larga para asegurar que no se auto-escuche
+          await new Promise(resolve => setTimeout(resolve, 3000));
+          
+          // Intentar escuchar de nuevo para confirmación
+          await startListeningForConfirmation(noteText);
+          return;
+        }
+        
+        // Verificación de sí/no más clara y directa
+        if (confirmationText && lowerConfirmation) {
+          // Búsqueda más específica de "sí" o variantes
+          const isYes = lowerConfirmation.includes('sí') || 
+                        lowerConfirmation.includes('si ') || 
+                        lowerConfirmation.includes(' si') ||
+                        lowerConfirmation === 'si';
+          
+          // Búsqueda más específica de "no" o variantes
+          const isNo = lowerConfirmation.includes(' no ') || 
+                       lowerConfirmation.startsWith('no ') ||
+                       lowerConfirmation.endsWith(' no') ||
+                       lowerConfirmation === 'no';
+          
+          addDebugMessage(`Análisis de confirmación: isYes=${isYes}, isNo=${isNo}`);
+          
+          if (isYes) {
+            addDebugMessage('Confirmación "sí" detectada - guardando nota');
+            await saveNote(noteText);
+          } else if (isNo) {
+            addDebugMessage('Confirmación "no" detectada - cancelando nota');
+            await new Promise((resolve) => {
+              Speech.speak("Nota cancelada.", {
+                language: 'es-ES',
+                pitch: 1.0,
+                rate: 0.9,
+                onDone: resolve
+              });
+            });
+            setTimeout(() => startListeningCycle(), 1000);
+          } else {
+            addDebugMessage('Confirmación no clara, repitiendo pregunta');
+            
+            await new Promise((resolve) => {
+              Speech.speak(`No entendí. Responda simplemente sí o no.`, {
+                language: 'es-ES',
+                pitch: 1.0,
+                rate: 0.9,
+                onDone: resolve
+              });
+            });
+            
+            // Pequeña pausa antes de escuchar de nuevo
+            await new Promise(resolve => setTimeout(resolve, 2500));
+            
+            // Intentar escuchar de nuevo para confirmación
+            setTimeout(() => startListeningForConfirmation(noteText), 1000);
+            return;
+          }
+        } else {
+          addDebugMessage('No se reconoció confirmación, reiniciando ciclo');
+          
+          await new Promise((resolve) => {
+            Speech.speak("No pude entender su respuesta. Reiniciando asistente.", {
+              language: 'es-ES',
+              pitch: 1.0,
+              rate: 0.9,
+              onDone: resolve
+            });
+          });
+          
+          setTimeout(() => startListeningCycle(), 1000);
+        }
+      } catch (error) {
+        addDebugMessage(`Error procesando audio de confirmación: ${error.message}`);
+        
+        await new Promise((resolve) => {
+          Speech.speak("Ha ocurrido un error. Reiniciando el sistema.", {
+            language: 'es-ES',
+            pitch: 1.0,
+            rate: 0.9,
+            onDone: resolve
+          });
+        });
+        
+        setTimeout(() => startListeningCycle(), 1000);
+      }
+    } catch (error) {
+      addDebugMessage(`Error general en processConfirmationRecording: ${error.message}`);
+      setTimeout(() => startListeningCycle(), 1000);
+    }
+  };
+  
+  // Guardar la nota usando la API exactamente como lo hace VoiceAssistantSimulator
+  const saveNote = async (noteText) => {
+    try {
+      addDebugMessage('Guardando nota en el backend...');
+      
+      await new Promise((resolve) => {
+        Speech.speak("Guardando nota...", {
+          language: 'es-ES',
+          pitch: 1.0,
+          rate: 0.9,
+          onDone: resolve
+        });
+      });
+      
+      const token = await AsyncStorage.getItem('token');
+      if (!token) {
+        throw new Error('No hay token de autenticación');
+      }
+      
+      // Extraer ID de tarea
+      const taskId = taskData._id || taskData.id;
+      
+      if (!taskId) {
+        throw new Error('ID de tarea no válido');
+      }
+      
+      addDebugMessage(`Guardando nota para tarea ID: ${taskId}`);
+      
+      // Construir URL directamente con el endpoint correcto (igual que en el simulador)
+      const url = `https://managetime-backend-48f256c2dfe5.herokuapp.com/api/tasks/${taskId}/note`;
+      addDebugMessage(`URL para guardar nota: ${url}`);
+      
+      // Crear opciones exactamente iguales a las del simulador
+      const options = {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ 
+          text: noteText, 
+          type: 'voice_note',
+          timestamp: new Date().toISOString()
+        })
+      };
+      
+      addDebugMessage(`Opciones de la petición: ${JSON.stringify(options, null, 2)}`);
+      
+      // Realizar petición exactamente como en el simulador
+      const response = await fetch(url, options);
+      addDebugMessage(`Respuesta del servidor: ${response.status}`);
+      
+      // Manejar errores igual que en el simulador
+      if (!response.ok) {
+        const errorText = await response.text();
+        addDebugMessage(`Error del servidor: ${errorText}`);
+        throw new Error(`Error al guardar nota de voz: ${response.status} ${errorText}`);
+      }
+      
+      const data = await response.json();
+      addDebugMessage(`Nota guardada con éxito: ${JSON.stringify(data, null, 2)}`);
+      
+      // Confirmar guardado
+      await new Promise((resolve) => {
+        Speech.speak("Nota guardada correctamente.", {
+          language: 'es-ES',
+          pitch: 1.0,
+          rate: 0.9,
+          onDone: resolve
+        });
+      });
+      
+      addDebugMessage('Nota guardada correctamente');
+      
+      // Reiniciar ciclo de escucha después de un breve retraso
+      setTimeout(() => startListeningCycle(), 1000);
       
     } catch (error) {
-      addDebugMessage(`Error activando asistente: ${error.message}`);
+      addDebugMessage(`Error al guardar nota: ${error.message}`);
       
-      // Reiniciar ciclo de escucha en caso de error
-      if (isTaskActive) {
-        startListeningCycle();
-      }
+      await new Promise((resolve) => {
+        Speech.speak("Hubo un error al guardar la nota. Intente nuevamente.", {
+          language: 'es-ES',
+          pitch: 1.0,
+          rate: 0.9,
+          onDone: resolve
+        });
+      });
+      
+      // Reiniciar ciclo de escucha después de un breve retraso
+      setTimeout(() => startListeningCycle(), 3000);
     }
   };
   
@@ -376,32 +916,3 @@ const VoiceListener = ({ isTaskActive = false, taskData = null }) => {
 
 // Exportar componente
 export default VoiceListener;
-
-// Añadir configuración para activar el modo manos libres
-export const enableHandsFreeMode = async (taskId) => {
-  try {
-    const token = await AsyncStorage.getItem('token');
-    if (!token) {
-      throw new Error('Usuario no autenticado');
-    }
-    
-    // Llamar a la API para activar el modo manos libres
-    const apiUrl = getApiUrl();
-    const response = await fetch(`${apiUrl}/api/tasks/${taskId}/hands-free`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      }
-    });
-    
-    if (!response.ok) {
-      throw new Error('Error al activar modo manos libres');
-    }
-    
-    return await response.json();
-  } catch (error) {
-    console.error('Error en enableHandsFreeMode:', error);
-    throw error;
-  }
-};
