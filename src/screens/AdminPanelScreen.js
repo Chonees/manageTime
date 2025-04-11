@@ -7,13 +7,14 @@ import {
   FlatList,
   Alert,
   ActivityIndicator,
-  ScrollView
 } from 'react-native';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 import * as api from '../services/api';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import * as Linking from 'expo-linking';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const AdminPanelScreen = () => {
   const { t } = useLanguage();
@@ -23,6 +24,7 @@ const AdminPanelScreen = () => {
   const [activities, setActivities] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const navigation = useNavigation();
 
   useEffect(() => {
@@ -139,6 +141,34 @@ const AdminPanelScreen = () => {
     if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)} ${t('hoursAgo')}`;
     if (diffInSeconds < 604800) return `${Math.floor(diffInSeconds / 86400)} ${t('daysAgo')}`;
     return t('someTimeAgo');
+  };
+
+  const downloadActivityReport = async () => {
+    try {
+      setIsGeneratingPdf(true);
+      
+      // Obtener el token directamente de AsyncStorage para asegurar su disponibilidad
+      const token = await AsyncStorage.getItem('token');
+      
+      if (!token) {
+        throw new Error('No hay token de autenticación disponible');
+      }
+      
+      // URL del endpoint del reporte
+      const reportUrl = `${api.getApiUrl()}/api/reports/activities/pdf`;
+      
+      // Abrir URL con el token incluido como parámetro de consulta
+      await Linking.openURL(`${reportUrl}?token=${token}`);
+      
+      setIsGeneratingPdf(false);
+    } catch (error) {
+      console.error('Error al descargar el reporte:', error);
+      Alert.alert(
+        t('error'), 
+        error.message || t('errorDownloadingReport') || 'Error al descargar el reporte',
+        [{ text: 'OK', onPress: () => setIsGeneratingPdf(false) }]
+      );
+    }
   };
 
   const renderActivity = ({ item }) => {
@@ -282,15 +312,29 @@ const AdminPanelScreen = () => {
   }
 
   return (
-    <ScrollView style={styles.container}>
+    <View style={styles.container}>
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>{t('recentActivity')}</Text>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>{t('recentActivity')}</Text>
+          <TouchableOpacity 
+            style={styles.reportButtonSmall}
+            onPress={downloadActivityReport}
+            disabled={isGeneratingPdf}
+          >
+            <Ionicons name="document-text-outline" size={16} color="#fff" style={styles.reportButtonIcon} />
+            <Text style={styles.reportButtonText}>
+              {isGeneratingPdf ? t('generatingReport') || '...' : t('downloadPdf') || 'PDF'}
+            </Text>
+            {isGeneratingPdf && <ActivityIndicator size="small" color="#fff" style={{ marginLeft: 5 }} />}
+          </TouchableOpacity>
+        </View>
+        
         {activities.length > 0 ? (
           <FlatList
             data={activities}
             renderItem={renderActivity}
             keyExtractor={item => item._id}
-            scrollEnabled={false}
+            nestedScrollEnabled={true}
             ListEmptyComponent={
               <View style={styles.emptyContainer}>
                 <Text style={styles.emptyText}>{t('noRecentActivity')}</Text>
@@ -310,7 +354,7 @@ const AdminPanelScreen = () => {
           data={tasks}
           renderItem={renderTask}
           keyExtractor={item => item._id}
-          scrollEnabled={false}
+          nestedScrollEnabled={true}
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
               <Text style={styles.emptyText}>{t('noTasks')}</Text>
@@ -318,7 +362,7 @@ const AdminPanelScreen = () => {
           }
         />
       </View>
-    </ScrollView>
+    </View>
   );
 };
 
@@ -338,11 +382,44 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
   },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 15,
+  },
   sectionTitle: {
     fontSize: 18,
     fontWeight: 'bold',
     color: '#333',
     marginBottom: 15,
+    flex: 1,
+  },
+  reportButton: {
+    backgroundColor: '#2e2e2e',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 15,
+  },
+  reportButtonSmall: {
+    backgroundColor: '#2e2e2e',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+  },
+  reportButtonIcon: {
+    marginRight: 8,
+  },
+  reportButtonText: {
+    color: '#fff3e5',
+    fontWeight: 'bold',
+    fontSize: 14,
   },
   activityItem: {
     flexDirection: 'row',

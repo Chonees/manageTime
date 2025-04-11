@@ -1284,29 +1284,37 @@ export const saveActivity = async (activityData) => {
  */
 export const getAdminActivities = async (options = {}) => {
   try {
-    const token = await getAuthHeader();
+    // Obtener token directamente para asegurar la autenticación
+    const token = await AsyncStorage.getItem('token');
     
     if (!token) {
-      throw new Error('No hay token de autenticación');
+      throw new Error('No hay token de autenticación disponible');
     }
     
     // Construir la URL con parámetros de paginación
     const queryParams = new URLSearchParams();
-    if (options.limit) queryParams.append('limit', options.limit);
-    if (options.page) queryParams.append('page', options.page);
+    if (options && options.limit) queryParams.append('limit', options.limit);
+    if (options && options.page) queryParams.append('page', options.page);
 
-    const url = `${getApiUrl()}/activities${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+    const url = `${getApiUrl()}/api/activities/admin/all${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
     console.log(`Obteniendo actividades de administrador: ${url}`);
 
-    const options = createFetchOptions('GET');
+    // Crear opciones manualmente para asegurar que el token esté presente
+    const fetchOptions = {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      }
+    };
     
-    const response = await fetchWithRetry(url, options);
+    const response = await fetchWithRetry(url, fetchOptions);
     const data = await handleResponse(response);
     console.log(`Actividades obtenidas: ${data.activities?.length || 0}`);
-    resolve(data);
+    return data;
   } catch (error) {
     console.error('Error al obtener actividades de administrador:', error);
-    reject(error);
+    throw error;
   }
 };
 

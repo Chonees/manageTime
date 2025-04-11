@@ -11,8 +11,30 @@ const Task = require('../models/task.model');
  */
 exports.generateActivityReport = async (req, res) => {
   try {
+    // Verificar autenticación - primero intentar desde token en parámetro de consulta
+    if (req.query.token) {
+      try {
+        const jwt = require('jsonwebtoken');
+        const decoded = jwt.verify(req.query.token, process.env.JWT_SECRET);
+        if (decoded && decoded.id) {
+          // Buscar usuario para verificar si es admin
+          const user = await User.findById(decoded.id);
+          
+          if (user && user.role === 'admin') {
+            req.user = {
+              id: user._id,
+              role: user.role
+            };
+          }
+        }
+      } catch (tokenError) {
+        console.error('Error al verificar token de consulta:', tokenError);
+        // Continuar con la verificación normal si el token de consulta falla
+      }
+    }
+
     // Verificar que el usuario sea administrador
-    if (req.user.role !== 'admin') {
+    if (!req.user || req.user.role !== 'admin') {
       return res.status(403).json({ message: 'Acceso denegado: se requieren permisos de administrador' });
     }
 
