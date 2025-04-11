@@ -1193,7 +1193,7 @@ export const saveActivity = async (activityData) => {
     const validTypes = [
       'location_enter', 'location_exit', 
       'task_complete', 'task_create', 'task_update', 'task_delete',
-      'started_working', 'stopped_working'
+      'started_working', 'stopped_working', 'task_activity'
     ];
     
     // Check if type is valid
@@ -1691,7 +1691,7 @@ export const getTaskActivities = async (taskId) => {
     }
 
     const options = createFetchOptions('GET');
-    const url = `${getApiUrl()}/activities/task/${taskId}`;
+    const url = `${getApiUrl()}/api/activities/task/${taskId}`;
     
     console.log(`Fetching activities for task: ${taskId}`);
     const response = await fetchWithRetry(url, options);

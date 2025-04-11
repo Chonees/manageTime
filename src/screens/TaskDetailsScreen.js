@@ -505,7 +505,7 @@ const TaskDetailsScreen = ({ route, navigation }) => {
       // Crear objeto de actividad
       const activityData = {
         taskId: task._id,
-        description: activityInput.trim(),
+        message: activityInput.trim(),
         type: 'task_activity',
         timestamp: new Date().toISOString()
       };
