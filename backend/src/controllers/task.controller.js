@@ -72,7 +72,7 @@ const registerTaskActivity = async (userId, taskId, type, taskData) => {
 // Crear una nueva tarea
 exports.createTask = async (req, res) => {
   try {
-    const { title, description, userId, location, radius, locationName } = req.body;
+    const { title, description, userId, location, radius, locationName, handsFreeMode, status } = req.body;
     
     console.log('Datos recibidos para crear tarea:', req.body);
     
@@ -96,7 +96,9 @@ exports.createTask = async (req, res) => {
       title,
       description,
       userId: assignedUserId,
-      completed: false
+      completed: false,
+      handsFreeMode: handsFreeMode === true, // Asegurar que se guarde como booleano
+      status: status || 'pending' // Usar el status proporcionado o 'pending' por defecto
     };
     
     // Añadir información de ubicación si se proporciona
@@ -142,7 +144,7 @@ exports.createTask = async (req, res) => {
 // Crear una tarea asignada a otro usuario (solo admin)
 exports.createAssignedTask = async (req, res) => {
   try {
-    const { title, description, userId, location, radius, locationName } = req.body;
+    const { title, description, userId, location, radius, locationName, handsFreeMode, status } = req.body;
     
     console.log('Admin creando tarea asignada con datos:', req.body);
     
@@ -161,7 +163,9 @@ exports.createAssignedTask = async (req, res) => {
       title,
       description,
       userId: userId,
-      completed: false
+      completed: false,
+      handsFreeMode: handsFreeMode === true, // Asegurar que se guarde como booleano
+      status: status || 'pending' // Usar el status proporcionado o 'pending' por defecto
     };
     
     // Añadir información de ubicación si se proporciona
@@ -273,7 +277,7 @@ exports.getNearbyTasks = async (req, res) => {
 // Actualizar una tarea
 exports.updateTask = async (req, res) => {
   try {
-    const { title, description, completed, location, radius, locationName } = req.body;
+    const { title, description, completed, location, radius, locationName, handsFreeMode, status } = req.body;
     
     // Buscar la tarea
     const task = await Task.findById(req.params.id);
@@ -293,6 +297,8 @@ exports.updateTask = async (req, res) => {
     if (title) task.title = title;
     if (description !== undefined) task.description = description;
     if (completed !== undefined) task.completed = completed;
+    if (handsFreeMode !== undefined) task.handsFreeMode = handsFreeMode === true; // Asegurar que se guarde como booleano
+    if (status !== undefined) task.status = status;
     
     // Actualizar información de ubicación si se proporciona
     if (location && location.coordinates && location.coordinates.length === 2) {
