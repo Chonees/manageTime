@@ -50,8 +50,9 @@ class VoiceAssistantService {
     console.log("Inicializando servicio de asistente de voz...");
     
     try {
-      // Intentar inicializar el reconocimiento de voz real
-      const isVoiceAvailable = await this.checkVoiceAvailability();
+      // Cambio importante: forzar modo simulación para evitar errores
+      // Temporalmente deshabilitamos el reconocimiento real
+      const isVoiceAvailable = false; // Fuerza modo simulación
       
       // Usar texto a voz para informar al usuario del estado
       if (isVoiceAvailable) {
@@ -80,7 +81,7 @@ class VoiceAssistantService {
           setTimeout(() => {
             Alert.alert(
               "Asistente de Voz",
-              "El reconocimiento de voz está en modo simulación porque no está disponible en este dispositivo. Use la pantalla del asistente para probar.",
+              "El reconocimiento de voz está en modo simulación. Use la pantalla del asistente para probar con los botones.",
               [{ text: "Entendido" }]
             );
           }, 1000);
