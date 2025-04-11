@@ -24,6 +24,9 @@ class VoiceAssistantService {
     
     // Indicador de si estamos usando reconocimiento real o simulación
     this.usingRealRecognition = false;
+    
+    // Control para mostrar o no alertas de inicialización
+    this.showInitAlerts = true;
   }
 
   async initialize() {
@@ -49,20 +52,22 @@ class VoiceAssistantService {
       } else {
         // Fallback a simulación
         this.usingRealRecognition = false;
-        await Speech.speak("Asistente de voz iniciado en modo simulación. Diga bitácora para activar.", {
+        await Speech.speak("Asistente de voz iniciado en modo simulación. Use la pantalla de asistente para probar.", {
           language: 'es-ES',
           pitch: 1.0,
           rate: 0.9
         });
         
-        // Mostrar alerta informativa sobre el modo de simulación
-        setTimeout(() => {
-          Alert.alert(
-            "Asistente de Voz",
-            "El reconocimiento de voz está en modo simulación porque no se pudo inicializar el módulo de voz. Para probar la funcionalidad, usa la pantalla de 'Asistente de Voz' en el menú.",
-            [{ text: "Entendido" }]
-          );
-        }, 1000);
+        // Solo mostrar alerta si realmente estamos en modo simulación y showInitAlerts está habilitado
+        if (this.showInitAlerts) {
+          setTimeout(() => {
+            Alert.alert(
+              "Asistente de Voz",
+              "El reconocimiento de voz está en modo simulación porque no está disponible en este dispositivo. Use la pantalla del asistente para probar.",
+              [{ text: "Entendido" }]
+            );
+          }, 1000);
+        }
       }
       
       return true;
@@ -124,12 +129,14 @@ class VoiceAssistantService {
       this.isListening = false;
       this.usingRealRecognition = false;
       
-      // Mostrar error al usuario
-      Alert.alert(
-        "Error de reconocimiento de voz",
-        "No se pudo iniciar el reconocimiento de voz. Se usará el modo simulación.",
-        [{ text: "Entendido" }]
-      );
+      // Mostrar error al usuario si showInitAlerts está habilitado
+      if (this.showInitAlerts) {
+        Alert.alert(
+          "Error de reconocimiento de voz",
+          "No se pudo iniciar el reconocimiento de voz. Se usará el modo simulación.",
+          [{ text: "Entendido" }]
+        );
+      }
     }
   }
   

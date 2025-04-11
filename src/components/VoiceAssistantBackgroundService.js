@@ -16,51 +16,34 @@ const VoiceAssistantBackgroundService = () => {
   useEffect(() => {
     const initService = async () => {
       try {
-        // Interceptar los logs de la función de voz para mostrar estados importantes
-        const originalConsoleLog = console.log;
-        console.log = function(...args) {
-          originalConsoleLog.apply(console, args);
-          
-          // Si es un mensaje del sistema de voz, actualizar estado
-          if (typeof args[0] === 'string' && args[0].includes('[Voz]')) {
-            const message = args.join(' ').replace('[Voz]', '').trim();
-            setStatusMessage(message);
-            
-            // Mostrar brevemente el mensaje de estado
-            setShowMessage(true);
-            setTimeout(() => setShowMessage(false), 3000);
-          }
-        };
+        // Crear una nueva instancia del servicio de voz
+        const voiceService = new voiceAssistant();
+        
+        // Desactivar las alertas automáticas para evitar duplicados
+        voiceService.showInitAlerts = false;
         
         // Inicializar el servicio
-        const success = await voiceAssistant.initialize();
-        setInitialized(success);
+        const success = await voiceService.initialize();
         
         if (success) {
-          setStatusMessage(t('voiceAssistantActive'));
-          setShowMessage(true);
-          setTimeout(() => setShowMessage(false), 3000);
+          setInitialized(true);
+          setStatusMessage(`Asistente de voz ${voiceService.usingRealRecognition ? 'con reconocimiento real' : 'en modo simulación'}`);
         } else {
-          setStatusMessage(t('voiceAssistantError'));
-          setShowMessage(true);
-          setTimeout(() => setShowMessage(false), 5000);
+          setStatusMessage('Error al inicializar el asistente de voz');
         }
         
-        // Restaurar el console.log original cuando se desmonte
+        // Restaurar console.log original al desmontar
         return () => {
-          console.log = originalConsoleLog;
-          voiceAssistant.stop();
+          voiceService.stop();
         };
       } catch (error) {
-        console.error('Error inicializando asistente de voz en segundo plano:', error);
-        setStatusMessage(t('voiceAssistantError'));
-        setShowMessage(true);
-        setTimeout(() => setShowMessage(false), 5000);
+        console.error('Error en VoiceAssistantBackgroundService:', error);
+        setStatusMessage('Error en el servicio de asistente de voz');
       }
     };
     
     initService();
-  }, [t]);
+  }, []);
 
   // No renderizar nada si no hay mensajes para mostrar
   if (!showMessage) return null;
