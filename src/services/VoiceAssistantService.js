@@ -430,7 +430,9 @@ class VoiceAssistantService {
   }
 }
 
-// Instancia singleton
-const voiceAssistant = new VoiceAssistantService();
+// Exportar una instancia por defecto
+const voiceAssistantService = new VoiceAssistantService();
+export default voiceAssistantService;
 
-export default voiceAssistant;
+// También exportar la clase para permitir crear instancias personalizadas
+export { VoiceAssistantService };

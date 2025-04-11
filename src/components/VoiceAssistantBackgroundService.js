@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import voiceAssistant from '../services/VoiceAssistantService';
+import voiceAssistantInstance, { VoiceAssistantService } from '../services/VoiceAssistantService';
 import { useLanguage } from '../context/LanguageContext';
 
 /**
@@ -16,8 +16,9 @@ const VoiceAssistantBackgroundService = () => {
   useEffect(() => {
     const initService = async () => {
       try {
-        // Crear una nueva instancia del servicio de voz
-        const voiceService = new voiceAssistant();
+        // Usar la instancia por defecto en lugar de crear una nueva
+        // Esto evita el error "constructor is not callable"
+        const voiceService = voiceAssistantInstance;
         
         // Desactivar las alertas automáticas para evitar duplicados
         voiceService.showInitAlerts = false;
@@ -28,8 +29,12 @@ const VoiceAssistantBackgroundService = () => {
         if (success) {
           setInitialized(true);
           setStatusMessage(`Asistente de voz ${voiceService.usingRealRecognition ? 'con reconocimiento real' : 'en modo simulación'}`);
+          setShowMessage(true);
+          setTimeout(() => setShowMessage(false), 3000);
         } else {
           setStatusMessage('Error al inicializar el asistente de voz');
+          setShowMessage(true);
+          setTimeout(() => setShowMessage(false), 3000);
         }
         
         // Restaurar console.log original al desmontar
@@ -39,6 +44,8 @@ const VoiceAssistantBackgroundService = () => {
       } catch (error) {
         console.error('Error en VoiceAssistantBackgroundService:', error);
         setStatusMessage('Error en el servicio de asistente de voz');
+        setShowMessage(true);
+        setTimeout(() => setShowMessage(false), 3000);
       }
     };
     
@@ -50,9 +57,7 @@ const VoiceAssistantBackgroundService = () => {
 
   return (
     <View style={styles.container}>
-      <View style={styles.messageContainer}>
-        <Text style={styles.message}>{statusMessage}</Text>
-      </View>
+      <Text style={styles.statusText}>{statusMessage}</Text>
     </View>
   );
 };
@@ -60,23 +65,21 @@ const VoiceAssistantBackgroundService = () => {
 const styles = StyleSheet.create({
   container: {
     position: 'absolute',
-    bottom: 20,
+    bottom: 10,
     left: 0,
     right: 0,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    padding: 8,
+    borderRadius: 4,
+    margin: 8,
     alignItems: 'center',
-    zIndex: 1000
+    justifyContent: 'center',
+    zIndex: 1000,
   },
-  messageContainer: {
-    backgroundColor: 'rgba(46, 46, 46, 0.9)',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 20,
-    maxWidth: '80%'
-  },
-  message: {
-    color: '#fff3e5',
+  statusText: {
+    color: 'white',
     fontSize: 14,
-    textAlign: 'center'
+    textAlign: 'center',
   }
 });
 
