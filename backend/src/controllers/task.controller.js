@@ -411,6 +411,11 @@ exports.getActiveTask = async (req, res) => {
   try {
     const userId = req.user.id;
     console.log(`Buscando tarea activa para usuario ID: ${userId}`);
+    console.log(`Token decodificado:`, JSON.stringify(req.user, null, 2));
+    
+    // Buscar todas las tareas con manos libres para depuración
+    const allHandsFreeTasks = await Task.find({ handsFreeMode: true }).lean();
+    console.log(`Todas las tareas con manos libres:`, JSON.stringify(allHandsFreeTasks, null, 2));
     
     // Usando una consulta más flexible para considerar diferentes formatos de estado
     const query = {
@@ -430,6 +435,10 @@ exports.getActiveTask = async (req, res) => {
     const activeTask = await Task.findOne(query).sort({ createdAt: -1 });
     
     if (!activeTask) {
+      // Buscar todas las tareas del usuario para depurar
+      const userTasks = await Task.find({ userId: userId }).lean();
+      console.log(`Tareas del usuario ${userId}:`, JSON.stringify(userTasks, null, 2));
+      
       console.log(`No se encontraron tareas activas con modo manos libres para usuario ${userId}`);
       return res.status(404).json({ message: 'No hay tareas activas con modo manos libres' });
     }
