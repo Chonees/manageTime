@@ -1,9 +1,19 @@
 import * as Speech from 'expo-speech';
-// Importamos Voice en lugar de expo-speech-recognition
+// Importamos Voice de manera compatible con la versión actual
 import Voice from '@react-native-voice/voice';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as api from './api';
 import { Platform, Alert } from 'react-native';
+
+// Verificar que Voice esté disponible
+let voiceAvailable = false;
+try {
+  // Intentar verificar Voice como un objeto
+  voiceAvailable = Voice && typeof Voice === 'object';
+  console.log("¿Voice está disponible?", voiceAvailable);
+} catch (e) {
+  console.log("Error verificando Voice:", e);
+}
 
 class VoiceAssistantService {
   constructor() {
@@ -13,11 +23,18 @@ class VoiceAssistantService {
     this.currentNote = "";
     this.activeTask = null;
     
-    // Configurar los handlers para Voice
-    Voice.onSpeechStart = this.onSpeechStart.bind(this);
-    Voice.onSpeechEnd = this.onSpeechEnd.bind(this);
-    Voice.onSpeechResults = this.onSpeechResults.bind(this);
-    Voice.onSpeechError = this.onSpeechError.bind(this);
+    // Configurar los handlers para Voice si está disponible
+    if (voiceAvailable) {
+      try {
+        Voice.onSpeechStart = this.onSpeechStart.bind(this);
+        Voice.onSpeechEnd = this.onSpeechEnd.bind(this);
+        Voice.onSpeechResults = this.onSpeechResults.bind(this);
+        Voice.onSpeechError = this.onSpeechError.bind(this);
+        console.log("Handlers de Voice configurados correctamente");
+      } catch (e) {
+        console.error("Error configurando handlers de Voice:", e);
+      }
+    }
     
     // Mantener la simulación como fallback
     this.simulateVoiceRecognition = this.simulateVoiceRecognition.bind(this);
@@ -81,10 +98,21 @@ class VoiceAssistantService {
   async checkVoiceAvailability() {
     try {
       // Verificar si Voice está disponible en la plataforma
-      const isAvailable = await Voice.isAvailable();
-      
-      if (!isAvailable) {
-        console.log("Voice no está disponible en este dispositivo");
+      // Nota: En algunos casos Voice.isAvailable() puede causar errores
+      // si la API nativa no está disponible
+      try {
+        if (Voice && typeof Voice.isAvailable === 'function') {
+          const isAvailable = await Voice.isAvailable();
+          if (!isAvailable) {
+            console.log("Voice.isAvailable() devolvió false");
+            return false;
+          }
+        } else {
+          console.log("Voice.isAvailable no es una función. Posiblemente no inicializado correctamente");
+          return false;
+        }
+      } catch (error) {
+        console.error("Error al llamar Voice.isAvailable():", error);
         return false;
       }
       
