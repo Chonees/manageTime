@@ -8,96 +8,136 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  Alert
+  Alert,
+  Image,
+  Dimensions
 } from 'react-native';
 import { useAuth } from '../../../context/AuthContext';
-import { useLanguage } from '../../../context/LanguageContext';
+import { useTheme } from '../../../context/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 import styles from './loginScreenStyles';
 
 const LoginScreen = ({ navigation }) => {
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const { login, loading, error, setLoading, setError } = useAuth();
-  const { t, toggleLanguage, language } = useLanguage();
+  const theme = useTheme();
 
   const handleLogin = async () => {
-    if (!username.trim() || !password.trim()) {
-      Alert.alert(t('error'), t('pleaseEnter'));
+    if (!email.trim() || !password.trim()) {
+      Alert.alert('Error', 'Please enter email and password');
       return;
     }
 
     try {
       setLoading(true);
       setError(null);
-      console.log('Iniciando sesión para usuario:', username);
+      console.log('Iniciando sesión para usuario:', email);
       
-      const normalizedUsername = username.toLowerCase();
-      console.log('Usuario normalizado:', normalizedUsername);
+      const normalizedEmail = email.toLowerCase();
+      console.log('Usuario normalizado:', normalizedEmail);
       
-      const result = await login(normalizedUsername, password);
+      const result = await login(normalizedEmail, password);
       
       if (!result || !result.success) {
-        const errorMessage = result?.error || t('tryAgain');
+        const errorMessage = result?.error || 'Please try again';
         console.log('Login fallido:', errorMessage);
         setError(errorMessage);
-        Alert.alert(t('loginError'), errorMessage);
+        Alert.alert('Login Error', errorMessage);
       } else {
         console.log('Login exitoso, usuario:', result.user?.username);
       }
     } catch (error) {
       console.error('Error en login:', error);
-      setError(t('unexpectedError'));
-      Alert.alert(t('error'), t('unexpectedError'));
+      setError('An unexpected error occurred');
+      Alert.alert('Error', 'An unexpected error occurred');
     } finally {
       setLoading(false);
     }
   };
 
+  const togglePasswordVisibility = () => {
+    setShowPassword(!showPassword);
+  };
 
   return (
     <KeyboardAvoidingView
-    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      style={styles.container}
     >
       <ScrollView contentContainerStyle={styles.scrollContainer}>
         <View style={styles.headerContainer}>
-          <Text style={styles.appTitle}>Work Proof</Text>
-          <TouchableOpacity onPress={toggleLanguage} style={styles.languageToggle}>
-            <Ionicons 
-              name={language === 'es' ? 'language' : 'language-outline'} 
-              size={24} 
-              color="#4A90E2" 
+          <View style={styles.logoContainer}>
+            <Image 
+              source={require('../../../../assets/Work Proof LOGO CREMA.png')} 
+              style={styles.logo} 
             />
-            <Text style={styles.languageText}>{language.toUpperCase()}</Text>
-          </TouchableOpacity>
+          </View>
+          <Text style={styles.greeting}>Hello.</Text>
+          <Text style={styles.welcomeBack}>Welcome back</Text>
         </View>
+
         <View style={styles.formContainer}>
-          <Text style={styles.title}>{t('login')}</Text>
-          
           {error && <Text style={styles.errorText}>{error}</Text>}
           
           <View style={styles.inputContainer}>
-            <Text style={styles.label}>{t('username')}</Text>
-            <TextInput
-              style={styles.input}
-              placeholder={t('username')}
-              value={username}
-              onChangeText={setUsername}
-              autoCapitalize="none"
-            />
+            <Text style={styles.fieldLabel}>Email</Text>
+            <View style={{ position: 'relative' }}>
+              <Ionicons 
+                name="mail-outline" 
+                size={24} 
+                color="#000000" 
+                style={[styles.inputIcon, { color: '#000000' }]}
+              />
+              <TextInput
+                style={styles.input}
+                placeholder="Enter email"
+                placeholderTextColor={'rgba(0,0,0,0.5)'}
+                value={email}
+                onChangeText={setEmail}
+                autoCapitalize="none"
+                keyboardType="email-address"
+              />
+            </View>
           </View>
           
           <View style={styles.inputContainer}>
-            <Text style={styles.label}>{t('password')}</Text>
-            <TextInput
-              style={styles.input}
-              placeholder={t('password')}
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-            />
+            <Text style={styles.fieldLabel}>Password</Text>
+            <View style={{ position: 'relative' }}>
+              <Ionicons 
+                name="lock-closed-outline" 
+                size={24} 
+                color="#000000" 
+                style={[styles.inputIcon, { color: '#000000' }]}
+              />
+              <TextInput
+                style={styles.input}
+                placeholder="Enter password"
+                placeholderTextColor={'rgba(0,0,0,0.5)'}
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={!showPassword}
+              />
+              <TouchableOpacity 
+                onPress={togglePasswordVisibility} 
+                style={styles.inputIconRight}
+              >
+                <Ionicons 
+                  name={showPassword ? "eye-outline" : "eye-off-outline"} 
+                  size={24} 
+                  color="#000000" 
+                />
+              </TouchableOpacity>
+            </View>
           </View>
+          
+          <TouchableOpacity 
+            style={styles.forgotPasswordContainer} 
+            onPress={() => navigation.navigate('ForgotPassword')}
+          >
+            <Text style={styles.forgotPasswordText}>Forgot password?</Text>
+          </TouchableOpacity>
           
           <TouchableOpacity
             style={styles.loginButton}
@@ -105,25 +145,41 @@ const LoginScreen = ({ navigation }) => {
             disabled={loading}
           >
             {loading ? (
-              <ActivityIndicator color="#fff" />
+              <ActivityIndicator color={theme.colors.darkGrey} />
             ) : (
-              <Text style={styles.loginButtonText}>{t('loginButton')}</Text>
+              <Text style={styles.loginButtonText}>Sign In</Text>
             )}
           </TouchableOpacity>
           
-          <View style={styles.registerContainer}>
-            <Text style={styles.registerText}>{t('noAccount')}</Text>
-            <TouchableOpacity onPress={() => navigation.navigate('Register')}>
-              <Text style={styles.registerLink}>{t('registerHere')}</Text>
+          <View style={styles.orContainer}>
+            <View style={styles.orLine} />
+            <Text style={styles.orText}>OR CONTINUE WITH</Text>
+            <View style={styles.orLine} />
+          </View>
+          
+          <View style={styles.socialButtonsContainer}>
+            <TouchableOpacity style={styles.googleButton}>
+              <Ionicons name="logo-google" size={24} color={theme.colors.white} style={styles.googleIcon} />
+              <Text style={styles.googleText}>Google</Text>
             </TouchableOpacity>
           </View>
           
-          <TouchableOpacity
-            style={styles.diagnosticButton}
-            onPress={() => navigation.navigate('Diagnostic')}
-          >
-            <Text style={styles.diagnosticText}>{t('diagnostic')}</Text>
-          </TouchableOpacity>
+          <View style={styles.registerContainer}>
+            <Text style={styles.registerText}>Don't have an account?</Text>
+            <TouchableOpacity onPress={() => navigation.navigate('Register')}>
+              <Text style={styles.registerLink}>Sign up</Text>
+            </TouchableOpacity>
+          </View>
+          
+          {/* El botón de diagnóstico se puede mantener para desarrollo, pero se puede ocultar en producción */}
+          {__DEV__ && (
+            <TouchableOpacity
+              style={[styles.loginButton, { marginTop: 30, backgroundColor: theme.colors.darkGrey, borderWidth: 1, borderColor: theme.colors.input.border }]}
+              onPress={() => navigation.navigate('Diagnostic')}
+            >
+              <Text style={[styles.loginButtonText, { color: theme.colors.white }]}>Diagnostic</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </ScrollView>
     </KeyboardAvoidingView>

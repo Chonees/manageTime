@@ -1,94 +1,143 @@
-import { StyleSheet } from 'react-native';
+import { StyleSheet, Dimensions } from 'react-native';
+import { appTheme } from '../../../context/ThemeContext';
+
+// Obtener dimensiones de la pantalla para cálculos responsivos si se necesitan en el futuro
+const { width, height } = Dimensions.get('window');
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: appTheme.colors.darkGrey,
   },
   scrollContainer: {
     flexGrow: 1,
     justifyContent: 'flex-start',
     padding: 20,
+    paddingTop: 60,
   },
   headerContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    width: '100%',
-    marginBottom: 20,
-  },
-  formContainer: {
-    backgroundColor: '#fff',
-    borderRadius: 10,
-    padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-    marginTop: 10,
-  },
-  languageToggleContainer: {
-    alignItems: 'flex-end',
     marginBottom: 10,
   },
-  languageToggle: {
-    flexDirection: 'row',
+  logoContainer: {
     alignItems: 'center',
-    padding: 8,
-    borderRadius: 20,
-    backgroundColor: 'rgba(74, 144, 226, 0.1)',
+    marginBottom: -90,
   },
-  languageText: {
-    marginLeft: 5,
-    color: '#4A90E2',
-    fontWeight: 'bold',
+  logo: {
+    width: 300,
+    height: 300,
+    resizeMode: 'contain',
   },
-  appTitle: {
-    fontSize: 28,
+  greeting: {
+    fontSize: 45,
     fontWeight: 'bold',
-    color: '#333',
+    color: appTheme.colors.lightCream,
+    marginBottom: 5,
   },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#333',
+  welcomeBack: {
+    fontSize: 20,
+    color: appTheme.colors.white,
     marginBottom: 20,
-    textAlign: 'center',
+    opacity: 0.8,
   },
-  errorText: {
-    color: '#e74c3c',
-    marginBottom: 15,
-    textAlign: 'center',
+  formContainer: {
+    backgroundColor: 'transparent',
+    borderRadius: 10,
+    padding: 20,
+    width: '100%',
+  },
+  fieldLabel: {
+    fontSize: 14,
+    color: appTheme.colors.white,
+    marginBottom: 5,
+    opacity: 0.7,
   },
   inputContainer: {
     marginBottom: 15,
   },
-  label: {
-    fontSize: 16,
-    color: '#333',
-    marginBottom: 5,
-  },
   input: {
     height: 50,
     borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 5,
-    paddingHorizontal: 15,
-    backgroundColor: '#fff',
+    borderColor: appTheme.colors.lightCream,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingLeft: 40, // Espacio para el icono
+    backgroundColor: appTheme.colors.lightCream, // Color crema sólido
+    color: '#000000', // Texto negro
+    marginBottom: 5,
+    fontSize: 16,
+  },
+  inputIcon: {
+    position: 'absolute',
+    left: 10,
+    top: 13,
+    zIndex: 10,
+  },
+  inputIconRight: {
+    position: 'absolute',
+    right: 10,
+    top: 13,
+    zIndex: 10,
+  },
+  forgotPasswordContainer: {
+    alignItems: 'flex-end',
+    marginBottom: 10,
+  },
+  forgotPasswordText: {
+    color: appTheme.colors.white,
+    fontSize: 14,
   },
   loginButton: {
-    backgroundColor: '#4A90E2',
+    backgroundColor: '#1c1c1c',
     height: 50,
-    borderRadius: 5,
+    borderRadius: 15,
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: 15,
   },
   loginButtonText: {
-    color: '#fff',
+    color: appTheme.colors.white,
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  orContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 20,
+  },
+  orLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: appTheme.colors.input.border,
+  },
+  orText: {
+    color: appTheme.colors.white,
+    paddingHorizontal: 10,
+    fontSize: 14,
+    opacity: 0.7,
+  },
+  socialButtonsContainer: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  googleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 50,
+    borderRadius: 15,
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: appTheme.colors.input.border,
+    marginTop: 10,
+    paddingHorizontal: 20,
+  },
+  googleIcon: {
+    marginRight: 10,
+  },
+  googleText: {
+    color: appTheme.colors.white,
+    fontSize: 14,
   },
   registerContainer: {
     flexDirection: 'row',
@@ -96,28 +145,21 @@ const styles = StyleSheet.create({
     marginTop: 20,
   },
   registerText: {
-    color: '#666',
+    color: appTheme.colors.white,
+    opacity: 0.7,
+    fontSize: 14,
   },
   registerLink: {
-    color: '#4A90E2',
+    color: appTheme.colors.lightCream,
     fontWeight: 'bold',
     marginLeft: 5,
+    fontSize: 14,
   },
-  diagnosticButton: {
-    backgroundColor: '#4A90E2',
-    height: 50,
-    borderRadius: 5,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 15,
-  },
-  diagnosticText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  centered: {
-    alignSelf: 'center',
+  errorText: {
+    color: appTheme.colors.error,
+    marginBottom: 15,
+    textAlign: 'center',
+    fontSize: 14,
   },
 });
 

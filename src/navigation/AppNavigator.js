@@ -43,7 +43,7 @@ const AuthNavigator = () => (
     <Stack.Screen 
       name="Login" 
       component={LoginScreen} 
-      options={{ title: 'Iniciar Sesión' }}
+      options={{ headerShown: false }}
     />
     <Stack.Screen 
       name="Register" 
