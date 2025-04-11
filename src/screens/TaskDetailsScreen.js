@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import MapView, { Marker, Circle } from 'react-native-maps';
 import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import VoiceListener from '../components/VoiceListener'; // Importar el componente de escucha de voz
 
 const TaskDetailsScreen = ({ route, navigation }) => {
   const { taskId } = route.params;
@@ -781,6 +782,8 @@ const TaskDetailsScreen = ({ route, navigation }) => {
           ))}
         </View>
       )}
+      
+      {taskStarted && <VoiceListener isTaskActive={taskStarted} taskData={task} />}
     </ScrollView>
   );
 };
