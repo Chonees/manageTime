@@ -4,14 +4,48 @@ import {
   StyleSheet,
   View,
   TouchableOpacity,
-  Text
+  Text,
+  ActivityIndicator,
+  Alert,
+  Linking
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useLanguage } from '../../context/LanguageContext';
 import AdminActivityList from '../../components/AdminActivityList';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as api from '../../services/api';
 
 const AdminActivitiesScreen = ({ navigation }) => {
   const { t } = useLanguage();
+  const [isGeneratingPdf, setIsGeneratingPdf] = React.useState(false);
+
+  const downloadActivityReport = async () => {
+    try {
+      setIsGeneratingPdf(true);
+      
+      // Obtener el token directamente de AsyncStorage
+      const token = await AsyncStorage.getItem('token');
+      
+      if (!token) {
+        throw new Error('No hay token de autenticación disponible');
+      }
+      
+      // URL del endpoint del reporte
+      const reportUrl = `${api.getApiUrl()}/api/reports/activities/pdf`;
+      
+      // Abrir URL con el token incluido como parámetro de consulta
+      await Linking.openURL(`${reportUrl}?token=${token}`);
+      
+      setIsGeneratingPdf(false);
+    } catch (error) {
+      console.error('Error al descargar el reporte:', error);
+      Alert.alert(
+        t('error'), 
+        error.message || t('errorDownloadingReport') || 'Error al descargar el reporte',
+        [{ text: 'OK', onPress: () => setIsGeneratingPdf(false) }]
+      );
+    }
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -23,6 +57,14 @@ const AdminActivitiesScreen = ({ navigation }) => {
           <Ionicons name="arrow-back" size={24} color="#ffffff" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>{t('viewAllActivities')}</Text>
+        <TouchableOpacity 
+          style={styles.pdfButton}
+          onPress={downloadActivityReport}
+          disabled={isGeneratingPdf}
+        >
+          <Ionicons name="document-text-outline" size={18} color="#ffffff" />
+          {isGeneratingPdf && <ActivityIndicator size="small" color="#ffffff" style={{marginLeft: 5}} />}
+        </TouchableOpacity>
       </View>
       
       <AdminActivityList />
@@ -38,7 +80,7 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#4A90E2',
+    backgroundColor: '#2e2e2e',
     padding: 15,
     paddingTop: 40, // Extra padding for status bar
   },
@@ -48,7 +90,16 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#ffffff',
+    color: '#fff3e5',
+    flex: 1,
+  },
+  pdfButton: {
+    backgroundColor: '#1c1c1c',
+    padding: 8,
+    borderRadius: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
 
