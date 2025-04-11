@@ -33,8 +33,17 @@ const AdminActivitiesScreen = ({ navigation }) => {
       // URL del endpoint del reporte
       const reportUrl = `${api.getApiUrl()}/api/reports/activities/pdf`;
       
-      // Abrir URL con el token incluido como parámetro de consulta
-      await Linking.openURL(`${reportUrl}?token=${token}`);
+      // Abrir URL con el token incluido como parámetro de consulta y encabezado de autorización
+      const fullUrl = `${reportUrl}?token=${encodeURIComponent(token)}`;
+      console.log('Abriendo URL:', fullUrl);
+      
+      // Intentar abrir la URL
+      const canOpen = await Linking.canOpenURL(fullUrl);
+      if (!canOpen) {
+        throw new Error('No se puede abrir la URL del reporte');
+      }
+      
+      await Linking.openURL(fullUrl);
       
       setIsGeneratingPdf(false);
     } catch (error) {

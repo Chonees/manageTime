@@ -3,6 +3,7 @@ const moment = require('moment');
 const User = require('../models/user.model');
 const Activity = require('../models/activity.model');
 const Task = require('../models/task.model');
+const jwt = require('jsonwebtoken');
 
 /**
  * Genera un reporte PDF con todas las actividades de todos los usuarios
@@ -11,30 +12,51 @@ const Task = require('../models/task.model');
  */
 exports.generateActivityReport = async (req, res) => {
   try {
+    console.log('Iniciando generación de reporte PDF');
+    console.log('Query params:', req.query);
+    console.log('Headers:', req.headers);
+    
     // Verificar autenticación - primero intentar desde token en parámetro de consulta
     if (req.query.token) {
       try {
-        const jwt = require('jsonwebtoken');
-        const decoded = jwt.verify(req.query.token, process.env.JWT_SECRET);
+        console.log('Token recibido en query:', req.query.token);
+        
+        // Verificar el token con el secreto adecuado
+        const JWT_SECRET = process.env.JWT_SECRET || 'tokenSecretJWT';
+        const decoded = jwt.verify(req.query.token, JWT_SECRET);
+        console.log('Token decodificado:', decoded);
+        
         if (decoded && decoded.id) {
           // Buscar usuario para verificar si es admin
           const user = await User.findById(decoded.id);
+          console.log('Usuario encontrado:', user ? user.username : 'ninguno');
           
           if (user && user.role === 'admin') {
             req.user = {
               id: user._id,
               role: user.role
             };
+            console.log('Usuario autenticado como admin');
+          } else {
+            console.log('Usuario no es admin:', user ? user.role : 'rol desconocido');
+            return res.status(403).json({ message: 'Acceso denegado: se requieren permisos de administrador' });
           }
+        } else {
+          console.log('Token no contiene ID de usuario');
+          return res.status(401).json({ message: 'Token inválido: falta información del usuario' });
         }
       } catch (tokenError) {
         console.error('Error al verificar token de consulta:', tokenError);
-        // Continuar con la verificación normal si el token de consulta falla
+        return res.status(401).json({ message: `Error de autenticación: ${tokenError.message}` });
       }
+    } else {
+      console.log('No se proporcionó token en los parámetros de consulta');
+      return res.status(401).json({ message: 'No se proporcionó token de autenticación' });
     }
 
     // Verificar que el usuario sea administrador
     if (!req.user || req.user.role !== 'admin') {
+      console.log('Acceso denegado: No es admin o no hay usuario autenticado');
       return res.status(403).json({ message: 'Acceso denegado: se requieren permisos de administrador' });
     }
 
