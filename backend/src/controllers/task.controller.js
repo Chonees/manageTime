@@ -226,15 +226,30 @@ exports.getMyTasks = async (req, res) => {
 // Obtener todas las tareas (solo admin)
 exports.getAllTasks = async (req, res) => {
   try {
-    const tasks = await Task.find()
-                           .sort({ createdAt: -1 })
-                           .populate('userId', 'username email');
+    console.log(`Administrador ${req.user.username} solicitando todas las tareas`);
     
-    console.log(`Admin ${req.user.username} obtuvo ${tasks.length} tareas`);
-    res.status(200).json(tasks);
+    // Añadir manejo de errores y validación
+    if (!req.user || !req.user.isAdmin) {
+      console.log('Usuario no autorizado intentando obtener todas las tareas');
+      return res.status(403).json({ message: 'No autorizado para ver todas las tareas' });
+    }
+    
+    const tasks = await Task.find()
+                         .sort({ createdAt: -1 })
+                         .populate('userId', 'username email')
+                         .lean();  // Añadido .lean() para mejorar rendimiento
+    
+    // Verificar resultado
+    if (!tasks) {
+      console.log('No se pudieron recuperar las tareas');
+      return res.status(404).json({ message: 'No se encontraron tareas' });
+    }
+    
+    console.log(`Admin ${req.user.username} obtuvo ${tasks.length} tareas correctamente`);
+    return res.status(200).json(tasks);
   } catch (error) {
     console.error('Error al obtener todas las tareas:', error);
-    res.status(500).json({ message: 'Error al obtener todas las tareas' });
+    return res.status(500).json({ message: 'Error al obtener todas las tareas', error: error.message });
   }
 };
 
