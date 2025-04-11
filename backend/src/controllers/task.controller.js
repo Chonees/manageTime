@@ -395,18 +395,21 @@ exports.deleteTask = async (req, res) => {
 exports.getActiveTask = async (req, res) => {
   try {
     const userId = req.user.id;
+    console.log(`Buscando tarea activa para usuario ID: ${userId}`);
     
     // Buscar la tarea más reciente que esté en progreso para este usuario
     const activeTask = await Task.findOne({
-      assignedTo: userId,
+      userId: userId, // Cambiado de assignedTo a userId para coincidir con el modelo
       status: 'in_progress',
       handsFreeMode: true // Solo tareas que tengan el modo manos libres
-    }).sort({ startedAt: -1 });
+    }).sort({ createdAt: -1 }); // Cambiado de startedAt a createdAt
     
     if (!activeTask) {
+      console.log(`No se encontraron tareas activas con modo manos libres para usuario ${userId}`);
       return res.status(404).json({ message: 'No hay tareas activas con modo manos libres' });
     }
     
+    console.log(`Tarea activa encontrada: ${activeTask.title} (ID: ${activeTask.id})`);
     res.status(200).json(activeTask);
   } catch (error) {
     console.error('Error al obtener tarea activa:', error);
@@ -427,7 +430,7 @@ exports.addTaskNote = async (req, res) => {
     // Verificar que la tarea exista y esté asignada al usuario
     const task = await Task.findOne({ 
       _id: taskId, 
-      assignedTo: userId
+      userId: userId
     });
     
     if (!task) {

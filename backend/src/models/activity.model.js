@@ -28,7 +28,12 @@ const ActivitySchema = new Schema({
       'clock_in',
       'clock_out',
       'task_activity',
-      'voice_note' // Nuevo tipo para notas de voz
+      'voice_note',
+      'location_enter',
+      'location_exit',
+      'task_create',
+      'task_update',
+      'task_complete'
     ]
   },
   
