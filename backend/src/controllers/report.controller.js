@@ -31,14 +31,15 @@ exports.generateActivityReport = async (req, res) => {
           const user = await User.findById(decoded.id);
           console.log('Usuario encontrado:', user ? user.username : 'ninguno');
           
-          if (user && user.role === 'admin') {
+          if (user && (user.isAdmin === true || decoded.isAdmin === true)) {
             req.user = {
               id: user._id,
-              role: user.role
+              role: 'admin', // Establecer role para compatibilidad
+              isAdmin: true
             };
             console.log('Usuario autenticado como admin');
           } else {
-            console.log('Usuario no es admin:', user ? user.role : 'rol desconocido');
+            console.log('Usuario no es admin:', user ? (user.isAdmin ? 'Es admin' : 'No es admin') : 'rol desconocido');
             return res.status(403).json({ message: 'Acceso denegado: se requieren permisos de administrador' });
           }
         } else {
@@ -55,7 +56,7 @@ exports.generateActivityReport = async (req, res) => {
     }
 
     // Verificar que el usuario sea administrador
-    if (!req.user || req.user.role !== 'admin') {
+    if (!req.user || !req.user.isAdmin) {
       console.log('Acceso denegado: No es admin o no hay usuario autenticado');
       return res.status(403).json({ message: 'Acceso denegado: se requieren permisos de administrador' });
     }
