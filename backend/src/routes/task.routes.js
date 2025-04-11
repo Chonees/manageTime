@@ -7,17 +7,17 @@ const { verifyToken, isAdmin } = require('../middleware/auth.middleware');
 router.use(verifyToken);
 
 // Rutas accesibles para todos los usuarios autenticados
-router.get('/my-tasks', taskController.getMyTasks);
-router.get('/nearby', taskController.getNearbyTasks);
+router.get('/my-tasks', (req, res) => taskController.getMyTasks(req, res));
+router.get('/nearby', (req, res) => taskController.getNearbyTasks(req, res));
 router.get('/active', (req, res) => taskController.getActiveTask(req, res)); // Obtener tarea activa (manos libres)
 router.post('/note', (req, res) => taskController.addTaskNote(req, res)); // Añadir notas de voz
-router.get('/:id', taskController.getTaskById); // Obtener una tarea específica
-router.put('/:id', taskController.updateTask); // Actualizar una tarea (si es el propietario)
-router.delete('/:id', taskController.deleteTask); // Eliminar una tarea (si es el propietario)
+router.get('/:id', (req, res) => taskController.getTaskById(req, res)); // Obtener una tarea específica
+router.put('/:id', (req, res) => taskController.updateTask(req, res)); // Actualizar una tarea (si es el propietario)
+router.delete('/:id', (req, res) => taskController.deleteTask(req, res)); // Eliminar una tarea (si es el propietario)
 
 // Rutas para administradores
-router.get('/', taskController.getAllTasks); // Obtener todas las tareas (filtradas según permisos)
-router.post('/', taskController.createTask); // Crear una tarea (todos pueden, pero los admins tienen más opciones)
-router.post('/assign', isAdmin, taskController.createAssignedTask); // Asignar tareas (solo admins)
+router.get('/', (req, res) => taskController.getAllTasks(req, res)); // Obtener todas las tareas (filtradas según permisos)
+router.post('/', (req, res) => taskController.createTask(req, res)); // Crear una tarea (todos pueden, pero los admins tienen más opciones)
+router.post('/assign', isAdmin, (req, res) => taskController.createAssignedTask(req, res)); // Asignar tareas (solo admins)
 
 module.exports = router;
