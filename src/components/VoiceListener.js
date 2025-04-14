@@ -7,7 +7,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Constantes para configuración
 const LISTENING_INTERVAL = 2000; // Intervalo de escucha en ms (2 segundos)
-const LISTENING_DURATION = 3000; // Duración de cada escucha en ms (3 segundos)
+const LISTENING_DURATION = 5000; // Duración de cada escucha en ms (5 segundos)
 const ACTIVATION_KEYWORD = 'hola'; // Palabra clave de activación
 
 const recordingOptions = {
@@ -15,16 +15,16 @@ const recordingOptions = {
     extension: '.m4a',
     outputFormat: Audio.RECORDING_OPTIONS_PRESET_HIGH_QUALITY,
     audioEncoder: Audio.RECORDING_OPTION_ANDROID_AUDIO_ENCODER_AAC,
-    sampleRate: 44100,
-    numberOfChannels: 2,
+    sampleRate: 16000,
+    numberOfChannels: 1,
     bitRate: 128000,
   },
   ios: {
     extension: '.m4a',
     outputFormat: Audio.RECORDING_OPTION_IOS_OUTPUT_FORMAT_MPEG4AAC,
     audioQuality: Audio.RECORDING_OPTION_IOS_AUDIO_QUALITY_MAX,
-    sampleRate: 44100,
-    numberOfChannels: 2,
+    sampleRate: 16000,
+    numberOfChannels: 1,
     bitRate: 128000,
     linearPCMBitDepth: 16,
     linearPCMIsBigEndian: false,
@@ -74,66 +74,78 @@ const VoiceListener = ({ isTaskActive = false, taskData = null }) => {
     }
   };
   
-  // Inicializar el sistema de escucha
   useEffect(() => {
     // Solo activar si hay una tarea activa
     if (isTaskActive) {
-      startListeningCycle();
+      // Configuración mínima para iOS
+      if (Platform.OS === 'ios') {
+        Audio.setAudioModeAsync({
+          allowsRecordingIOS: true,
+          playsInSilentModeIOS: true
+        }).then(() => {
+          addDebugMessage('Audio mode configurado para iOS (config mínima)');
+          startListeningCycle();
+        }).catch(error => {
+          addDebugMessage(`Error configurando audio mode: ${error.message}`);
+        });
+      } else {
+        startListeningCycle();
+      }
       addDebugMessage('Iniciando sistema de escucha continua para tareas');
       
       // Informar brevemente al usuario
       Speech.speak("Sistema de voz activado. Diga hola para tomar notas.", {
         language: 'es-ES',
         pitch: 1.0,
-        rate: 0.9
       });
-      
-      setIsEnabled(true);
-    } else {
-      stopListeningCycle();
-      setIsEnabled(false);
+  
+      // Cleanup function
+      return () => {
+        ensureNoActiveRecordings();
+        if (intervalTimerRef.current) {
+          clearInterval(intervalTimerRef.current);
+          intervalTimerRef.current = null;
+        }
+        if (listeningTimerRef.current) {
+          clearTimeout(listeningTimerRef.current);
+          listeningTimerRef.current = null;
+        }
+      };
+    }
+  }, [isTaskActive]);
+  // Función para iniciar el ciclo de escucha
+const startListeningCycle = async () => {
+  try {
+    // Verificar permisos
+    const { status } = await Audio.requestPermissionsAsync();
+    addDebugMessage(`Estado de permisos: ${status}`);
+    
+    if (status !== 'granted') {
+      addDebugMessage('Permisos de audio denegados');
+      return;
     }
     
-    // Limpiar al desmontar
-    return () => {
-      stopListeningCycle();
-    };
-  }, [isTaskActive]);
-  
-  // Función para iniciar el ciclo de escucha
-  const startListeningCycle = async () => {
-    try {
-      // Verificar permisos
-      const { status } = await Audio.requestPermissionsAsync();
-      addDebugMessage(`Estado de permisos: ${status}`);
-      
-      if (status !== 'granted') {
-        addDebugMessage('Permisos de audio denegados');
+    // Detener cualquier escucha previa
+    stopListeningCycle();
+    
+    // Limpiar grabaciones previas
+    await ensureNoActiveRecordings();
+    
+    // Iniciar ciclo de escucha
+    addDebugMessage('Ciclo de escucha iniciado');
+    intervalTimerRef.current = setInterval(() => {
+      // Si ya hay una escucha activa, no iniciar otra
+      if (isListening || recordingRef.current) {
         return;
       }
       
-      // Detener cualquier escucha previa
-      stopListeningCycle();
-      
-      // Limpiar grabaciones previas
-      await ensureNoActiveRecordings();
-      
-      // Iniciar ciclo de escucha
-      addDebugMessage('Ciclo de escucha iniciado');
-      intervalTimerRef.current = setInterval(() => {
-        // Si ya hay una escucha activa, no iniciar otra
-        if (isListening || recordingRef.current) {
-          return;
-        }
-        
-        // Iniciar escucha para palabra clave
-        startListeningForKeyword();
-      }, LISTENING_INTERVAL); // Verificar cada LISTENING_INTERVAL segundos si podemos iniciar una nueva escucha
-    } catch (error) {
-      addDebugMessage(`Error iniciando ciclo de escucha: ${error.message}`);
-    }
-  };
-  
+      // Iniciar escucha para palabra clave
+      startListeningForKeyword();
+    }, LISTENING_INTERVAL); // Verificar cada LISTENING_INTERVAL segundos si podemos iniciar una nueva escucha
+  } catch (error) {
+    addDebugMessage(`Error iniciando ciclo de escucha: ${error.message}`);
+  }
+};
   // Detener el ciclo de escucha
   const stopListeningCycle = () => {
     // Detener la escucha actual si existe
@@ -171,6 +183,15 @@ const VoiceListener = ({ isTaskActive = false, taskData = null }) => {
       if (status !== 'granted') {
         return;
       }
+    // Configuración mínima para iOS
+    if (Platform.OS === 'ios') {
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true
+      });
+      addDebugMessage('Audio mode configurado para iOS (config mínima)');
+    }
+
       
       // Limpiar grabaciones anteriores
       await ensureNoActiveRecordings();
@@ -385,6 +406,15 @@ const VoiceListener = ({ isTaskActive = false, taskData = null }) => {
       
       // Asegurar que no hay grabaciones activas
       await ensureNoActiveRecordings();
+    // Configuración mínima para iOS
+    if (Platform.OS === 'ios') {
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true
+      });
+      addDebugMessage('Audio mode configurado para iOS (config mínima)');
+    }
+
       
       // Configurar la grabación
       const recording = new Audio.Recording();
@@ -545,6 +575,15 @@ const VoiceListener = ({ isTaskActive = false, taskData = null }) => {
       
       // Asegurar que no hay grabaciones activas
       await ensureNoActiveRecordings();
+    // Configuración mínima para iOS
+    if (Platform.OS === 'ios') {
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true
+      });
+      addDebugMessage('Audio mode configurado para iOS (config mínima)');
+    }
+
       
       // Configurar la grabación
       const recording = new Audio.Recording();
@@ -879,10 +918,12 @@ const VoiceListener = ({ isTaskActive = false, taskData = null }) => {
         },
         body: JSON.stringify({
           config: {
-            encoding: 'AMR',
-            sampleRateHertz: 8000,
+            encoding: 'LINEAR16',
+            sampleRateHertz: 16000,
             languageCode: 'es-ES',
             model: 'command_and_search',
+            enableAutomaticPunctuation: true,
+            useEnhanced: true,
             speechContexts: [{
               phrases: [ACTIVATION_KEYWORD],
               boost: 20
@@ -894,8 +935,23 @@ const VoiceListener = ({ isTaskActive = false, taskData = null }) => {
         }),
       });
       
-      // Procesar respuesta
-      const data = await response.json();
+      // Proceso de depuración para mostrar la respuesta completa
+      const dataText = await response.text();
+      const audioFileInfo = await FileSystem.getInfoAsync(audioUri);
+        addDebugMessage(`Tamaño del archivo de audio: ${audioFileInfo.size} bytes`);
+        addDebugMessage(`URI del archivo: ${audioUri.slice(0, 30)}...`);
+if (dataText.includes('"results":[]') || !dataText.includes('"results"')) {
+        addDebugMessage('Google no detectó voz en el audio');
+}
+        addDebugMessage(`Respuesta de Google Speech: ${dataText.slice(0, 200)}...`);
+      
+      let data;
+      try {
+        data = JSON.parse(dataText);
+      } catch (parseError) {
+        addDebugMessage(`Error al parsear respuesta: ${parseError.message}`);
+        return '';
+      }
       
       // Extraer texto reconocido
       if (data.results && data.results.length > 0) {
