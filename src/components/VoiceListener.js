@@ -7,8 +7,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Constantes para configuración
 const LISTENING_INTERVAL = 2000; // Intervalo de escucha en ms (2 segundos)
-const LISTENING_DURATION = 5000; // Duración de cada escucha en ms (5 segundos)
-const ACTIVATION_KEYWORD = 'hola'; // Palabra clave de activación
+const LISTENING_DURATION = 3000; // Duración de cada escucha en ms (5 segundos)
+const ACTIVATION_KEYWORD = 'ei'; // Palabra clave de activación
 
 const recordingOptions = {
   android: {
