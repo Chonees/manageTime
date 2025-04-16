@@ -8,7 +8,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 // Constantes para configuración
 const LISTENING_INTERVAL = 2000; // Intervalo de escucha en ms (2 segundos)
 const LISTENING_DURATION = 3000; // Duración de cada escucha en ms (5 segundos)
-const ACTIVATION_KEYWORD = 'ei'; // Palabra clave de activación
+const ACTIVATION_KEYWORD = 'malena'; // Palabra clave de activación
 
 const recordingOptions = {
   android: {
@@ -502,7 +502,7 @@ const startListeningCycle = async () => {
         
         // Enviar la nota al backend
         if (noteText && noteText.trim().length > 0) {
-          addDebugMessage('Simulando guardado de nota...');
+          addDebugMessage('Enviando nota de voz al backend...');
           
           // Decir que se ha entendido la nota y esperar a que termine
           await new Promise((resolve) => {
@@ -797,7 +797,7 @@ const startListeningCycle = async () => {
     }
   };
   
-  // Guardar la nota usando la API exactamente como lo hace VoiceAssistantSimulator
+  // Guardar la nota en el backend
   const saveNote = async (noteText) => {
     try {
       addDebugMessage('Guardando nota en el backend...');
@@ -825,11 +825,11 @@ const startListeningCycle = async () => {
       
       addDebugMessage(`Guardando nota para tarea ID: ${taskId}`);
       
-      // Construir URL directamente con el endpoint correcto (igual que en el simulador)
+      // Construir URL para la API del backend
       const url = `https://managetime-backend-48f256c2dfe5.herokuapp.com/api/tasks/${taskId}/note`;
       addDebugMessage(`URL para guardar nota: ${url}`);
       
-      // Crear opciones exactamente iguales a las del simulador
+      // Configurar opciones para la petición
       const options = {
         method: 'POST',
         headers: {
@@ -845,11 +845,11 @@ const startListeningCycle = async () => {
       
       addDebugMessage(`Opciones de la petición: ${JSON.stringify(options, null, 2)}`);
       
-      // Realizar petición exactamente como en el simulador
+      // Realizar petición al backend
       const response = await fetch(url, options);
       addDebugMessage(`Respuesta del servidor: ${response.status}`);
       
-      // Manejar errores igual que en el simulador
+      // Manejar errores de la respuesta
       if (!response.ok) {
         const errorText = await response.text();
         addDebugMessage(`Error del servidor: ${errorText}`);
