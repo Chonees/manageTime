@@ -1037,7 +1037,7 @@ export const getRecentActivities = async () => {
     const transformedData = data.map(activity => ({
       id: activity.id || activity._id,
       type: activity.type,
-      action: activity.action,
+      action: getActionFromType(activity.type),
       username: activity.username,
       title: activity.title,
       message: activity.message,
@@ -1249,7 +1249,7 @@ export const saveActivity = async (activityData) => {
     });
 
     if (!response.ok) {
-      const errorText = await response.text().catch(() => 'No error details available');
+      const errorText = await response.text();
       console.error(`Activity save failed with status ${response.status}:`, errorText);
       
       // Si es un error 404 para una actividad de eliminación de tarea, registrarlo pero no lanzar excepción
@@ -1402,6 +1402,22 @@ export const getTaskById = async (taskId) => {
   try {
     console.log(`Obteniendo tarea con ID: ${taskId}`);
     
+    // Try to get from local cache first
+    try {
+      const cachedTasksString = await AsyncStorage.getItem('cachedTasks');
+      if (cachedTasksString) {
+        const cachedTasks = JSON.parse(cachedTasksString);
+        const cachedTask = cachedTasks.find(task => task._id === taskId);
+        if (cachedTask) {
+          console.log('Found task in local cache, using cached data');
+          return cachedTask;
+        }
+      }
+    } catch (cacheError) {
+      console.warn('Error checking task cache:', cacheError);
+      // Continue with API request even if cache check fails
+    }
+    
     // Obtenemos el token de autenticación directamente
     let token;
     try {
@@ -1442,6 +1458,25 @@ export const getTaskById = async (taskId) => {
         if (response.ok) {
           const data = await response.json();
           console.log('Datos de tarea recibidos:', JSON.stringify(data).substring(0, 100) + '...');
+          
+          // Cache the task for future use
+          try {
+            const cachedTasksString = await AsyncStorage.getItem('cachedTasks');
+            const cachedTasks = cachedTasksString ? JSON.parse(cachedTasksString) : [];
+            
+            // Remove old version of this task if it exists
+            const filteredTasks = cachedTasks.filter(task => task._id !== taskId);
+            
+            // Add the new task data
+            filteredTasks.push(data);
+            
+            // Store back in AsyncStorage (limit to 50 tasks to avoid storage issues)
+            await AsyncStorage.setItem('cachedTasks', JSON.stringify(filteredTasks.slice(-50)));
+          } catch (cacheError) {
+            console.warn('Error caching task data:', cacheError);
+            // Continue even if caching fails
+          }
+          
           return data;
         }
         
@@ -1455,15 +1490,56 @@ export const getTaskById = async (taskId) => {
       }
     }
     
+    // If we reach here, try to get from user's tasks as a last resort
+    try {
+      console.log('Trying to find task in user tasks list as last resort...');
+      const userTasks = await getUserTasks();
+      const foundTask = userTasks.find(task => task._id === taskId);
+      if (foundTask) {
+        console.log('Found task in user tasks list:', foundTask);
+        return foundTask;
+      }
+    } catch (userTasksError) {
+      console.error('Error getting user tasks as fallback:', userTasksError);
+      // Continue to throw the original error
+    }
+    
     // Si llegamos aquí es porque ninguna URL funcionó
     throw lastError || new Error(`No se pudo obtener la tarea con ID ${taskId}`);
   } catch (error) {
     console.error(`Error al obtener tarea con ID ${taskId}:`, error);
-    throw error;
+    if (error.message.includes('401')) {
+      console.log('Error de autorización, intentando obtener tarea sin token');
+      try {
+        const tokenlessOptions = {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        };
+        const response = await fetchWithRetry(`${getApiUrl()}/api/tasks/${taskId}`, tokenlessOptions);
+        if (response.ok) {
+          const data = await response.json();
+          console.log('Datos de tarea recibidos sin token:', JSON.stringify(data).substring(0, 100) + '...');
+          return data;
+        } else {
+          throw new Error(`Error ${response.status}: ${response.statusText}`);
+        }
+      } catch (tokenlessError) {
+        console.error('Error al obtener tarea sin token:', tokenlessError);
+        throw error;
+      }
+    } else {
+      throw error;
+    }
   }
 };
 
-// Get user by ID
+/**
+ * Get user by ID
+ * @param {string} userId - ID of the user
+ * @returns {Promise<Object>} User data
+ */
 export const getUserById = async (userId) => {
   try {
     console.log(`Obteniendo usuario con ID: ${userId}`);
@@ -1694,11 +1770,18 @@ const getActionFromType = (type) => {
 export const getTaskActivities = async (taskId) => {
   try {
     const authHeader = await getAuthHeader();
-    if (!authHeader) {
-      throw new Error('No auth token available');
+    if (!authHeader || !authHeader.Authorization) {
+      throw new Error('No se proporcionó token de autenticación');
     }
 
-    const options = createFetchOptions('GET');
+    const options = {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeader
+      }
+    };
+    
     const url = `${getApiUrl()}/api/activities/task/${taskId}`;
     
     console.log(`Fetching activities for task: ${taskId}`);

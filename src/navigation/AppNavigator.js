@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from 'react';
-import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { ActivityIndicator, View, StyleSheet, Text } from 'react-native';
 import { startLocationMonitoring, stopLocationMonitoring } from '../services/location-service';
@@ -15,6 +14,7 @@ import TaskScreen from '../screens/TaskScreen';
 import TaskDetailsScreen from '../screens/TaskDetailsScreen';
 import LocationHistoryScreen from '../screens/LocationHistoryScreen';
 import VoiceAssistantScreen from '../screens/VoiceAssistantScreen';
+import LocationTrackingScreen from '../screens/LocationTrackingScreen';
 
 // Pantallas de administrador
 import AdminDashboardScreen from '../screens/admin/AdminDashboardScreen';
@@ -24,6 +24,7 @@ import UserManagementScreen from '../screens/admin/UserManagementScreen';
 // Contexto de autenticación
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
+import { LocationTrackingProvider } from '../context/LocationTrackingContext';
 
 // Crear navegadores
 const Stack = createStackNavigator();
@@ -87,6 +88,11 @@ const UserNavigator = () => {
         name="VoiceAssistant" 
         component={VoiceAssistantScreen}
         options={{ headerShown: false }}
+      />
+      <Stack.Screen 
+        name="LocationTrackingScreen" 
+        component={LocationTrackingScreen}
+        options={{ headerShown: true, title: 'Location Tracking' }}
       />
     </Stack.Navigator>
   );
@@ -171,13 +177,13 @@ const AppNavigator = () => {
 
   // Renderizar el navegador adecuado según si el usuario está autenticado y su rol
   return (
-    <>
+    <LocationTrackingProvider>
       {!user ? (
         <AuthNavigator />
       ) : (
         user.isAdmin ? <AdminNavigator /> : <UserNavigator />
       )}
-    </>
+    </LocationTrackingProvider>
   );
 };
 

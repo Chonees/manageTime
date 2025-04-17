@@ -4,6 +4,7 @@ import * as Location from 'expo-location';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
+import { useLocationTracking } from '../context/LocationTrackingContext';
 import * as api from '../services/api';
 import { mapConfig } from '../services/platform-config';
 import VerificationPrompt from './VerificationPrompt';
@@ -11,6 +12,7 @@ import VerificationPrompt from './VerificationPrompt';
 const LocationComponent = ({ onLocationChange, showWorkControls = false }) => {
   const { user } = useAuth();
   const { t } = useLanguage();
+  const { startTracking, stopTracking } = useLocationTracking();
   const [location, setLocation] = useState(null);
   const [errorMsg, setErrorMsg] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -228,7 +230,7 @@ const LocationComponent = ({ onLocationChange, showWorkControls = false }) => {
       
       // Start work and location tracking
       await api.startWork(coords);
-      
+      startTracking();
       setIsWorking(true);
       setWorkStartTime(new Date());
       
@@ -268,7 +270,7 @@ const LocationComponent = ({ onLocationChange, showWorkControls = false }) => {
       
       // End work and stop location tracking
       await api.endWork(coords);
-      
+      stopTracking();
       setIsWorking(false);
       setWorkStartTime(null);
       
