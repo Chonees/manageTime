@@ -72,7 +72,7 @@ const registerTaskActivity = async (userId, taskId, type, taskData) => {
 // Crear una nueva tarea
 exports.createTask = async (req, res) => {
   try {
-    const { title, description, userId, location, radius, locationName, handsFreeMode, status } = req.body;
+    const { title, description, userId, location, radius, locationName, handsFreeMode, status, keywords } = req.body;
     
     console.log('Datos recibidos para crear tarea:', req.body);
     
@@ -98,7 +98,8 @@ exports.createTask = async (req, res) => {
       userId: assignedUserId,
       completed: false,
       handsFreeMode: handsFreeMode === true, // Asegurar que se guarde como booleano
-      status: status || 'pending' // Usar el status proporcionado o 'pending' por defecto
+      status: status || 'pending', // Usar el status proporcionado o 'pending' por defecto
+      keywords: keywords || '' // Guardar las palabras clave específicas para activación por voz
     };
     
     // Añadir información de ubicación si se proporciona
@@ -144,7 +145,7 @@ exports.createTask = async (req, res) => {
 // Crear una tarea asignada a otro usuario (solo admin)
 exports.createAssignedTask = async (req, res) => {
   try {
-    const { title, description, userId, location, radius, locationName, handsFreeMode, status } = req.body;
+    const { title, description, userId, location, radius, locationName, handsFreeMode, status, keywords } = req.body;
     
     console.log('Admin creando tarea asignada con datos:', req.body);
     
@@ -165,7 +166,8 @@ exports.createAssignedTask = async (req, res) => {
       userId: userId,
       completed: false,
       handsFreeMode: handsFreeMode === true, // Asegurar que se guarde como booleano
-      status: status || 'pending' // Usar el status proporcionado o 'pending' por defecto
+      status: status || 'pending', // Usar el status proporcionado o 'pending' por defecto
+      keywords: keywords || '' // Guardar las palabras clave específicas para activación por voz
     };
     
     // Añadir información de ubicación si se proporciona

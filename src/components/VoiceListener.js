@@ -8,8 +8,8 @@ import { Asset } from 'expo-asset';
 // Cargar el archivo de audio para que esté disponible
 const audioFile = require('../assets/sounds/micro.mp3');
 
-// Palabras clave específicas a detectar
-const KEYWORDS = ["tanques", "gas", "petroleo"];
+// Palabras clave predeterminadas como respaldo
+const DEFAULT_KEYWORDS = ["tanques", "gas", "petroleo"];
 
 // Configuración simplificada para iOS
 const CONFIG_IOS = {
@@ -42,6 +42,7 @@ const VoiceListener = ({ isTaskActive = false, taskData = null }) => {
   const [isListening, setIsListening] = useState(false);
   const recordingRef = useRef(null);
   const timeoutRef = useRef(null);
+  const [taskKeywords, setTaskKeywords] = useState([]);
 
   // Para mostrar mensajes de debug en la consola
   const logDebug = (message) => {
@@ -53,6 +54,41 @@ const VoiceListener = ({ isTaskActive = false, taskData = null }) => {
     // Solo activar si hay una tarea activa
     if (isTaskActive && taskData) {
       logDebug('Tarea activa detectada - Iniciando sistema de escucha');
+      logDebug(`Datos de la tarea recibidos: ${JSON.stringify(taskData, null, 2)}`);
+      
+      // Extraer palabras clave específicas de la tarea si existen
+      if (taskData.handsFreeMode) {
+        logDebug(`La tarea tiene modo manos libres activado`);
+        
+        if (taskData.keywords) {
+          logDebug(`Palabras clave de la tarea encontradas: ${taskData.keywords}`);
+          
+          // Convertir el string de palabras clave a un array
+          let keywords = [];
+          if (typeof taskData.keywords === 'string') {
+            keywords = taskData.keywords
+              .split(',')
+              .map(word => word.trim().toLowerCase())
+              .filter(word => word.length > 0);
+          } else if (Array.isArray(taskData.keywords)) {
+            keywords = taskData.keywords.map(word => word.toLowerCase());
+          }
+          
+          if (keywords.length > 0) {
+            setTaskKeywords(keywords);
+            logDebug(`Palabras clave específicas configuradas: ${keywords.join(', ')}`);
+          } else {
+            logDebug(`No se encontraron palabras clave válidas en la tarea, usando predeterminadas`);
+            setTaskKeywords(DEFAULT_KEYWORDS);
+          }
+        } else {
+          logDebug(`No hay campo keywords en la tarea, usando palabras clave predeterminadas`);
+          setTaskKeywords(DEFAULT_KEYWORDS);
+        }
+      } else {
+        logDebug(`La tarea NO tiene modo manos libres, usando palabras clave predeterminadas`);
+        setTaskKeywords(DEFAULT_KEYWORDS);
+      }
       
       // Configurar audio (versión ultra simplificada)
       Audio.setAudioModeAsync(CONFIG_IOS).then(() => {
@@ -188,9 +224,12 @@ const VoiceListener = ({ isTaskActive = false, taskData = null }) => {
         // Convertir a minúsculas para comparación
         const lowerText = recognizedText.toLowerCase();
         
+        // Mostrar las palabras clave que estamos buscando
+        logDebug(`Buscando coincidencias con palabras clave: ${JSON.stringify(taskKeywords)}`);
+        
         // Buscar palabras clave
-        const foundKeywords = KEYWORDS.filter(keyword => 
-          lowerText.includes(keyword.toLowerCase())
+        const foundKeywords = taskKeywords.filter(keyword => 
+          lowerText.includes(keyword)
         );
         
         if (foundKeywords.length > 0) {
@@ -210,6 +249,8 @@ const VoiceListener = ({ isTaskActive = false, taskData = null }) => {
           } catch (audioError) {
             logDebug(`Error reproduciendo sonido: ${audioError.message}`);
           }
+        } else {
+          logDebug(`No se encontraron coincidencias con las palabras clave configuradas`);
         }
       }
       
@@ -230,6 +271,9 @@ const VoiceListener = ({ isTaskActive = false, taskData = null }) => {
         encoding: FileSystem.EncodingType.Base64 
       });
       
+      // Registrar las palabras clave que se usarán para el reconocimiento
+      logDebug(`Usando palabras clave para reconocimiento: ${JSON.stringify(taskKeywords)}`);
+      
       // Enviar a Google Speech API - optimizado para velocidad
       const response = await fetch('https://speech.googleapis.com/v1/speech:recognize?key=AIzaSyDGqyJR4KZRJt9qRLmeGjdlgIBt_nb7Kqw', {
         method: 'POST',
@@ -245,7 +289,7 @@ const VoiceListener = ({ isTaskActive = false, taskData = null }) => {
             enableAutomaticPunctuation: false,
             useEnhanced: false,  // Más rápido
             speechContexts: [{
-              phrases: KEYWORDS,
+              phrases: taskKeywords,
               boost: 20
             }]
           },
@@ -309,7 +353,7 @@ const VoiceListener = ({ isTaskActive = false, taskData = null }) => {
     }
   };
 
-  // Guardar nota en el backend
+  // saveNote on backend
   const saveNote = async (noteText) => {
     try {
       logDebug(`Guardando nota: ${noteText}`);

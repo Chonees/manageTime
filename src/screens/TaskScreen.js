@@ -36,6 +36,8 @@ const TaskScreen = ({ navigation }) => {
   const [taskRadius, setTaskRadius] = useState(1.0);
   const [taskLocationName, setTaskLocationName] = useState('');
   const [handsFreeMode, setHandsFreeMode] = useState(false);
+  const [taskKeywords, setTaskKeywords] = useState([]);
+  const [currentKeyword, setCurrentKeyword] = useState('');
 
   // Function to handle pull-to-refresh
   const onRefresh = async () => {
@@ -154,7 +156,8 @@ const TaskScreen = ({ navigation }) => {
         description: newTaskDescription,
         completed: false,
         handsFreeMode: handsFreeMode,  // Añadir opción de manos libres
-        status: handsFreeMode ? 'in_progress' : 'pending'  // Si es manos libres, establecer como in_progress
+        status: handsFreeMode ? 'in_progress' : 'pending',  // Si es manos libres, establecer como in_progress
+        keywords: handsFreeMode ? taskKeywords.join(',') : null
       };
       
       // Añadir información de ubicación si está configurada
@@ -252,6 +255,8 @@ const TaskScreen = ({ navigation }) => {
         setTaskRadius(1.0);
         setTaskLocationName('');
         setHandsFreeMode(false); // Restablecer el modo manos libres
+        setTaskKeywords([]); // Restablecer palabras clave
+        setCurrentKeyword(''); // Limpiar el campo de entrada actual
         setShowAddForm(false);
         
         console.log(t('taskAddedSuccessfully'));
@@ -557,6 +562,56 @@ const TaskScreen = ({ navigation }) => {
           </TouchableOpacity>
         </View>
         
+        {/* Campo para palabras clave solo si handsFreeMode está activado */}
+        {handsFreeMode && (
+          <View style={styles.keywordsContainer}>
+            <Text style={styles.keywordsLabel}>{t('voiceKeywords') || 'Palabras clave para activación por voz'}</Text>
+            
+            <View style={styles.keywordInputRow}>
+              <TextInput
+                style={[styles.input, styles.keywordInput]}
+                placeholder={t('keywordPlaceholder') || "Escriba una palabra clave"}
+                value={currentKeyword}
+                onChangeText={setCurrentKeyword}
+              />
+              <TouchableOpacity 
+                style={styles.addKeywordButton}
+                onPress={() => {
+                  if (currentKeyword.trim()) {
+                    setTaskKeywords([...taskKeywords, currentKeyword.trim()]);
+                    setCurrentKeyword('');
+                  }
+                }}
+              >
+                <Text style={styles.addKeywordButtonText}>+</Text>
+              </TouchableOpacity>
+            </View>
+            
+            {taskKeywords.length > 0 && (
+              <View style={styles.keywordsList}>
+                <Text style={styles.keywordsListTitle}>Keywords:</Text>
+                <View style={styles.keywordTags}>
+                  {taskKeywords.map((keyword, index) => (
+                    <View key={`keyword-${index}`} style={styles.keywordTag}>
+                      <Text style={styles.keywordTagText}>{keyword}</Text>
+                      <TouchableOpacity
+                        style={styles.removeKeywordButton}
+                        onPress={() => {
+                          const updatedKeywords = [...taskKeywords];
+                          updatedKeywords.splice(index, 1);
+                          setTaskKeywords(updatedKeywords);
+                        }}
+                      >
+                        <Text style={styles.removeKeywordButtonText}>×</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            )}
+          </View>
+        )}
+        
         {user?.isAdmin && (
           <TouchableOpacity 
             style={styles.userSelectButton}
@@ -583,6 +638,8 @@ const TaskScreen = ({ navigation }) => {
               setTaskRadius(1.0);
               setTaskLocationName('');
               setHandsFreeMode(false); // Restablecer el modo manos libres
+              setTaskKeywords([]); // Restablecer palabras clave
+              setCurrentKeyword(''); // Limpiar el campo de entrada actual
             }}
           >
             <Text style={styles.cancelButtonText}>{t('cancel')}</Text>
@@ -1038,6 +1095,76 @@ const styles = StyleSheet.create({
   },
   handsFreeHandleInactive: {
     marginLeft: 5,
+  },
+  keywordsContainer: {
+    marginBottom: 10,
+  },
+  keywordsLabel: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 5,
+  },
+  keywordInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  keywordInput: {
+    flex: 1,
+    height: 40,
+    marginRight: 10,
+  },
+  addKeywordButton: {
+    backgroundColor: '#4A90E2',
+    borderRadius: 20,
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  addKeywordButtonText: {
+    color: '#fff',
+    fontSize: 24,
+    fontWeight: 'bold',
+  },
+  keywordsList: {
+    marginTop: 5,
+  },
+  keywordsListTitle: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 5,
+  },
+  keywordTags: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  keywordTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#e1f5fe',
+    borderRadius: 15,
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    marginRight: 8,
+    marginBottom: 8,
+  },
+  keywordTagText: {
+    color: '#0277bd',
+    marginRight: 5,
+  },
+  removeKeywordButton: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#0277bd',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  removeKeywordButtonText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
   },
 });
 

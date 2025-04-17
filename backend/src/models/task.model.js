@@ -55,6 +55,11 @@ const taskSchema = new mongoose.Schema({
     type: Boolean,
     default: false // Por defecto, las tareas no tienen modo manos libres
   },
+  keywords: {
+    type: String,
+    trim: true,
+    default: '' // Palabras clave separadas por comas para la activación por voz
+  },
   startedAt: {
     type: Date
   }
