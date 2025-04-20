@@ -253,3 +253,73 @@ exports.saveTrackingPoint = async (req, res) => {
     res.status(500).json({ message: 'Error al guardar punto de seguimiento' });
   }
 };
+
+// Guardar múltiples ubicaciones en lote
+exports.saveBatchLocations = async (req, res) => {
+  try {
+    const { locations } = req.body;
+    
+    // Validar que se haya enviado un array de ubicaciones
+    if (!locations || !Array.isArray(locations) || locations.length === 0) {
+      return res.status(400).json({ 
+        message: 'Se requiere un array de ubicaciones para procesar' 
+      });
+    }
+    
+    console.log(`Procesando lote de ${locations.length} ubicaciones para el usuario ${req.user._id}`);
+    
+    // Array para almacenar los resultados
+    const savedLocations = [];
+    const errors = [];
+    
+    // Procesar cada ubicación en el lote
+    for (const loc of locations) {
+      try {
+        // Validar que tenga las propiedades necesarias
+        if (!loc.latitude || !loc.longitude) {
+          errors.push({
+            location: loc,
+            error: 'Coordenadas de ubicación faltantes'
+          });
+          continue;
+        }
+        
+        // Crear nuevo registro de ubicación
+        const location = new Location({
+          userId: req.user._id,
+          type: loc.type || 'tracking',
+          latitude: loc.latitude,
+          longitude: loc.longitude,
+          // Si la ubicación tiene timestamp, usarlo; de lo contrario, usar la fecha actual
+          timestamp: loc.timestamp || new Date()
+        });
+        
+        // Guardar en la base de datos
+        await location.save();
+        savedLocations.push(location);
+      } catch (locError) {
+        console.error('Error al guardar ubicación individual:', locError);
+        errors.push({
+          location: loc,
+          error: locError.message
+        });
+      }
+    }
+    
+    // Devolver los resultados
+    res.status(201).json({
+      success: true,
+      message: `${savedLocations.length} ubicaciones guardadas correctamente`,
+      savedCount: savedLocations.length,
+      errorCount: errors.length,
+      savedLocations,
+      errors
+    });
+  } catch (error) {
+    console.error('Error al procesar lote de ubicaciones:', error);
+    res.status(500).json({ 
+      message: 'Error al procesar lote de ubicaciones',
+      error: error.message
+    });
+  }
+};
