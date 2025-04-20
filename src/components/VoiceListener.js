@@ -8,32 +8,35 @@ import { Asset } from 'expo-asset';
 // Cargar el archivo de audio para que esté disponible
 const audioFile = require('../assets/sounds/micro.mp3');
 
-// Palabras clave predeterminadas como respaldo
-const DEFAULT_KEYWORDS = ["tanques", "gas", "petroleo"];
-
 // Configuración simplificada para iOS
 const CONFIG_IOS = {
   allowsRecordingIOS: true,
   playsInSilentModeIOS: true
 };
 
-// Opciones simplificadas para grabación en iOS
+// Configuración simplificada de grabación
 const recordingOptions = {
-  ios: {
-    extension: '.m4a',
-    outputFormat: Audio.RECORDING_OPTION_IOS_OUTPUT_FORMAT_MPEG4AAC,
-    audioQuality: Audio.RECORDING_OPTION_IOS_AUDIO_QUALITY_MAX,
+  android: {
+    extension: '.wav',
+    outputFormat: Audio.RECORDING_OPTION_ANDROID_OUTPUT_FORMAT_DEFAULT,
+    audioEncoder: Audio.RECORDING_OPTION_ANDROID_AUDIO_ENCODER_DEFAULT,
     sampleRate: 16000,
     numberOfChannels: 1,
     bitRate: 128000,
   },
-  android: {
-    extension: '.m4a',
-    outputFormat: 2,
-    audioEncoder: 3,
+  ios: {
+    extension: '.wav', 
+    audioQuality: Audio.RECORDING_OPTION_IOS_AUDIO_QUALITY_HIGH,
     sampleRate: 16000,
     numberOfChannels: 1,
     bitRate: 128000,
+    linearPCMBitDepth: 16,
+    linearPCMIsBigEndian: false,
+    linearPCMIsFloat: false,
+  },
+  web: {
+    mimeType: 'audio/webm',
+    audioBitsPerSecond: 128000
   }
 };
 
@@ -42,53 +45,77 @@ const VoiceListener = ({ isTaskActive = false, taskData = null }) => {
   const [isListening, setIsListening] = useState(false);
   const recordingRef = useRef(null);
   const timeoutRef = useRef(null);
-  const [taskKeywords, setTaskKeywords] = useState([]);
+  const keywordsRef = useRef([]); // Referencia para guardar las palabras clave
+  const currentTaskIdRef = useRef(null); // Referencia para guardar el ID de la tarea actual
+  const [audioUri, setAudioUri] = useState(null);
 
   // Para mostrar mensajes de debug en la consola
   const logDebug = (message) => {
     console.log(`[VoiceListener] ${message}`);
   };
 
+  // Función para extraer palabras clave de la tarea
+  const extractKeywordsFromTask = (task) => {
+    if (!task) {
+      logDebug('No hay datos de tarea para extraer palabras clave');
+      return [];
+    }
+
+    logDebug(`Extrayendo palabras clave de tarea: ${JSON.stringify(task, null, 2)}`);
+    
+    // Verificar si tiene handsFreeMode y keywords
+    if (task.handsFreeMode && task.keywords) {
+      logDebug(`Tarea tiene handsFreeMode=${task.handsFreeMode} y keywords="${task.keywords}"`);
+      
+      // Si keywords es un string no vacío, procesarlo
+      if (typeof task.keywords === 'string' && task.keywords.trim().length > 0) {
+        const keywordsList = task.keywords
+          .split(',')
+          .map(word => word.trim().toLowerCase())
+          .filter(word => word.length > 0);
+        
+        // Procesar también palabras individuales de frases más largas
+        const individualWords = keywordsList.reduce((acc, phrase) => {
+          // Dividir por espacios y filtrar palabras muy cortas
+          const words = phrase.split(' ').filter(w => w.length > 2);
+          return [...acc, ...words];
+        }, []);
+        
+        // Combinar frases y palabras individuales, eliminando duplicados
+        const combinedKeywords = [...new Set([...keywordsList, ...individualWords])];
+        
+        logDebug(`Palabras clave extraídas de la tarea: ${JSON.stringify(combinedKeywords)}`);
+        return combinedKeywords;
+      }
+      
+      // Si keywords es un array, usarlo directamente
+      if (Array.isArray(task.keywords) && task.keywords.length > 0) {
+        const keywordsList = task.keywords.map(k => k.toLowerCase());
+        logDebug(`Palabras clave (array) extraídas de la tarea: ${JSON.stringify(keywordsList)}`);
+        return keywordsList;
+      }
+    }
+    
+    logDebug('No se encontraron keywords válidas en la tarea');
+    return [];
+  };
+
   // Efecto que se ejecuta cuando la tarea cambia
   useEffect(() => {
     // Solo activar si hay una tarea activa
     if (isTaskActive && taskData) {
+      logDebug('==================================================');
       logDebug('Tarea activa detectada - Iniciando sistema de escucha');
-      logDebug(`Datos de la tarea recibidos: ${JSON.stringify(taskData, null, 2)}`);
       
-      // Extraer palabras clave específicas de la tarea si existen
-      if (taskData.handsFreeMode) {
-        logDebug(`La tarea tiene modo manos libres activado`);
-        
-        if (taskData.keywords) {
-          logDebug(`Palabras clave de la tarea encontradas: ${taskData.keywords}`);
-          
-          // Convertir el string de palabras clave a un array
-          let keywords = [];
-          if (typeof taskData.keywords === 'string') {
-            keywords = taskData.keywords
-              .split(',')
-              .map(word => word.trim().toLowerCase())
-              .filter(word => word.length > 0);
-          } else if (Array.isArray(taskData.keywords)) {
-            keywords = taskData.keywords.map(word => word.toLowerCase());
-          }
-          
-          if (keywords.length > 0) {
-            setTaskKeywords(keywords);
-            logDebug(`Palabras clave específicas configuradas: ${keywords.join(', ')}`);
-          } else {
-            logDebug(`No se encontraron palabras clave válidas en la tarea, usando predeterminadas`);
-            setTaskKeywords(DEFAULT_KEYWORDS);
-          }
-        } else {
-          logDebug(`No hay campo keywords en la tarea, usando palabras clave predeterminadas`);
-          setTaskKeywords(DEFAULT_KEYWORDS);
-        }
-      } else {
-        logDebug(`La tarea NO tiene modo manos libres, usando palabras clave predeterminadas`);
-        setTaskKeywords(DEFAULT_KEYWORDS);
-      }
+      // Extraer y configurar las palabras clave de la tarea
+      const extractedKeywords = extractKeywordsFromTask(taskData);
+      keywordsRef.current = extractedKeywords;
+      
+      // Guardar el ID de la tarea actual
+      currentTaskIdRef.current = taskData._id || taskData.id;
+      
+      logDebug(`Palabras clave configuradas para reconocimiento: ${JSON.stringify(extractedKeywords)}`);
+      logDebug('==================================================');
       
       // Configurar audio (versión ultra simplificada)
       Audio.setAudioModeAsync(CONFIG_IOS).then(() => {
@@ -116,7 +143,7 @@ const VoiceListener = ({ isTaskActive = false, taskData = null }) => {
     }
   }, [isTaskActive, taskData]);
 
-  // Iniciar el ciclo de escucha - más rápido (1.5 segundos)
+  // Iniciar el ciclo de escucha - versión simplificada
   const startListeningCycle = async () => {
     try {
       // Verificar permisos
@@ -132,10 +159,10 @@ const VoiceListener = ({ isTaskActive = false, taskData = null }) => {
       // Iniciar una nueva grabación
       await startRecording();
       
-      // Programar para detener más rápido (1.5 segundos)
+      // Programar para detener (4 segundos para dar más tiempo a hablar)
       timeoutRef.current = setTimeout(() => {
         processRecording();
-      }, 1500);
+      }, 4000);
       
     } catch (error) {
       logDebug(`Error en ciclo de escucha: ${error.message}`);
@@ -144,25 +171,32 @@ const VoiceListener = ({ isTaskActive = false, taskData = null }) => {
     }
   };
 
-  // Iniciar la grabación
+  // Iniciar grabación con Audio - versión simplificada
   const startRecording = async () => {
     try {
-      // Configuración ultra básica sin propiedades problemáticas
+      // Resetear el objeto de grabación
+      if (recordingRef.current) {
+        recordingRef.current = null;
+      }
+      
+      logDebug('Iniciando grabación de audio...');
+      
+      // Configuración básica del audio
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+      });
+      
+      // Iniciar la grabación con la configuración
       const recording = new Audio.Recording();
       await recording.prepareToRecordAsync(recordingOptions);
       await recording.startAsync();
       
-      // Guardar referencia y actualizar estado
+      logDebug('Grabación iniciada correctamente');
       recordingRef.current = recording;
-      setIsListening(true);
       
     } catch (error) {
       logDebug(`Error al iniciar grabación: ${error.message}`);
-      recordingRef.current = null;
-      setIsListening(false);
-      
-      // Reintentar después de un breve retraso
-      setTimeout(startListeningCycle, 500);
     }
   };
 
@@ -187,122 +221,165 @@ const VoiceListener = ({ isTaskActive = false, taskData = null }) => {
     }
   };
 
-  // Procesar la grabación
-  const processRecording = async () => {
+  // Detener la grabación y obtener el archivo
+  const stopRecording = async () => {
     try {
       if (!recordingRef.current) {
-        logDebug('No hay grabación activa para procesar');
-        startListeningCycle();
-        return;
+        logDebug('No hay grabación activa para detener');
+        return null;
       }
       
-      // Detener la grabación
-      let audioUri = null;
+      logDebug('Deteniendo grabación...');
+      await recordingRef.current.stopAndUnloadAsync();
       
-      try {
-        await recordingRef.current.stopAndUnloadAsync();
-        audioUri = recordingRef.current.getURI();
-      } catch (stopError) {
-        logDebug(`Error deteniendo grabación: ${stopError.message}`);
+      const uri = recordingRef.current.getURI();
+      logDebug(`Grabación completada, archivo guardado en: ${uri}`);
+      
+      // Verificar tamaño del archivo
+      const fileInfo = await FileSystem.getInfoAsync(uri);
+      logDebug(`Archivo de audio: existe=${fileInfo.exists}, tamaño=${fileInfo.size} bytes`);
+      
+      if (fileInfo.size < 1000) {
+        logDebug('⚠️ ADVERTENCIA: El archivo de audio es muy pequeño. Posible problema con el micrófono.');
       }
       
-      // Limpiar referencia
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: false,
+      });
+      
       recordingRef.current = null;
-      setIsListening(false);
-      
-      if (!audioUri) {
-        logDebug('No se pudo obtener audio válido');
-        startListeningCycle();
-        return;
-      }
-      
-      // Reconocer voz con Google Speech-to-Text (más rápido)
-      const recognizedText = await recognizeWithGoogleSpeech(audioUri);
-      logDebug(`Texto reconocido: "${recognizedText || 'vacío'}"`);
-      
-      if (recognizedText) {
-        // Convertir a minúsculas para comparación
-        const lowerText = recognizedText.toLowerCase();
-        
-        // Mostrar las palabras clave que estamos buscando
-        logDebug(`Buscando coincidencias con palabras clave: ${JSON.stringify(taskKeywords)}`);
-        
-        // Buscar palabras clave
-        const foundKeywords = taskKeywords.filter(keyword => 
-          lowerText.includes(keyword)
-        );
-        
-        if (foundKeywords.length > 0) {
-          logDebug(`¡PALABRAS CLAVE DETECTADAS!: ${foundKeywords.join(", ")}`);
-          
-          // Vibrar para notificar
-          Vibration.vibrate(200);
-          
-          // Guardar en la base de datos
-          for (const keyword of foundKeywords) {
-            await saveNote(keyword);
-          }
-          
-          // Reproducir sonido después de guardar
-          try {
-            await playPrerecordedAudio('micro.mp3');
-          } catch (audioError) {
-            logDebug(`Error reproduciendo sonido: ${audioError.message}`);
-          }
-        } else {
-          logDebug(`No se encontraron coincidencias con las palabras clave configuradas`);
-        }
-      }
-      
-      // Continuar el ciclo de escucha inmediatamente - sin esperas adicionales
-      startListeningCycle();
+      return uri;
       
     } catch (error) {
-      logDebug(`Error procesando grabación: ${error.message}`);
-      startListeningCycle();
+      logDebug(`Error al detener grabación: ${error.message}`);
+      return null;
     }
   };
 
-  // Reconocimiento de voz con Google Speech-to-Text - optimizado
-  const recognizeWithGoogleSpeech = async (audioUri) => {
+  // Procesar una grabación
+  const processRecording = async () => {
     try {
+      // Detener grabación y obtener URI
+      const audioUri = await stopRecording();
+      if (!audioUri) {
+        logDebug('No se pudo obtener el audio grabado');
+        timeoutRef.current = setTimeout(startListeningCycle, 500);
+        return;
+      }
+      
+      // Verificar si hay keywords para reconocer
+      if (!keywordsRef.current || keywordsRef.current.length === 0) {
+        logDebug('No hay palabras clave configuradas para reconocimiento');
+        timeoutRef.current = setTimeout(startListeningCycle, 500);
+        return;
+      }
+      
+      logDebug(`[VoiceListener] Palabras clave para reconocimiento: ${JSON.stringify(keywordsRef.current)}`);
+      
+      // Realizar reconocimiento
+      const recognizedText = await recognizeWithGoogleSpeech(audioUri, keywordsRef.current);
+      logDebug(`[VoiceListener] Texto reconocido: "${recognizedText || 'vacío'}"`);
+      
+      // Verificar si se detectó alguna palabra clave
+      let keywordDetected = false;
+      
+      // Convertir a minúsculas para comparación insensible a mayúsculas/minúsculas
+      const lowerText = (recognizedText || '').toLowerCase().trim();
+      
+      if (lowerText) {
+        // Buscar coincidencias con palabras clave
+        for (const keyword of keywordsRef.current) {
+          const lowerKeyword = keyword.toLowerCase().trim();
+          if (lowerText.includes(lowerKeyword)) {
+            logDebug(`[VoiceListener] ✅ Palabra clave detectada: "${keyword}"`);
+            keywordDetected = true;
+            
+            // Guardar como nota para la tarea actual
+            await saveNote(recognizedText, currentTaskIdRef.current);
+            break;
+          }
+        }
+        
+        if (!keywordDetected) {
+          logDebug(`[VoiceListener] ❌ No se detectó ninguna palabra clave en: "${recognizedText}"`);
+        }
+      } else {
+        logDebug('[VoiceListener] No se reconoció ningún texto en el audio');
+      }
+      
+      // Continuar el ciclo
+      timeoutRef.current = setTimeout(startListeningCycle, 500);
+      
+    } catch (error) {
+      logDebug(`Error al procesar grabación: ${error.message}`);
+      timeoutRef.current = setTimeout(startListeningCycle, 500);
+    }
+  };
+
+  // Reconocimiento de voz con Google Speech-to-Text
+  const recognizeWithGoogleSpeech = async (audioUri, keywords) => {
+    try {
+      logDebug('Iniciando reconocimiento de voz para audio: ' + audioUri);
+      
       // Convertir audio a Base64
       const audioBase64 = await FileSystem.readAsStringAsync(audioUri, { 
         encoding: FileSystem.EncodingType.Base64 
       });
       
-      // Registrar las palabras clave que se usarán para el reconocimiento
-      logDebug(`Usando palabras clave para reconocimiento: ${JSON.stringify(taskKeywords)}`);
+      logDebug('Audio convertido a Base64, longitud: ' + audioBase64.length);
       
-      // Enviar a Google Speech API - optimizado para velocidad
+      // Configuración probada y validada para reconocimiento efectivo
+      const requestBody = {
+        config: {
+          encoding: 'LINEAR16',
+          sampleRateHertz: 16000,
+          languageCode: 'es-ES',
+          model: 'command_and_search',
+          enableAutomaticPunctuation: true,
+          useEnhanced: true,
+          profanityFilter: false,
+          speechContexts: [{
+            phrases: keywords,
+            boost: 25  // Boost alto para mejorar reconocimiento de palabras clave
+          }],
+          metadata: {
+            interactionType: 'VOICE_COMMAND',
+            microphoneDistance: 'NEARFIELD'
+          },
+          alternativeLanguageCodes: ['es-MX', 'es-AR', 'es-CO'],
+        },
+        audio: {
+          content: audioBase64,
+        },
+      };
+      
+      logDebug(`Enviando a Google Speech con ${keywords.length} palabras clave: ${keywords.join(', ')}`);
+      
+      // Enviar a Google Speech API
       const response = await fetch('https://speech.googleapis.com/v1/speech:recognize?key=AIzaSyDGqyJR4KZRJt9qRLmeGjdlgIBt_nb7Kqw', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          config: {
-            encoding: 'LINEAR16',
-            sampleRateHertz: 16000,
-            languageCode: 'es-ES',
-            model: 'command_and_search',
-            enableAutomaticPunctuation: false,
-            useEnhanced: false,  // Más rápido
-            speechContexts: [{
-              phrases: taskKeywords,
-              boost: 20
-            }]
-          },
-          audio: {
-            content: audioBase64,
-          },
-        }),
+        body: JSON.stringify(requestBody),
       });
       
       const data = await response.json();
       
+      // Log más detallado para diagnóstico
+      if (data.error) {
+        logDebug(`❌ Error en respuesta: ${JSON.stringify(data.error)}`);
+      } else if (data.results && data.results.length > 0) {
+        logDebug(`✅ Respuesta exitosa: ${JSON.stringify(data.results)}`);
+      } else {
+        logDebug(`⚠️ No hay resultados: ${JSON.stringify(data)}`);
+      }
+      
+      // Ya no hay simulación, solo reconocimiento real
       if (data && data.results && data.results.length > 0) {
-        return data.results[0].alternatives[0].transcript;
+        const recognizedText = data.results[0].alternatives[0].transcript;
+        logDebug(`Google reconoció: "${recognizedText}"`);
+        return recognizedText;
       }
       
       return '';
@@ -330,8 +407,8 @@ const VoiceListener = ({ isTaskActive = false, taskData = null }) => {
       await soundObject.setVolumeAsync(1.0);
       await soundObject.playAsync();
       
-      // Esperar 2 segundos y luego limpiar
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Esperar 1 segundo y luego limpiar
+      await new Promise(resolve => setTimeout(resolve, 1000));
       
       try {
         await soundObject.unloadAsync();
@@ -353,48 +430,59 @@ const VoiceListener = ({ isTaskActive = false, taskData = null }) => {
     }
   };
 
-  // saveNote on backend
-  const saveNote = async (noteText) => {
+  // Guardar nota en el backend
+  const saveNote = async (noteText, taskId = null) => {
     try {
-      logDebug(`Guardando nota: ${noteText}`);
+      // Usar el taskId que se pasa como parámetro o el almacenado en la referencia
+      const targetTaskId = taskId || currentTaskIdRef.current;
+      
+      if (!targetTaskId) {
+        logDebug('No hay ID de tarea para guardar la nota');
+        return;
+      }
+      
+      logDebug(`Guardando nota para tarea ${targetTaskId}: "${noteText}"`);
       
       // Obtener token de autenticación
       const token = await AsyncStorage.getItem('token');
       if (!token) {
-        throw new Error('No hay token de autenticación');
+        logDebug('No hay token de autenticación para guardar la nota');
+        return;
       }
       
-      // Obtener ID de la tarea
-      const taskId = taskData._id || taskData.id;
-      if (!taskId) {
-        throw new Error('ID de tarea no válido');
-      }
+      // Datos de la nota
+      const noteData = {
+        text: noteText,
+        type: 'voice_note',
+        timestamp: new Date().toISOString()
+      };
       
-      // URL para la API
-      const url = `https://managetime-backend-48f256c2dfe5.herokuapp.com/api/tasks/${taskId}/note`;
+      // URL directa al endpoint
+      const url = `https://managetime-backend-48f256c2dfe5.herokuapp.com/api/tasks/${targetTaskId}/note`;
       
-      // Enviar nota al backend
+      // Enviar la nota al backend
       const response = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ 
-          text: noteText, 
-          type: 'voice_note',
-          timestamp: new Date().toISOString()
-        })
+        body: JSON.stringify(noteData)
       });
       
-      if (!response.ok) {
-        throw new Error(`Error del servidor: ${response.status}`);
+      if (response.ok) {
+        logDebug('✅ Nota guardada exitosamente');
+        // Vibrar para notificar
+        Vibration.vibrate(200);
+        // Reproducir sonido de confirmación
+        await playPrerecordedAudio('micro.mp3');
+      } else {
+        const error = await response.text();
+        logDebug(`❌ Error al guardar nota: ${error}`);
       }
       
-      logDebug('Nota guardada correctamente');
-      
     } catch (error) {
-      logDebug(`Error guardando nota: ${error.message}`);
+      logDebug(`Error al guardar nota: ${error.message}`);
     }
   };
 
