@@ -173,9 +173,16 @@ const DashboardScreen = ({ navigation }) => {
           onPress={() => navigation.navigate('LocationHistory')}
         >
           <Ionicons name="location" size={24} color={theme.colors.background} style={styles.buttonIcon} />
-          <Text style={[styles.navButtonText, { color: theme.colors.background }]}>
+          <Text style={[styles.navButtonText, { color: theme.colors.background }]}> 
             {t('locationHistory')}
           </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.navButton, { backgroundColor: theme.colors.success || '#4CAF50' }]}
+          onPress={() => navigation.navigate('LocationTrackingScreen')}
+        >
+          <Ionicons name="finger-print" size={24} color={theme.colors.background} style={styles.buttonIcon} />
+          <Text style={[styles.navButtonText, { color: theme.colors.background }]}>Punch In</Text>
         </TouchableOpacity>
       </View>
     </ScrollView>

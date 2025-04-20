@@ -191,7 +191,7 @@ const TaskDetailsScreen = ({ route, navigation }) => {
       
       console.log('Watch position options:', watchOptions);
       
-      locationSubscription = await Location.watchPositionAsync(
+      const subscription = await Location.watchPositionAsync(
         watchOptions,
         (locationUpdate) => {
           console.log(t('locationUpdateReceived'));
@@ -217,13 +217,13 @@ const TaskDetailsScreen = ({ route, navigation }) => {
       );
       
       setIsLocationTracking(true);
-      setLocationSubscription(locationSubscription);
+      setLocationSubscription(subscription);
       console.log(t('locationTrackingStarted'));
     } catch (error) {
-      console.error(t('locationTrackingError', { error: error.message }));
+      console.error(`${t('locationTrackingError').replace('${error}', error.message)}`);
       Alert.alert(
         t('error'),
-        t('locationTrackingError', { error: error.message }),
+        t('locationTrackingError').replace('${error}', error.message),
         [{ text: t('ok') }]
       );
     }
