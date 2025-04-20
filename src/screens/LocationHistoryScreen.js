@@ -17,6 +17,7 @@ import {
 } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
+import { useLocationTracking } from '../context/LocationTrackingContext';
 import LanguageToggle from '../components/LanguageToggle';
 import * as api from '../services/api';
 import MapComponent from '../components/MapComponent';
@@ -223,6 +224,7 @@ Current Location: ${results.currentLocation.success ? 'Available' : 'Unavailable
 const LocationHistoryScreen = () => {
   const { user } = useAuth();
   const { t } = useLanguage();
+  const { tracking, locations: trackedLocations, startTracking, stopTracking } = useLocationTracking();
   const [locationHistory, setLocationHistory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -575,6 +577,83 @@ const LocationHistoryScreen = () => {
     </View>
   );
 
+  // Manejar el inicio de seguimiento de ubicación
+  const handleStartTracking = async () => {
+    try {
+      await startTracking();
+      Alert.alert('Éxito', 'Seguimiento de ubicación iniciado');
+    } catch (error) {
+      Alert.alert('Error', 'No se pudo iniciar el seguimiento de ubicación: ' + error.message);
+    }
+  };
+
+  // Manejar la detención de seguimiento de ubicación
+  const handleStopTracking = async () => {
+    try {
+      stopTracking();
+      
+      // Si hay ubicaciones registradas, guardarlas en el backend
+      if (trackedLocations.length > 0) {
+        try {
+          // Convertir las ubicaciones al formato esperado por el backend
+          const locationData = trackedLocations.map(loc => ({
+            latitude: loc.latitude,
+            longitude: loc.longitude,
+            timestamp: new Date().toISOString(),
+            type: 'tracking' // o el tipo que corresponda en tu sistema
+          }));
+          
+          // Enviar las ubicaciones al backend
+          await api.saveLocations(locationData);
+          Alert.alert('Éxito', `${trackedLocations.length} ubicaciones guardadas correctamente`);
+          
+          // Refrescar el historial después de guardar
+          loadLocationHistory(selectedUserId);
+        } catch (saveError) {
+          console.error('Error al guardar ubicaciones:', saveError);
+          Alert.alert('Error', 'Las ubicaciones se registraron pero no se pudieron guardar: ' + saveError.message);
+        }
+      } else {
+        Alert.alert('Información', 'Seguimiento de ubicación detenido. No se registraron ubicaciones.');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'No se pudo detener el seguimiento de ubicación: ' + error.message);
+    }
+  };
+
+  // Renderizar el control de seguimiento de ubicación
+  const renderTrackingControls = () => (
+    <View style={styles.trackingControlsContainer}>
+      <Text style={styles.trackingStatusText}>
+        {tracking ? t('trackingActive') : t('trackingInactive')}
+      </Text>
+      
+      {tracking ? (
+        <TouchableOpacity
+          style={[styles.trackingButton, styles.stopTrackingButton]}
+          onPress={handleStopTracking}
+        >
+          <Ionicons name="stop-circle" size={22} color="#fff" style={styles.trackingButtonIcon} />
+          <Text style={styles.trackingButtonText}>{t('stopTracking')}</Text>
+        </TouchableOpacity>
+      ) : (
+        <TouchableOpacity
+          style={[styles.trackingButton, styles.startTrackingButton]}
+          onPress={handleStartTracking}
+        >
+          <Ionicons name="play-circle" size={22} color="#fff" style={styles.trackingButtonIcon} />
+          <Text style={styles.trackingButtonText}>{t('startTracking')}</Text>
+        </TouchableOpacity>
+      )}
+      
+      {tracking && trackedLocations.length > 0 && (
+        <Text style={styles.locationCountText}>
+          {trackedLocations.length} {t('locationsRecorded')}
+        </Text>
+      )}
+    </View>
+  );
+
   // Determinar qué ubicaciones mostrar (filtradas o todas)
   const locationsToDisplay = dateFilter ? filteredLocations : locationHistory;
 
@@ -583,6 +662,8 @@ const LocationHistoryScreen = () => {
       <View style={styles.header}>
         <Text style={styles.title}>{t('locationHistory')}</Text>
       </View>
+
+      {renderTrackingControls()}
 
       <View style={styles.filterContainer}>
         <View style={styles.viewToggle}>
@@ -1036,6 +1117,45 @@ const styles = StyleSheet.create({
   diagnosticButtonText: {
     color: '#fff',
     fontWeight: 'bold',
+  },
+  trackingControlsContainer: {
+    padding: 15,
+    backgroundColor: '#fff',
+    marginBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#ddd',
+  },
+  trackingStatusText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 10,
+  },
+  trackingButton: {
+    padding: 10,
+    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  startTrackingButton: {
+    backgroundColor: '#4CAF50',
+  },
+  stopTrackingButton: {
+    backgroundColor: '#F44336',
+  },
+  trackingButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    marginLeft: 10,
+  },
+  trackingButtonIcon: {
+    marginRight: 10,
+  },
+  locationCountText: {
+    fontSize: 14,
+    color: '#666',
+    marginTop: 10,
   },
 });
 

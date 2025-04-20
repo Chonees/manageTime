@@ -177,13 +177,6 @@ const DashboardScreen = ({ navigation }) => {
             {t('locationHistory')}
           </Text>
         </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.navButton, { backgroundColor: theme.colors.success || '#4CAF50' }]}
-          onPress={() => navigation.navigate('LocationTrackingScreen')}
-        >
-          <Ionicons name="finger-print" size={24} color={theme.colors.background} style={styles.buttonIcon} />
-          <Text style={[styles.navButtonText, { color: theme.colors.background }]}>Punch In</Text>
-        </TouchableOpacity>
       </View>
     </ScrollView>
   );

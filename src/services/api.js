@@ -1950,3 +1950,36 @@ export const addSimpleVoiceNote = async (taskId, text, token) => {
     throw error;
   }
 };
+
+/**
+ * Guardar múltiples ubicaciones de seguimiento en el backend
+ * @param {Array} locations - Array de objetos de ubicación con {latitude, longitude, timestamp, type}
+ * @returns {Promise<Object>} - Resultado de la operación
+ */
+export const saveLocations = async (locations) => {
+  try {
+    if (!Array.isArray(locations) || locations.length === 0) {
+      throw new Error('Se requiere un array de ubicaciones para guardar');
+    }
+    
+    // Crear opciones de la petición
+    const options = await createFetchOptions('POST', { locations });
+    
+    // Endpoint para guardar ubicaciones
+    const url = `${getApiUrl()}/api/locations/batch`;
+    
+    console.log('Guardando batch de ubicaciones:', locations.length);
+    
+    // Realizar la petición al servidor
+    const response = await fetchWithRetry(url, options);
+    
+    // Manejar la respuesta
+    const result = await handleResponse(response);
+    
+    console.log('Ubicaciones guardadas correctamente:', result);
+    return result;
+  } catch (error) {
+    console.error('Error al guardar ubicaciones:', error);
+    throw error;
+  }
+};

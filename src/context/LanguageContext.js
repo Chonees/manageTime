@@ -370,6 +370,13 @@ export const translations = {
     voiceCommandsHelp: "Voice commands available: 'bitacora' (starts recording), 'yes/no' (confirmation)",
     voiceAssistantActive: "Voice assistant active and listening for 'bitacora'",
     voiceAssistantError: "Could not activate voice assistant. Check microphone permissions.",
+    
+    // Tracking functionality
+    trackingActive: 'Tracking Active',
+    trackingInactive: 'Tracking Inactive',
+    startTracking: 'Start Tracking',
+    stopTracking: 'Stop Tracking',
+    locationsRecorded: 'locations recorded',
   },
   es: {
     login: 'Iniciar Sesión',
@@ -739,6 +746,13 @@ export const translations = {
     voiceCommandsHelp: "Comandos de voz disponibles: 'bitácora' (inicia grabación), 'sí/no' (confirmación)",
     voiceAssistantActive: "Asistente de voz activo y escuchando por 'bitácora'",
     voiceAssistantError: "No se pudo activar el asistente de voz. Verifica los permisos del micrófono.",
+    
+    // Tracking functionality
+    trackingActive: 'Seguimiento Activo',
+    trackingInactive: 'Seguimiento Inactivo',
+    startTracking: 'Iniciar Seguimiento',
+    stopTracking: 'Detener Seguimiento',
+    locationsRecorded: 'ubicaciones registradas',
   }
 };
 
