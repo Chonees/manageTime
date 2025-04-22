@@ -40,6 +40,45 @@ const AuthNavigator = () => (
       headerTitleStyle: {
         fontWeight: 'bold',
       },
+      cardStyle: { backgroundColor: '#2e2e2e' },
+      cardStyleInterpolator: ({ current, layouts }) => {
+        return {
+          cardStyle: {
+            transform: [
+              {
+                translateX: current.progress.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [layouts.screen.width, 0],
+                }),
+              },
+            ],
+            opacity: current.progress.interpolate({
+              inputRange: [0, 0.5, 1],
+              outputRange: [0, 0.5, 1],
+            }),
+          },
+          overlayStyle: {
+            opacity: current.progress.interpolate({
+              inputRange: [0, 1],
+              outputRange: [0, 0.5],
+            }),
+          },
+        };
+      },
+      transitionSpec: {
+        open: {
+          animation: 'timing',
+          config: {
+            duration: 300,
+          },
+        },
+        close: {
+          animation: 'timing',
+          config: {
+            duration: 300,
+          },
+        },
+      },
     }}
   >
     <Stack.Screen 
@@ -50,7 +89,7 @@ const AuthNavigator = () => (
     <Stack.Screen 
       name="Register" 
       component={RegisterScreen} 
-      options={{ title: 'Registrarse' }}
+      options={{ headerShown: false }}
     />
     <Stack.Screen 
       name="Diagnostic" 
@@ -62,46 +101,150 @@ const AuthNavigator = () => (
 
 // Navegador para usuarios autenticados (no administradores)
 const UserNavigator = () => {
+  const { t } = useLanguage();
+  
   return (
-    <Stack.Navigator>
-      <Stack.Screen 
-        name="Dashboard" 
-        component={DashboardScreen}
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen 
-        name="TaskScreen" 
-        component={TaskScreen}
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen 
-        name="TaskDetails" 
-        component={TaskDetailsScreen}
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen 
-        name="LocationHistory" 
-        component={LocationHistoryScreen}
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen 
-        name="VoiceAssistant" 
-        component={VoiceAssistantScreen}
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen 
-        name="LocationTrackingScreen" 
-        component={LocationTrackingScreen}
-        options={{ headerShown: true, title: 'Location Tracking' }}
-      />
-    </Stack.Navigator>
+    <LocationTrackingProvider>
+      <Stack.Navigator
+        screenOptions={{
+          headerStyle: {
+            backgroundColor: '#4A90E2',
+          },
+          headerTintColor: '#fff',
+          headerTitleStyle: {
+            fontWeight: 'bold',
+          },
+          cardStyle: { backgroundColor: '#2e2e2e' },
+          cardStyleInterpolator: ({ current, layouts }) => {
+            return {
+              cardStyle: {
+                transform: [
+                  {
+                    translateX: current.progress.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [layouts.screen.width, 0],
+                    }),
+                  },
+                ],
+                opacity: current.progress.interpolate({
+                  inputRange: [0, 0.5, 1],
+                  outputRange: [0, 0.5, 1],
+                }),
+              },
+              overlayStyle: {
+                opacity: current.progress.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0, 0.5],
+                }),
+              },
+            };
+          },
+          transitionSpec: {
+            open: {
+              animation: 'timing',
+              config: {
+                duration: 300,
+              },
+            },
+            close: {
+              animation: 'timing',
+              config: {
+                duration: 300,
+              },
+            },
+          },
+        }}
+      >
+        <Stack.Screen 
+          name="Dashboard" 
+          component={DashboardScreen}
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen 
+          name="TaskScreen" 
+          component={TaskScreen}
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen 
+          name="TaskDetails" 
+          component={TaskDetailsScreen}
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen 
+          name="LocationHistory" 
+          component={LocationHistoryScreen}
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen 
+          name="VoiceAssistant" 
+          component={VoiceAssistantScreen}
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen 
+          name="LocationTrackingScreen" 
+          component={LocationTrackingScreen}
+          options={{ headerShown: true, title: 'Location Tracking' }}
+        />
+      </Stack.Navigator>
+    </LocationTrackingProvider>
   );
 };
 
 // Navegador para administradores
 const AdminNavigator = () => {
+  const { t } = useLanguage();
+  
   return (
-    <Stack.Navigator>
+    <Stack.Navigator
+      screenOptions={{
+        headerStyle: {
+          backgroundColor: '#4A90E2',
+        },
+        headerTintColor: '#fff',
+        headerTitleStyle: {
+          fontWeight: 'bold',
+        },
+        cardStyle: { backgroundColor: '#2e2e2e' },
+        cardStyleInterpolator: ({ current, layouts }) => {
+          return {
+            cardStyle: {
+              transform: [
+                {
+                  translateX: current.progress.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [layouts.screen.width, 0],
+                  }),
+                },
+              ],
+              opacity: current.progress.interpolate({
+                inputRange: [0, 0.5, 1],
+                outputRange: [0, 0.5, 1],
+              }),
+            },
+            overlayStyle: {
+              opacity: current.progress.interpolate({
+                inputRange: [0, 1],
+                outputRange: [0, 0.5],
+              }),
+            },
+          };
+        },
+        transitionSpec: {
+          open: {
+            animation: 'timing',
+            config: {
+              duration: 300,
+            },
+          },
+          close: {
+            animation: 'timing',
+            config: {
+              duration: 300,
+            },
+          },
+        },
+      }}
+    >
       <Stack.Screen 
         name="AdminDashboard" 
         component={AdminDashboardScreen}
