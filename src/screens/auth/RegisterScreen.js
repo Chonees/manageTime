@@ -255,7 +255,7 @@ const styles = StyleSheet.create({
   },
   backButtonContainer: {
     position: 'absolute',
-    top: Platform.OS === 'ios' ? 50 : 30,
+    top: Platform.OS === 'ios' ? 20 : 30,
     left: 20,
     zIndex: 10,
   },
@@ -264,7 +264,7 @@ const styles = StyleSheet.create({
   },
   languageToggleContainer: {
     position: 'absolute',
-    top: Platform.OS === 'ios' ? 50 : 30,
+    top: Platform.OS === 'ios' ? 20 : 30,
     right: 20,
     zIndex: 10,
   },
@@ -272,7 +272,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'flex-start',
     paddingHorizontal: 20,
-    paddingTop: Platform.OS === 'ios' ? 60 : 80,
+    paddingTop: Platform.OS === 'ios' ? 10 : 80,
   },
   headerContainer: {
     alignItems: 'center',
