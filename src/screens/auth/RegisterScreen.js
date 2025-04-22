@@ -7,12 +7,11 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
-  ScrollView,
   Alert,
   Image,
   Dimensions,
-  SafeAreaView,
-  StatusBar
+  StatusBar,
+  SafeAreaView
 } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -20,6 +19,8 @@ import { useLanguage } from '../../context/LanguageContext';
 import { Ionicons } from '@expo/vector-icons';
 import { StyleSheet } from 'react-native';
 import LanguageToggle from '../../components/LanguageToggle';
+
+const { width, height } = Dimensions.get('window');
 
 const RegisterScreen = ({ navigation }) => {
   const [username, setUsername] = useState('');
@@ -102,15 +103,13 @@ const RegisterScreen = ({ navigation }) => {
         <View style={styles.languageToggleContainer}>
           <LanguageToggle />
         </View>
-        <ScrollView contentContainerStyle={styles.scrollContainer}>
+
+        <View style={styles.mainContainer}>
           <View style={styles.headerContainer}>
-            <View style={styles.logoContainer}>
-              <Image 
-                source={require('../../../assets/Work Proof LOGO CREMA.png')} 
-                style={styles.logo} 
-              />
-            </View>
-            <Text style={styles.greeting}>{t('hello')}</Text>
+            <Image 
+              source={require('../../../assets/Work Proof LOGO CREMA.png')} 
+              style={styles.logo} 
+            />
             <Text style={styles.welcomeBack}>{t('signUp')}</Text>
           </View>
 
@@ -119,12 +118,12 @@ const RegisterScreen = ({ navigation }) => {
             
             <View style={styles.inputContainer}>
               <Text style={styles.fieldLabel}>{t('username')}</Text>
-              <View style={{ position: 'relative' }}>
+              <View style={styles.inputWrapper}>
                 <Ionicons 
                   name="person-outline" 
-                  size={24} 
+                  size={20} 
                   color="#000000" 
-                  style={[styles.inputIcon, { color: '#000000' }]}
+                  style={styles.inputIcon}
                 />
                 <TextInput
                   style={styles.input}
@@ -139,12 +138,12 @@ const RegisterScreen = ({ navigation }) => {
             
             <View style={styles.inputContainer}>
               <Text style={styles.fieldLabel}>{t('email')}</Text>
-              <View style={{ position: 'relative' }}>
+              <View style={styles.inputWrapper}>
                 <Ionicons 
                   name="mail-outline" 
-                  size={24} 
+                  size={20} 
                   color="#000000" 
-                  style={[styles.inputIcon, { color: '#000000' }]}
+                  style={styles.inputIcon}
                 />
                 <TextInput
                   style={styles.input}
@@ -160,12 +159,12 @@ const RegisterScreen = ({ navigation }) => {
             
             <View style={styles.inputContainer}>
               <Text style={styles.fieldLabel}>{t('password')}</Text>
-              <View style={{ position: 'relative' }}>
+              <View style={styles.inputWrapper}>
                 <Ionicons 
                   name="lock-closed-outline" 
-                  size={24} 
+                  size={20} 
                   color="#000000" 
-                  style={[styles.inputIcon, { color: '#000000' }]}
+                  style={styles.inputIcon}
                 />
                 <TextInput
                   style={styles.input}
@@ -181,7 +180,7 @@ const RegisterScreen = ({ navigation }) => {
                 >
                   <Ionicons 
                     name={showPassword ? "eye-outline" : "eye-off-outline"} 
-                    size={24} 
+                    size={20} 
                     color="#000000" 
                   />
                 </TouchableOpacity>
@@ -190,12 +189,12 @@ const RegisterScreen = ({ navigation }) => {
             
             <View style={styles.inputContainer}>
               <Text style={styles.fieldLabel}>{t('confirmPassword')}</Text>
-              <View style={{ position: 'relative' }}>
+              <View style={styles.inputWrapper}>
                 <Ionicons 
                   name="lock-closed-outline" 
-                  size={24} 
+                  size={20} 
                   color="#000000" 
-                  style={[styles.inputIcon, { color: '#000000' }]}
+                  style={styles.inputIcon}
                 />
                 <TextInput
                   style={styles.input}
@@ -211,7 +210,7 @@ const RegisterScreen = ({ navigation }) => {
                 >
                   <Ionicons 
                     name={showConfirmPassword ? "eye-outline" : "eye-off-outline"} 
-                    size={24} 
+                    size={20} 
                     color="#000000" 
                   />
                 </TouchableOpacity>
@@ -230,27 +229,16 @@ const RegisterScreen = ({ navigation }) => {
               )}
             </TouchableOpacity>
             
-            <View style={styles.orContainer}>
-              <View style={styles.orLine} />
-              <Text style={styles.orText}>{t('or')}</Text>
-              <View style={styles.orLine} />
-            </View>
-            
-            <View style={styles.socialButtonsContainer}>
-              <TouchableOpacity style={styles.googleButton}>
-                <Ionicons name="logo-google" size={24} color="#fff" style={styles.googleIcon} />
-                <Text style={styles.googleText}>Google</Text>
-              </TouchableOpacity>
-            </View>
-            
-            <View style={styles.loginContainer}>
-              <Text style={styles.loginText}>{t('dontHaveAccount')}</Text>
-              <TouchableOpacity onPress={() => navigation.navigate('Login')}>
-                <Text style={styles.loginLink}>{t('signIn')}</Text>
-              </TouchableOpacity>
+            <View style={styles.footerContainer}>
+              <View style={styles.loginContainer}>
+                <Text style={styles.loginText}>{t('dontHaveAccount')}</Text>
+                <TouchableOpacity onPress={() => navigation.navigate('Login')}>
+                  <Text style={styles.loginLink}>{t('signIn')}</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
-        </ScrollView>
+        </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -267,7 +255,7 @@ const styles = StyleSheet.create({
   },
   backButtonContainer: {
     position: 'absolute',
-    top: 50,
+    top: Platform.OS === 'ios' ? 50 : 30,
     left: 20,
     zIndex: 10,
   },
@@ -276,46 +264,37 @@ const styles = StyleSheet.create({
   },
   languageToggleContainer: {
     position: 'absolute',
-    top: 60,
+    top: Platform.OS === 'ios' ? 50 : 30,
     right: 20,
     zIndex: 10,
   },
-  scrollContainer: {
-    flexGrow: 1,
+  mainContainer: {
+    flex: 1,
     justifyContent: 'flex-start',
-    padding: 20,
-    paddingTop: 60,
+    paddingHorizontal: 20,
+    paddingTop: Platform.OS === 'ios' ? 60 : 80,
   },
   headerContainer: {
     alignItems: 'center',
-    marginBottom: 10,
-    marginTop: 30,
-  },
-  logoContainer: {
-    alignItems: 'center',
-    marginBottom: -90,
+    marginBottom: height * 0.01,
+    position: 'relative',
   },
   logo: {
     width: 300,
     height: 300,
     resizeMode: 'contain',
   },
-  greeting: {
-    fontSize: 45,
-    fontWeight: 'bold',
-    color: '#fff3e5',
-    marginBottom: 5,
-  },
   welcomeBack: {
-    fontSize: 20,
+    fontSize: Math.min(width * 0.07, 30),
+    fontWeight: 'bold',
     color: '#ffffff',
-    marginBottom: 20,
-    opacity: 0.8,
+    marginTop: -70,
+    marginBottom: height * 0.02,
+    opacity: 0.9,
+    position: 'relative',
+    zIndex: 1,
   },
   formContainer: {
-    backgroundColor: 'transparent',
-    borderRadius: 10,
-    padding: 20,
     width: '100%',
   },
   fieldLabel: {
@@ -325,105 +304,67 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   inputContainer: {
-    marginBottom: 15,
+    marginBottom: height * 0.02,
   },
-  input: {
-    height: 50,
+  inputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: height * 0.055,
     borderWidth: 1,
     borderColor: '#fff3e5',
     borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingLeft: 40, // Espacio para el icono
-    backgroundColor: '#fff3e5', // Color crema sólido
-    color: '#000000', // Texto negro
-    marginBottom: 5,
-    fontSize: 16,
+    backgroundColor: '#fff3e5',
+    paddingHorizontal: 10,
   },
   inputIcon: {
-    position: 'absolute',
-    left: 10,
-    top: 13,
-    zIndex: 10,
+    marginRight: 10,
   },
   inputIconRight: {
     position: 'absolute',
     right: 10,
-    top: 13,
-    zIndex: 10,
+  },
+  input: {
+    flex: 1,
+    height: '100%',
+    color: '#000000',
+    fontSize: Math.min(width * 0.04, 16),
   },
   registerButton: {
     backgroundColor: '#1c1c1c',
-    height: 50,
+    height: height * 0.06,
     borderRadius: 15,
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 15,
+    marginTop: height * 0.02,
   },
   registerButtonText: {
     color: '#ffffff',
-    fontSize: 16,
+    fontSize: Math.min(width * 0.04, 16),
     fontWeight: 'bold',
   },
-  orContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: 20,
-  },
-  orLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: '#ffffff40',
-  },
-  orText: {
-    color: '#ffffff',
-    paddingHorizontal: 10,
-    fontSize: 14,
-    opacity: 0.7,
-  },
-  socialButtonsContainer: {
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  googleButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: 50,
-    borderRadius: 15,
-    backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: '#ffffff40',
-    marginTop: 10,
-    paddingHorizontal: 20,
-  },
-  googleIcon: {
-    marginRight: 10,
-  },
-  googleText: {
-    color: '#ffffff',
-    fontSize: 14,
+  footerContainer: {
+    marginTop: height * 0.03,
   },
   loginContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
-    marginTop: 20,
   },
   loginText: {
     color: '#ffffff',
     opacity: 0.7,
-    fontSize: 14,
+    fontSize: Math.min(width * 0.035, 14),
   },
   loginLink: {
     color: '#fff3e5',
     fontWeight: 'bold',
     marginLeft: 5,
-    fontSize: 14,
+    fontSize: Math.min(width * 0.035, 14),
   },
   errorText: {
     color: '#ff5252',
-    marginBottom: 15,
+    marginBottom: height * 0.015,
     textAlign: 'center',
-    fontSize: 14,
+    fontSize: Math.min(width * 0.035, 14),
   },
 });
 

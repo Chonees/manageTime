@@ -26,7 +26,11 @@ const LanguageToggle = ({ style }) => {
         onPress={toggleLanguage} 
         style={[
           styles.switchContainer,
-          { backgroundColor: isEnglish ? theme.colors.darkGrey : theme.colors.lightCream }
+          { 
+            backgroundColor: isEnglish ? theme.colors.darkGrey : theme.colors.lightCream,
+            borderWidth: 1,
+            borderColor: theme.colors.lightCream
+          }
         ]}
         activeOpacity={0.8}
       >
@@ -39,20 +43,30 @@ const LanguageToggle = ({ style }) => {
             }
           ]}
         />
-        <Text style={[
-          styles.switchText, 
-          styles.enText,
-          { color: isEnglish ? theme.colors.lightCream : theme.colors.darkGrey }
-        ]}>
-          EN
-        </Text>
-        <Text style={[
-          styles.switchText, 
-          styles.esText,
-          { color: isEnglish ? theme.colors.darkGrey : theme.colors.lightCream }
-        ]}>
-          ES
-        </Text>
+        <View style={styles.textContainer}>
+          <Text style={[
+            styles.switchText, 
+            styles.enText,
+            { 
+              color: isEnglish ? theme.colors.lightCream : theme.colors.darkGrey,
+              fontWeight: isEnglish ? 'bold' : 'normal'
+            }
+          ]}>
+            EN
+          </Text>
+        </View>
+        <View style={styles.textContainer}>
+          <Text style={[
+            styles.switchText, 
+            styles.esText,
+            { 
+              color: isEnglish ? theme.colors.lightCream : theme.colors.darkGrey,
+              fontWeight: isEnglish ? 'normal' : 'bold'
+            }
+          ]}>
+            ES
+          </Text>
+        </View>
       </TouchableOpacity>
     </View>
   );
@@ -72,6 +86,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 5,
     position: 'relative',
+    overflow: 'hidden',
   },
   switchCircle: {
     position: 'absolute',
@@ -85,10 +100,15 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 1,
   },
+  textContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 1,
+  },
   switchText: {
     fontSize: 12,
     fontWeight: 'bold',
-    zIndex: 1,
   },
   enText: {
     marginLeft: 3,
