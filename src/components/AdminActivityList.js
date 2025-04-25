@@ -8,7 +8,9 @@ import {
   FlatList,
   RefreshControl,
   SectionList,
-  Button
+  Button,
+  Linking,
+  AsyncStorage
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { getAdminActivities } from '../services/api';
@@ -428,7 +430,7 @@ const AdminActivityList = () => {
           color={viewMode === 'list' ? '#fff' : '#333'} 
         />
         <Text style={[styles.viewModeButtonText, viewMode === 'list' && styles.viewModeButtonTextActive]}>
-          Lista
+          {t('listMode')}
         </Text>
       </TouchableOpacity>
       
@@ -442,11 +444,114 @@ const AdminActivityList = () => {
           color={viewMode === 'grouped' ? '#fff' : '#333'} 
         />
         <Text style={[styles.viewModeButtonText, viewMode === 'grouped' && styles.viewModeButtonTextActive]}>
-          Por usuario
+          {t('groupedMode')}
         </Text>
       </TouchableOpacity>
     </View>
   );
+
+  // Renderizar los botones de exportación
+  const renderExportButtons = () => {
+    const [exporting, setExporting] = useState(false);
+    
+    const handleExportToExcel = async () => {
+      try {
+        setExporting(true);
+        
+        // Construir la URL base para la exportación
+        const baseUrl = 'https://managetime-backend-48f256c2dfe5.herokuapp.com/api/reports/activities/excel';
+        
+        // Obtener el token de autenticación del almacenamiento local
+        const token = await AsyncStorage.getItem('token');
+        if (!token) {
+          alert(t('loginError'));
+          setExporting(false);
+          return;
+        }
+        
+        // Construir la URL completa con el token y parámetros de filtro
+        let url = `${baseUrl}?token=${token}`;
+        
+        // Añadir parámetros de filtro si están seleccionados
+        if (filterType !== 'all') {
+          url += `&activityType=${filterType}`;
+        }
+        
+        // Abrir la URL en el navegador para descargar el archivo
+        Linking.openURL(url);
+        
+        setTimeout(() => {
+          setExporting(false);
+        }, 2000);
+      } catch (error) {
+        console.error('Error exporting to Excel:', error);
+        alert(t('error'));
+        setExporting(false);
+      }
+    };
+    
+    const handleExportToPDF = async () => {
+      try {
+        setExporting(true);
+        
+        // Construir la URL base para la exportación
+        const baseUrl = 'https://managetime-backend-48f256c2dfe5.herokuapp.com/api/reports/activities/pdf';
+        
+        // Obtener el token de autenticación del almacenamiento local
+        const token = await AsyncStorage.getItem('token');
+        if (!token) {
+          alert(t('loginError'));
+          setExporting(false);
+          return;
+        }
+        
+        // Construir la URL completa con el token y parámetros de filtro
+        let url = `${baseUrl}?token=${token}`;
+        
+        // Añadir parámetros de filtro si están seleccionados
+        if (filterType !== 'all') {
+          url += `&activityType=${filterType}`;
+        }
+        
+        // Abrir la URL en el navegador para descargar el archivo
+        Linking.openURL(url);
+        
+        setTimeout(() => {
+          setExporting(false);
+        }, 2000);
+      } catch (error) {
+        console.error('Error exporting to PDF:', error);
+        alert(t('error'));
+        setExporting(false);
+      }
+    };
+    
+    return (
+      <View style={styles.exportContainer}>
+        <TouchableOpacity 
+          style={styles.exportButton}
+          onPress={handleExportToExcel}
+          disabled={exporting}
+        >
+          <Ionicons name="document-outline" size={20} color="#fff" />
+          <Text style={styles.exportButtonText}>
+            {exporting ? t('generating') : t('exportToExcel')}
+          </Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity 
+          style={styles.exportButton}
+          onPress={handleExportToPDF}
+          disabled={exporting}
+        >
+          <Ionicons name="document-text-outline" size={20} color="#fff" />
+          <Text style={styles.exportButtonText}>
+            {exporting ? t('generating') : t('exportToPDF')}
+          </Text>
+        </TouchableOpacity>
+      </View>
+    );
+  };
 
   // Renderizar el componente principal
   return (
@@ -462,6 +567,7 @@ const AdminActivityList = () => {
 
       {renderViewModeButtons()}
       {renderFilterButtons()}
+      {renderExportButtons()}
 
       {error && (
         <View style={styles.errorContainer}>
@@ -837,6 +943,25 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     fontSize: 14,
     color: '#666',
+  },
+  // Estilos para los botones de exportación
+  exportContainer: {
+    flexDirection: 'row',
+    marginBottom: 16,
+  },
+  exportButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: '#4CAF50',
+    marginRight: 8,
+  },
+  exportButtonText: {
+    fontSize: 14,
+    color: '#fff',
+    marginLeft: 4,
   },
 });
 
