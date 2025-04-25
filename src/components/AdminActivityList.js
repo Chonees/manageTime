@@ -1,20 +1,22 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  TouchableOpacity, 
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
   ActivityIndicator,
   FlatList,
   RefreshControl,
   SectionList,
   Button,
-  Linking,
-  AsyncStorage
+  Linking
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { getAdminActivities } from '../services/api';
 import { useLanguage } from '../context/LanguageContext';
+import { formatDistanceToNow } from 'date-fns';
+import { es, enUS } from 'date-fns/locale';
 
 const AdminActivityList = () => {
   const { t } = useLanguage();
