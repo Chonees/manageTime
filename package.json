@@ -13,7 +13,7 @@
     "@expo/metro-runtime": "~4.0.1",
     "@expo/ngrok": "^4.1.0",
     "@expo/vector-icons": "^14.0.2",
-    "@react-native-async-storage/async-storage": "1.23.1",
+    "@react-native-async-storage/async-storage": "^1.23.1",
     "@react-native-community/datetimepicker": "^8.3.0",
     "@react-native-community/slider": "4.5.5",
     "@react-native-voice/voice": "^3.2.4",

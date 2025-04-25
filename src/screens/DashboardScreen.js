@@ -301,6 +301,7 @@ const DashboardScreen = ({ navigation }) => {
             mapOnly={true}
             customHeight={240}
             transparentContainer={true}
+            isWorking={isWorking}
           />
         </View>
 

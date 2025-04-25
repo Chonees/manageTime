@@ -14,7 +14,8 @@ const LocationComponent = ({
   showWorkControls = false, 
   mapOnly = false,
   customHeight,
-  transparentContainer = false 
+  transparentContainer = false,
+  isWorking: externalIsWorking
 }) => {
   const { user } = useAuth();
   const { t } = useLanguage();
@@ -23,11 +24,18 @@ const LocationComponent = ({
   const [errorMsg, setErrorMsg] = useState(null);
   const [loading, setLoading] = useState(true);
   const [permissionGranted, setPermissionGranted] = useState(false);
-  const [isWorking, setIsWorking] = useState(false);
+  const [isWorking, setIsWorking] = useState(externalIsWorking || false);
   const [workStartTime, setWorkStartTime] = useState(null);
   const [loadingAction, setLoadingAction] = useState(false);
   const [mapReady, setMapReady] = useState(false);
   const [mapError, setMapError] = useState(false);
+
+  // Actualizar isWorking cuando cambia la prop externa
+  useEffect(() => {
+    if (externalIsWorking !== undefined) {
+      setIsWorking(externalIsWorking);
+    }
+  }, [externalIsWorking]);
 
   const getLocation = async () => {
     setLoading(true);
@@ -563,7 +571,7 @@ const LocationComponent = ({
       
       {/* Componente de verificación periódica */}
       <VerificationPrompt 
-        isWorking={isWorking} 
+        isAvailable={isWorking} 
         onVerificationFailed={handleVerificationFailed} 
       />
     </View>

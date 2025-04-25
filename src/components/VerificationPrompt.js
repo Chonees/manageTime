@@ -18,13 +18,46 @@ import { Ionicons } from '@expo/vector-icons';
 import * as FileSystem from 'expo-file-system';
 import { useLanguage } from '../context/LanguageContext';
 
-const VERIFICATION_INTERVAL = 600000; // 10 minutos en milisegundos (antes era 10000 - 10 segundos)
+const VERIFICATION_INTERVAL = 10000; // 10 segundos en milisegundos (antes era 600000 - 10 minutos)
 const VIBRATION_PATTERN = Platform.OS === 'android' ? [1000, 1000] : [1000, 2000, 1000, 2000]; // Patrón de vibración (vibrar, pausa)
 const SPEECH_DELAY = 1000; // Retraso antes de leer el código en voz alta (ms)
 const LISTENING_DELAY = 0; // Retraso antes de activar el micrófono (ms)
 const LISTENING_TIMEOUT = 10000; // Tiempo máximo de escucha (ms)
 
-const VerificationPrompt = ({ isWorking, onVerificationFailed }) => {
+// Configuración simplificada para iOS (como en VoiceListener.js)
+const CONFIG_IOS = {
+  allowsRecordingIOS: true,
+  playsInSilentModeIOS: true
+};
+
+// Configuración simplificada de grabación (como en VoiceListener.js)
+const recordingOptions = {
+  android: {
+    extension: '.wav',
+    outputFormat: Audio.RECORDING_OPTION_ANDROID_OUTPUT_FORMAT_DEFAULT,
+    audioEncoder: Audio.RECORDING_OPTION_ANDROID_AUDIO_ENCODER_DEFAULT,
+    sampleRate: 16000,
+    numberOfChannels: 1,
+    bitRate: 128000,
+  },
+  ios: {
+    extension: '.wav', 
+    audioQuality: Audio.RECORDING_OPTION_IOS_AUDIO_QUALITY_HIGH,
+    sampleRate: 16000,
+    numberOfChannels: 1,
+    bitRate: 128000,
+    linearPCMBitDepth: 16,
+    linearPCMIsBigEndian: false,
+    linearPCMIsFloat: false,
+  },
+  web: {
+    mimeType: 'audio/webm',
+    audioBitsPerSecond: 128000
+  }
+};
+
+// Cambiado de isWorking a isAvailable para reflejar el nuevo enfoque
+const VerificationPrompt = ({ isAvailable, onVerificationFailed }) => {
   const [modalVisible, setModalVisible] = useState(false);
   const [verificationCode, setVerificationCode] = useState('');
   const [timeRemaining, setTimeRemaining] = useState(30);
@@ -45,12 +78,18 @@ const VerificationPrompt = ({ isWorking, onVerificationFailed }) => {
   const listeningTimerRef = useRef(null);
   const listeningTimeoutRef = useRef(null);
 
+  // Variable para almacenar el último código generado
+  let lastGeneratedCode = '';
+  
+  // Función para obtener el último código generado
+  const getLastGeneratedCode = () => {
+    return lastGeneratedCode;
+  };
+
   // Función para generar un código aleatorio de 4 dígitos
   const generateRandomCode = () => {
-    let code = '';
-    for (let i = 0; i < 4; i++) {
-      code += Math.floor(Math.random() * 10).toString();
-    }
+    const code = Math.floor(1000 + Math.random() * 9000).toString();
+    lastGeneratedCode = code; // Almacenar el código generado
     return code;
   };
 
@@ -112,22 +151,22 @@ const VerificationPrompt = ({ isWorking, onVerificationFailed }) => {
       verificationTimerRef.current = null;
     }
     
-    if (isWorking && !modalVisible) {
-      // Iniciar el timer de verificación cuando el usuario comienza a trabajar
+    if (isAvailable && !modalVisible) {
+      // Iniciar el timer de verificación cuando el usuario está disponible
       verificationTimerRef.current = setTimeout(() => {
         triggerVerification();
       }, VERIFICATION_INTERVAL);
       
       addDebugInfo(`Timer de verificación iniciado, se activará en ${VERIFICATION_INTERVAL / 1000} segundos`);
-    } else if (!isWorking) {
-      // Cerrar el modal si está abierto y el usuario deja de trabajar
+    } else if (!isAvailable) {
+      // Cerrar el modal si está abierto y el usuario no está disponible
       if (modalVisible) {
         setModalVisible(false);
         cleanupResources();
         setTimeRemaining(30);
       }
     }
-  }, [isWorking, modalVisible]);
+  }, [isAvailable, modalVisible]);
 
   // Iniciar vibración constante
   const startConstantVibration = () => {
@@ -173,19 +212,20 @@ const VerificationPrompt = ({ isWorking, onVerificationFailed }) => {
 
   // Programar la siguiente verificación
   const scheduleNextVerification = () => {
-    // Limpiar el timer anterior si existe
     if (verificationTimerRef.current) {
       clearTimeout(verificationTimerRef.current);
-      verificationTimerRef.current = null;
     }
     
-    // Solo programar si el usuario está trabajando
-    if (isWorking) {
-      addDebugInfo(`Próxima verificación programada para dentro de 10 segundos`);
-      verificationTimerRef.current = setTimeout(() => {
+    addDebugInfo(`Próxima verificación programada para dentro de ${VERIFICATION_INTERVAL / 1000} segundos`);
+    
+    verificationTimerRef.current = setTimeout(() => {
+      if (isAvailable) {
         triggerVerification();
-      }, VERIFICATION_INTERVAL);
-    }
+      } else {
+        addDebugInfo('Usuario no disponible, no se inicia verificación');
+        scheduleNextVerification();
+      }
+    }, VERIFICATION_INTERVAL);
   };
 
   // Verificar permisos de audio
@@ -246,7 +286,7 @@ const VerificationPrompt = ({ isWorking, onVerificationFailed }) => {
             allowsRecordingIOS: false,
             playsInSilentModeIOS: true,
             staysActiveInBackground: false,
-            interruptionModeIOS: Audio.INTERRUPTION_MODE_IOS_MIX_WITH_OTHERS,
+            interruptionModeIOS: 1, // Valor numérico en lugar de constante
             shouldDuckAndroid: true,
             playThroughEarpieceAndroid: false
           });
@@ -281,8 +321,17 @@ const VerificationPrompt = ({ isWorking, onVerificationFailed }) => {
         return;
       }
       
-      // Limpiar grabaciones anteriores
-      await ensureNoActiveRecordings();
+      // Detener cualquier grabación previa
+      await stopListening();
+      
+      // Configuración básica del audio (simplificada como en VoiceListener.js)
+      try {
+        addDebugInfo('Configurando modo de audio para grabación...');
+        await Audio.setAudioModeAsync(CONFIG_IOS);
+        addDebugInfo('Modo de audio configurado correctamente');
+      } catch (audioModeError) {
+        addDebugInfo(`Error al configurar modo de audio: ${audioModeError.message}`);
+      }
       
       try {
         // Crear una nueva instancia de grabación
@@ -291,7 +340,7 @@ const VerificationPrompt = ({ isWorking, onVerificationFailed }) => {
         
         // Configuración simplificada para mayor compatibilidad
         addDebugInfo('Preparando grabación con configuración simplificada...');
-        await recording.prepareToRecordAsync(Audio.RECORDING_OPTIONS_PRESET_HIGH_QUALITY);
+        await recording.prepareToRecordAsync(recordingOptions);
         
         // Guardar referencia
         recordingRef.current = recording;
@@ -421,155 +470,163 @@ const VerificationPrompt = ({ isWorking, onVerificationFailed }) => {
       const audioUri = await stopListening();
       
       if (!audioUri) {
+        addDebugInfo('No se obtuvo URI de audio, no se puede procesar');
         return;
       }
       
       setRecognitionStatus('Procesando...');
       
       try {
+        // Obtener el código actual para verificación
+        const codeToVerify = getLastGeneratedCode();
+        
+        // Mostrar el código actual para depuración
+        addDebugInfo(`CÓDIGO ESPERADO: ${codeToVerify}`);
+        
         // Llamada a Google Speech-to-Text
-        let recognizedText = await recognizeWithGoogleSpeech(audioUri, currentCode);
+        let recognizedText = await recognizeWithGoogleSpeech(audioUri, codeToVerify);
+        
+        // Si no se reconoció texto, manejar el error de forma silenciosa
+        if (!recognizedText || recognizedText.trim() === '') {
+          addDebugInfo('No se reconoció texto en el audio');
+          setRecognitionStatus('No se pudo reconocer la voz. Intente ingresar el código manualmente.');
+          return;
+        }
         
         // Convertir palabras numéricas a dígitos
         recognizedText = convertirPalabrasANumeros(recognizedText);
+        addDebugInfo(`Texto después de convertir palabras a números: "${recognizedText}"`);
         
-        // Extraer números del texto reconocido
+        // Extraer todos los números del texto reconocido
         const numbers = recognizedText.match(/\d+/g);
         
         if (numbers && numbers.length > 0) {
-          // Intentar con cada número encontrado
+          // 1. Verificar si algún número coincide exactamente con el código esperado
           for (const num of numbers) {
-            // Verificar si el número coincide con el código actual
-            if (num === currentCode) {
-              verifyCode(currentCode);
+            if (num === codeToVerify) {
+              addDebugInfo(`Coincidencia exacta encontrada: ${num} = ${codeToVerify}`);
+              setVerificationCode(codeToVerify);
+              setCurrentCode(codeToVerify);
+              setTimeout(() => verifyCode(codeToVerify), 100);
               return;
             }
+          }
+          
+          // 2. Verificar si el código esperado está contenido en algún número más largo
+          for (const num of numbers) {
+            if (num.length > codeToVerify.length && num.includes(codeToVerify)) {
+              addDebugInfo(`Código encontrado dentro de un número más largo: ${codeToVerify} en ${num}`);
+              setVerificationCode(codeToVerify);
+              setCurrentCode(codeToVerify);
+              setTimeout(() => verifyCode(codeToVerify), 100);
+              return;
+            }
+          }
+          
+          // 3. Verificar si concatenando números se forma el código esperado
+          if (numbers.length > 1) {
+            // Unir todos los números en una sola cadena
+            const allNumbersJoined = numbers.join('');
+            if (allNumbersJoined.includes(codeToVerify)) {
+              addDebugInfo(`Código encontrado al unir todos los números: ${codeToVerify} en ${allNumbersJoined}`);
+              setVerificationCode(codeToVerify);
+              setCurrentCode(codeToVerify);
+              setTimeout(() => verifyCode(codeToVerify), 100);
+              return;
+            }
+          }
+          
+          // 4. Verificar si uniendo los primeros dígitos de cada número se forma el código
+          if (numbers.length >= codeToVerify.length) {
+            const firstDigits = numbers.map(num => num[0]).join('');
+            if (firstDigits.includes(codeToVerify)) {
+              addDebugInfo(`Código encontrado usando primer dígito de cada número: ${codeToVerify} en ${firstDigits}`);
+              setVerificationCode(codeToVerify);
+              setCurrentCode(codeToVerify);
+              setTimeout(() => verifyCode(codeToVerify), 100);
+              return;
+            }
+          }
+          
+          // 5. Extraer todos los dígitos individuales y verificar si la secuencia está presente
+          const allDigits = recognizedText.match(/\d/g);
+          if (allDigits) {
+            const allDigitsJoined = allDigits.join('');
+            if (allDigitsJoined.includes(codeToVerify)) {
+              addDebugInfo(`Código encontrado en la secuencia de dígitos: ${codeToVerify} en ${allDigitsJoined}`);
+              setVerificationCode(codeToVerify);
+              setCurrentCode(codeToVerify);
+              setTimeout(() => verifyCode(codeToVerify), 100);
+              return;
+            }
+          }
+          
+          // 6. Si el código tiene 4 dígitos, intentar con combinaciones específicas
+          if (codeToVerify.length === 4 && numbers.length >= 4) {
+            // Unir los primeros 4 números
+            const combinedCode = numbers.slice(0, 4).join('');
+            addDebugInfo(`Intentando con combinación de dígitos: ${combinedCode}`);
             
-            // Si el número es más largo que el código, verificar los últimos 4 dígitos
-            if (num.length > 4) {
-              const lastFourDigits = num.slice(-4);
-              if (lastFourDigits === currentCode) {
-                verifyCode(currentCode);
-                return;
+            if (combinedCode === codeToVerify) {
+              addDebugInfo(`Coincidencia encontrada con dígitos combinados: ${combinedCode} = ${codeToVerify}`);
+              setVerificationCode(codeToVerify);
+              setCurrentCode(codeToVerify);
+              setTimeout(() => verifyCode(codeToVerify), 100);
+              return;
+            }
+          }
+          
+          // 7. Verificar si hay una coincidencia parcial significativa (al menos 3 de 4 dígitos)
+          if (codeToVerify.length === 4) {
+            for (const num of numbers) {
+              if (num.length === 4) {
+                let matchingDigits = 0;
+                for (let i = 0; i < 4; i++) {
+                  if (num[i] === codeToVerify[i]) {
+                    matchingDigits++;
+                  }
+                }
+                
+                if (matchingDigits >= 3) {
+                  addDebugInfo(`Coincidencia parcial significativa: ${matchingDigits}/4 dígitos coinciden entre ${num} y ${codeToVerify}`);
+                  setVerificationCode(codeToVerify);
+                  setCurrentCode(codeToVerify);
+                  setTimeout(() => verifyCode(codeToVerify), 100);
+                  return;
+                }
               }
             }
           }
           
-          // Si no se encontró una coincidencia exacta, intentar con el primer número
-          const potentialCode = numbers[0].substring(0, 4);
-          if (potentialCode.length === 4) {
-            verifyCode(potentialCode);
-          }
+          // Verificar si el código reconocido coincide con el código mostrado en pantalla
+          addDebugInfo(`Verificando contra último código generado: ${codeToVerify}`);
+          
+          // Si llegamos aquí, no se encontró coincidencia
+          addDebugInfo(`No se encontró el código en el texto reconocido: "${recognizedText}"`);
+          setRecognitionStatus('Código no reconocido. Intente ingresar manualmente.');
         } else {
-          // Si no se encontraron números, intentar con dígitos individuales
-          const digitosIndividuales = recognizedText.match(/\d/g);
-          if (digitosIndividuales && digitosIndividuales.length >= 4) {
-            const codigoUnido = digitosIndividuales.slice(0, 4).join('');
-            verifyCode(codigoUnido);
-          } else {
-            setRecognitionStatus(t('codeMismatch'));
-          }
+          addDebugInfo(`No se encontraron números en el texto reconocido: "${recognizedText}"`);
+          setRecognitionStatus('No se reconocieron números. Intente ingresar manualmente.');
         }
-      } catch (error) {
-        setRecognitionStatus(t('errorRecognizingSpeech'));
-      } finally {
-        setRecognitionStatus('');
-      }
-      
-    } catch (error) {
-      setRecognitionStatus('');
-    }
-  };
-
-  // Función para reconocer la entrada de voz con Google Speech-to-Text
-  const recognizeWithGoogleSpeech = async (audioUri, expectedCode) => {
-    addDebugInfo('Llamando a Google Speech-to-Text API');
-    
-    try {
-      // Verificar que el URI sea válido
-      if (!audioUri || typeof audioUri !== 'string') {
-        throw new Error('URI de audio inválido');
-      }
-      
-      // Verificar que el archivo exista
-      const fileInfo = await FileSystem.getInfoAsync(audioUri);
-      if (!fileInfo.exists || fileInfo.size < 1000) {
-        throw new Error('Archivo de audio no válido');
-      }
-      
-      // 1. Obtener el archivo de audio
-      const audioFile = await FileSystem.readAsStringAsync(audioUri, { encoding: FileSystem.EncodingType.Base64 });
-      
-      // 2. Preparar la petición a Google Speech-to-Text
-      const response = await fetch('https://speech.googleapis.com/v1/speech:recognize?key=AIzaSyDGqyJR4KZRJt9qRLmeGjdlgIBt_nb7Kqw', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          config: {
-            encoding: 'AMR',
-            sampleRateHertz: 8000,
-            languageCode: language === 'es' ? 'es-ES' : 'en-US',
-            model: 'command_and_search',
-            speechContexts: [{
-              phrases: [expectedCode, ...expectedCode.split('')],
-              boost: 10
-            }]
-          },
-          audio: {
-            content: audioFile,
-          },
-        }),
-      });
-      
-      // 3. Procesar la respuesta
-      const data = await response.json();
-      
-      // 4. Extraer el texto reconocido
-      if (data.results && data.results.length > 0) {
-        const recognizedText = data.results[0].alternatives[0].transcript;
-        addDebugInfo(`Google Speech-to-Text reconoció: "${recognizedText}"`);
-        return recognizedText;
-      } else {
-        throw new Error('No se pudo reconocer ningún texto en el audio');
+      } catch (recognitionError) {
+        addDebugInfo(`Error al procesar voz: ${recognitionError.message}`);
+        setRecognitionStatus('Error al procesar voz. Intente ingresar manualmente.');
       }
     } catch (error) {
-      addDebugInfo(`Error al llamar a Google Speech-to-Text: ${error.message}`);
-      throw error;
+      addDebugInfo(`Error general en processVoiceInput: ${error.message}`);
+      setRecognitionStatus('Error al procesar entrada de voz');
     }
-  };
-
-  // Función para convertir palabras numéricas a dígitos
-  const convertirPalabrasANumeros = (texto) => {
-    const mapaPalabras = {
-      'cero': '0', 'zero': '0',
-      'uno': '1', 'un': '1', 'una': '1', 'one': '1',
-      'dos': '2', 'two': '2',
-      'tres': '3', 'three': '3',
-      'cuatro': '4', 'four': '4',
-      'cinco': '5', 'five': '5',
-      'seis': '6', 'six': '6',
-      'siete': '7', 'seven': '7',
-      'ocho': '8', 'eight': '8',
-      'nueve': '9', 'nine': '9'
-    };
-    
-    // Convertir a minúsculas para mejor coincidencia
-    let textoLower = texto.toLowerCase();
-    
-    // Reemplazar cada palabra numérica con su dígito
-    Object.keys(mapaPalabras).forEach(palabra => {
-      const regex = new RegExp('\\b' + palabra + '\\b', 'g');
-      textoLower = textoLower.replace(regex, mapaPalabras[palabra]);
-    });
-    
-    return textoLower;
   };
 
   // Función para verificar el código
   const verifyCode = (codeToVerify = verificationCode) => {
-    if (codeToVerify === currentCode) {
+    // Obtener el código actual para verificación
+    const currentVerificationCode = getLastGeneratedCode();
+    
+    // Mostrar información de depuración
+    addDebugInfo(`Verificando código: "${codeToVerify}" contra código actual: "${currentVerificationCode}"`);
+    
+    if (codeToVerify === currentVerificationCode) {
       // Código correcto
       setModalVisible(false);
       setTimeRemaining(60);
@@ -589,141 +646,324 @@ const VerificationPrompt = ({ isWorking, onVerificationFailed }) => {
       
       // Vibrar para indicar error
       try {
-        // Pausa breve en la vibración constante
-        stopVibration();
-        
-        // Vibración corta de error
-        Vibration.vibrate(300);
-        
-        // Reanudar vibración constante después de un breve retraso
-        setTimeout(() => {
-          startConstantVibration();
-        }, 500);
-        
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-        
-        // Volver a leer el código y reintentar
-        setTimeout(() => {
-          speakCode(currentCode);
-          
-          // Reintentar escucha después de leer el código
-          setTimeout(() => {
-            startListening();
-          }, LISTENING_DELAY);
-        }, 1500);
-        
-      } catch (error) {
-        addDebugInfo(`Error al vibrar para error: ${error.message}`);
-        // Asegurar que la vibración constante continúe incluso si hay un error
-        startConstantVibration();
+      } catch (hapticError) {
+        // Ignorar errores de háptica
       }
+      
+      addDebugInfo(`Código incorrecto: "${codeToVerify}" != "${currentVerificationCode}"`);
     }
   };
 
   // Función para leer el código en voz alta
-  const speakCode = async (code) => {
+  const speakCode = (code) => {
     try {
-      const speechLanguage = language === 'es' ? 'es-ES' : 'en-US';
-      const speechText = language === 'es' 
-        ? `Código de verificación: ${code.split('').join(' ')}`
-        : `Verification code: ${code.split('').join(' ')}`;
-
-      // Detener cualquier síntesis de voz en curso
-      await Speech.stop();
+      addDebugInfo(`Intentando leer código en voz alta: ${code}`);
       
-      // Esperar un momento antes de iniciar la nueva síntesis
-      await new Promise(resolve => setTimeout(resolve, 100));
-
-      await Speech.speak(speechText, {
-        language: speechLanguage,
-        pitch: 1.0,
-        rate: 0.8,
-        onDone: () => {
-          startListening();
-        },
-        onError: (error) => {
-          addDebugInfo(`Speech error: ${error.message}`);
-        }
+      // Determinar el idioma y el texto según la configuración del usuario
+      const speechLanguage = language === 'es' ? 'es-ES' : 'en-US';
+      const speechIntro = language === 'es' ? 'Código de verificación: ' : 'Verification code: ';
+      
+      addDebugInfo(`Usando idioma para lectura: ${speechLanguage}`);
+      
+      // Detener cualquier lectura previa
+      Speech.stop().then(() => {
+        addDebugInfo('Speech.stop() completado');
+        
+        // Agregar un pequeño retraso antes de hablar
+        setTimeout(() => {
+          // Leer el código en voz alta
+          const codeWithSpaces = code.split('').join(' ');
+          addDebugInfo(`Leyendo código en voz alta: ${speechIntro}${codeWithSpaces}`);
+          
+          Speech.speak(speechIntro + codeWithSpaces, {
+            language: speechLanguage,
+            pitch: 1.0,
+            rate: 0.8,
+            onStart: () => {
+              addDebugInfo('Lectura del código iniciada');
+            },
+            onDone: () => {
+              addDebugInfo('Lectura del código completada');
+              // Iniciar reconocimiento de voz después de leer el código
+              if (listeningTimerRef.current) {
+                clearTimeout(listeningTimerRef.current);
+              }
+              
+              listeningTimerRef.current = setTimeout(() => {
+                startListening();
+              }, LISTENING_DELAY);
+            },
+            onStopped: () => {
+              addDebugInfo('Lectura del código detenida');
+            },
+            onError: (error) => {
+              addDebugInfo(`Error al leer código: ${error}`);
+              // Iniciar reconocimiento de voz incluso si hay un error en la lectura
+              if (listeningTimerRef.current) {
+                clearTimeout(listeningTimerRef.current);
+              }
+              
+              listeningTimerRef.current = setTimeout(() => {
+                startListening();
+              }, LISTENING_DELAY);
+            }
+          });
+        }, SPEECH_DELAY);
+      }).catch(error => {
+        addDebugInfo(`Error en Speech.stop(): ${error}`);
+        // Continuar con la lectura incluso si hay un error al detener
+        setTimeout(() => {
+          const codeWithSpaces = code.split('').join(' ');
+          addDebugInfo(`Leyendo código en voz alta (después de error en stop): ${speechIntro}${codeWithSpaces}`);
+          
+          Speech.speak(speechIntro + codeWithSpaces, {
+            language: speechLanguage,
+            pitch: 1.0,
+            rate: 0.8,
+            onDone: () => {
+              addDebugInfo('Lectura del código completada (después de error)');
+              if (listeningTimerRef.current) {
+                clearTimeout(listeningTimerRef.current);
+              }
+              
+              listeningTimerRef.current = setTimeout(() => {
+                startListening();
+              }, LISTENING_DELAY);
+            }
+          });
+        }, SPEECH_DELAY);
       });
-    } catch (error) {
-      addDebugInfo(`Error in speakCode: ${error.message}`);
+    } catch (speechError) {
+      addDebugInfo(`Error general al leer código en voz alta: ${speechError.message}`);
+      // Iniciar reconocimiento de voz incluso si hay un error en la lectura
+      if (listeningTimerRef.current) {
+        clearTimeout(listeningTimerRef.current);
+      }
+      
+      listeningTimerRef.current = setTimeout(() => {
+        startListening();
+      }, LISTENING_DELAY);
     }
   };
 
-  // Efecto para leer el código en voz alta cuando se muestra el modal
-  useEffect(() => {
-    if (modalVisible && currentCode) {
-      // Pequeño retraso para asegurar que el modal esté completamente visible
-      const timer = setTimeout(() => {
-        speakCode(currentCode);
-      }, 500);
-
-      return () => clearTimeout(timer);
+  // Función para reconocer la entrada de voz con Google Speech-to-Text
+  const recognizeWithGoogleSpeech = async (audioUri, expectedCode) => {
+    addDebugInfo('Llamando a Google Speech-to-Text API');
+    
+    try {
+      // Verificar que el URI sea válido
+      if (!audioUri || typeof audioUri !== 'string') {
+        throw new Error('URI de audio inválido');
+      }
+      
+      // Verificar que el archivo exista
+      const fileInfo = await FileSystem.getInfoAsync(audioUri);
+      if (!fileInfo.exists || fileInfo.size < 1000) {
+        throw new Error('Archivo de audio no válido');
+      }
+      
+      addDebugInfo(`Procesando archivo de audio: ${audioUri} (tamaño: ${fileInfo.size} bytes)`);
+      
+      // 1. Obtener el archivo de audio
+      const audioFile = await FileSystem.readAsStringAsync(audioUri, { encoding: FileSystem.EncodingType.Base64 });
+      
+      addDebugInfo(`Archivo codificado en Base64 (longitud: ${audioFile.length})`);
+      
+      // 2. Preparar la petición a Google Speech-to-Text
+      const apiKey = 'AIzaSyDGqyJR4KZRJt9qRLmeGjdlgIBt_nb7Kqw';
+      addDebugInfo(`Enviando solicitud a Google Speech API con clave: ${apiKey.substring(0, 5)}...`);
+      
+      // Crear un contexto de reconocimiento específico para números en ambos idiomas
+      const speechContext = {
+        phrases: [
+          expectedCode,
+          ...expectedCode.split(''),
+          '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
+          // Palabras en español
+          'cero', 'uno', 'dos', 'tres', 'cuatro', 'cinco', 'seis', 'siete', 'ocho', 'nueve',
+          // Palabras en inglés
+          'zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'
+        ],
+        boost: 20
+      };
+      
+      // Determinar el idioma principal según la configuración del usuario
+      const primaryLanguage = language === 'es' ? 'es-ES' : 'en-US';
+      const secondaryLanguage = language === 'es' ? 'en-US' : 'es-ES';
+      
+      addDebugInfo(`Usando idioma primario para reconocimiento: ${primaryLanguage}, secundario: ${secondaryLanguage}`);
+      
+      // Configuración para reconocimiento multilingüe
+      const requestBody = {
+        config: {
+          encoding: 'LINEAR16',
+          sampleRateHertz: 16000,
+          languageCode: primaryLanguage,
+          alternativeLanguageCodes: [secondaryLanguage],
+          model: 'command_and_search',
+          speechContexts: [speechContext],
+          useEnhanced: true,
+          profanityFilter: false,
+          enableAutomaticPunctuation: false,
+          enableWordTimeOffsets: false
+        },
+        audio: {
+          content: audioFile
+        }
+      };
+      
+      addDebugInfo('Enviando solicitud a Google Speech API...');
+      
+      const response = await fetch(`https://speech.googleapis.com/v1/speech:recognize?key=${apiKey}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody)
+      });
+      
+      // 3. Procesar la respuesta
+      if (!response.ok) {
+        const errorText = await response.text();
+        addDebugInfo(`Error en respuesta de API: ${response.status} - ${errorText}`);
+        throw new Error(`Error en respuesta de API: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      addDebugInfo(`Respuesta recibida: ${JSON.stringify(data)}`);
+      
+      // 4. Extraer el texto reconocido
+      if (data.results && data.results.length > 0) {
+        const recognizedText = data.results[0].alternatives[0].transcript;
+        addDebugInfo(`Google Speech-to-Text reconoció: "${recognizedText}"`);
+        return recognizedText;
+      } else {
+        addDebugInfo('No se encontraron resultados en la respuesta de la API');
+        throw new Error('No se pudo reconocer ningún texto en el audio');
+      }
+    } catch (error) {
+      addDebugInfo(`Error al llamar a Google Speech-to-Text: ${error.message}`);
+      throw error;
     }
-  }, [modalVisible, currentCode, language]);
+  };
+
+  // Función para convertir palabras numéricas a dígitos
+  const convertirPalabrasANumeros = (texto) => {
+    const mapaPalabras = {
+      // Español
+      'cero': '0', 
+      'uno': '1', 'un': '1', 'una': '1', 
+      'dos': '2', 
+      'tres': '3', 
+      'cuatro': '4', 
+      'cinco': '5', 
+      'seis': '6', 
+      'siete': '7', 
+      'ocho': '8', 
+      'nueve': '9',
+      // Inglés
+      'zero': '0',
+      'one': '1',
+      'two': '2',
+      'three': '3',
+      'four': '4',
+      'five': '5',
+      'six': '6',
+      'seven': '7',
+      'eight': '8',
+      'nine': '9'
+    };
+    
+    // Convertir a minúsculas para mejor coincidencia
+    let textoLower = texto.toLowerCase();
+    
+    // Reemplazar cada palabra numérica con su dígito
+    Object.keys(mapaPalabras).forEach(palabra => {
+      const regex = new RegExp('\\b' + palabra + '\\b', 'g');
+      textoLower = textoLower.replace(regex, mapaPalabras[palabra]);
+    });
+    
+    // Registrar la conversión para depuración
+    if (textoLower !== texto.toLowerCase()) {
+      addDebugInfo(`Texto convertido: "${texto}" -> "${textoLower}"`);
+    }
+    
+    return textoLower;
+  };
 
   // Activar la verificación
   const triggerVerification = () => {
-    // Detener cualquier verificación en curso
-    if (verificationTimerRef.current) {
-      clearTimeout(verificationTimerRef.current);
-      verificationTimerRef.current = null;
+    try {
+      // Generar un nuevo código aleatorio
+      const newCode = generateRandomCode();
+      
+      // Asegurarse de que el currentCode se actualice inmediatamente
+      setCurrentCode(newCode);
+      
+      // Registrar el nuevo código para depuración
+      addDebugInfo(`CÓDIGO GENERADO: ${newCode}`);
+      
+      setVerificationCode('');
+      setTimeRemaining(30);
+      setModalVisible(true);
+      
+      // Mostrar el código en los logs para depuración
+      addDebugInfo(`CÓDIGO ACTUAL: ${newCode}`);
+      
+      // Iniciar vibración para alertar al usuario
+      startConstantVibration();
+      
+      // Iniciar temporizador de cuenta regresiva
+      if (countdownTimerRef.current) {
+        clearInterval(countdownTimerRef.current);
+      }
+      
+      countdownTimerRef.current = setInterval(() => {
+        setTimeRemaining(prev => {
+          if (prev <= 1) {
+            // Tiempo agotado
+            handleVerificationTimeout();
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+      
+      // Leer el código en voz alta inmediatamente
+      addDebugInfo(`Llamando a speakCode con código: ${newCode}`);
+      speakCode(newCode);
+      
+    } catch (error) {
+      addDebugInfo(`Error al iniciar verificación: ${error.message}`);
+      cleanupResources();
     }
-    
-    // Detener cualquier vibración en curso
-    stopVibration();
-    
-    // Limpiar estados anteriores
-    setRecognitionStatus('');
-    
-    // Generar un nuevo código aleatorio
-    const newCode = generateRandomCode();
-    setCurrentCode(newCode);
-    
-    // Limpiar el código ingresado por el usuario
-    setVerificationCode('');
-    
-    // Mostrar el modal
-    setModalVisible(true);
-    
-    // Iniciar vibración constante
-    startConstantVibration();
-    
-    // Reiniciar el sistema de audio completamente antes de iniciar
-    ensureNoActiveRecordings();
-    
-    // Iniciar el temporizador de cuenta regresiva
-    setTimeRemaining(60);
+  };
+
+  // Manejar tiempo de espera agotado
+  const handleVerificationTimeout = () => {
+    // Limpiar temporizadores
     if (countdownTimerRef.current) {
       clearInterval(countdownTimerRef.current);
+      countdownTimerRef.current = null;
     }
     
-    countdownTimerRef.current = setInterval(() => {
-      setTimeRemaining(prev => {
-        if (prev <= 1) {
-          // Tiempo agotado
-          clearInterval(countdownTimerRef.current);
-          countdownTimerRef.current = null;
-          
-          // Ocultar el modal
-          setModalVisible(false);
-          
-          // Detener vibración
-          stopVibration();
-          
-          // Notificar fallo de verificación
-          if (onVerificationFailed) {
-            onVerificationFailed('Tiempo de espera agotado para la verificación de autenticación');
-          }
-          
-          // Programar la siguiente verificación
-          scheduleNextVerification();
-          
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
+    // Detener vibración
+    stopVibration();
+    
+    // Detener grabación si está activa
+    stopListening();
+    
+    // Ocultar el modal
+    setModalVisible(false);
+    
+    // Notificar fallo de verificación
+    if (onVerificationFailed) {
+      onVerificationFailed('Tiempo de espera agotado para la verificación de autenticación');
+    }
+    
+    // Programar la siguiente verificación
+    scheduleNextVerification();
   };
 
   // Renderizar el componente

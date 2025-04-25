@@ -22,16 +22,15 @@ const AdminActivityList = () => {
   const { t } = useLanguage();
   const [activities, setActivities] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
   const [pagination, setPagination] = useState({
     currentPage: 1,
-    limit: 100,
-    total: 0,
-    pages: 0
+    pages: 1,
+    total: 0
   });
-  const [error, setError] = useState(null);
-  const [viewMode, setViewMode] = useState('list'); // 'list' o 'grouped'
-  const [filterType, setFilterType] = useState('all'); // 'all', 'availability', 'tasks', 'locations'
+  const [filterType, setFilterType] = useState('all');
+  const [viewMode, setViewMode] = useState('list');
 
   // Cargar las actividades
   const loadActivities = async (page = 1) => {
@@ -39,7 +38,7 @@ const AdminActivityList = () => {
       setLoading(true);
       const response = await getAdminActivities({ 
         page, 
-        limit: pagination.limit,
+        limit: 100,
         sort: '-createdAt'
       });
       
@@ -51,9 +50,8 @@ const AdminActivityList = () => {
       
       setPagination(response.pagination || {
         currentPage: 1,
-        limit: 100,
-        total: 0,
-        pages: 0
+        pages: 1,
+        total: 0
       });
     } catch (error) {
       console.error('Error loading activities:', error);
@@ -452,112 +450,9 @@ const AdminActivityList = () => {
     </View>
   );
 
-  // Renderizar los botones de exportación
-  const renderExportButtons = () => {
-    const [exporting, setExporting] = useState(false);
-    
-    const handleExportToExcel = async () => {
-      try {
-        setExporting(true);
-        
-        // Construir la URL base para la exportación
-        const baseUrl = 'https://managetime-backend-48f256c2dfe5.herokuapp.com/api/reports/activities/excel';
-        
-        // Obtener el token de autenticación del almacenamiento local
-        const token = await AsyncStorage.getItem('token');
-        if (!token) {
-          alert(t('loginError'));
-          setExporting(false);
-          return;
-        }
-        
-        // Construir la URL completa con el token y parámetros de filtro
-        let url = `${baseUrl}?token=${token}`;
-        
-        // Añadir parámetros de filtro si están seleccionados
-        if (filterType !== 'all') {
-          url += `&activityType=${filterType}`;
-        }
-        
-        // Abrir la URL en el navegador para descargar el archivo
-        Linking.openURL(url);
-        
-        setTimeout(() => {
-          setExporting(false);
-        }, 2000);
-      } catch (error) {
-        console.error('Error exporting to Excel:', error);
-        alert(t('error'));
-        setExporting(false);
-      }
-    };
-    
-    const handleExportToPDF = async () => {
-      try {
-        setExporting(true);
-        
-        // Construir la URL base para la exportación
-        const baseUrl = 'https://managetime-backend-48f256c2dfe5.herokuapp.com/api/reports/activities/pdf';
-        
-        // Obtener el token de autenticación del almacenamiento local
-        const token = await AsyncStorage.getItem('token');
-        if (!token) {
-          alert(t('loginError'));
-          setExporting(false);
-          return;
-        }
-        
-        // Construir la URL completa con el token y parámetros de filtro
-        let url = `${baseUrl}?token=${token}`;
-        
-        // Añadir parámetros de filtro si están seleccionados
-        if (filterType !== 'all') {
-          url += `&activityType=${filterType}`;
-        }
-        
-        // Abrir la URL en el navegador para descargar el archivo
-        Linking.openURL(url);
-        
-        setTimeout(() => {
-          setExporting(false);
-        }, 2000);
-      } catch (error) {
-        console.error('Error exporting to PDF:', error);
-        alert(t('error'));
-        setExporting(false);
-      }
-    };
-    
-    return (
-      <View style={styles.exportContainer}>
-        <TouchableOpacity 
-          style={styles.exportButton}
-          onPress={handleExportToExcel}
-          disabled={exporting}
-        >
-          <Ionicons name="document-outline" size={20} color="#fff" />
-          <Text style={styles.exportButtonText}>
-            {exporting ? t('generating') : t('exportToExcel')}
-          </Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity 
-          style={styles.exportButton}
-          onPress={handleExportToPDF}
-          disabled={exporting}
-        >
-          <Ionicons name="document-text-outline" size={20} color="#fff" />
-          <Text style={styles.exportButtonText}>
-            {exporting ? t('generating') : t('exportToPDF')}
-          </Text>
-        </TouchableOpacity>
-      </View>
-    );
-  };
-
   // Renderizar el componente principal
-  return (
-    <View style={styles.container}>
+  const renderHeader = () => (
+    <>
       <View style={styles.header}>
         <Text style={styles.title}>{t('userActivities')}</Text>
         {pagination.total > 0 && (
@@ -569,7 +464,6 @@ const AdminActivityList = () => {
 
       {renderViewModeButtons()}
       {renderFilterButtons()}
-      {renderExportButtons()}
 
       {error && (
         <View style={styles.errorContainer}>
@@ -579,122 +473,91 @@ const AdminActivityList = () => {
           </TouchableOpacity>
         </View>
       )}
-
-      {viewMode === 'list' ? (
-        <FlatList
-          data={getFilteredActivities()}
-          keyExtractor={(item) => item._id}
-          renderItem={renderActivityItem}
-          ItemSeparatorComponent={renderSeparator}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-          }
-          onEndReached={loadMore}
-          onEndReachedThreshold={0.5}
-          ListEmptyComponent={
-            loading ? (
-              <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color="#4A90E2" />
-                <Text style={styles.loadingText}>{t('loading')}</Text>
-              </View>
-            ) : (
-              <Text style={styles.emptyText}>
-                {t('noActivities')}
-              </Text>
-            )
-          }
-          ListFooterComponent={
-            pagination.currentPage < pagination.pages && !loading ? (
-              <TouchableOpacity style={styles.loadMoreButton} onPress={loadMore}>
-                <Text style={styles.loadMoreButtonText}>{t('loadMore')}</Text>
-              </TouchableOpacity>
-            ) : pagination.currentPage > 1 && loading ? (
-              <View style={styles.loadingMoreContainer}>
-                <ActivityIndicator size="small" color="#4A90E2" />
-                <Text style={styles.loadingMoreText}>{t('loadingMore')}</Text>
-              </View>
-            ) : null
-          }
-        />
-      ) : (
-        <SectionList
-          sections={getGroupedActivities()}
-          keyExtractor={(item) => item._id}
-          renderItem={renderActivityItem}
-          renderSectionHeader={renderSectionHeader}
-          ItemSeparatorComponent={renderSeparator}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-          }
-          onEndReached={loadMore}
-          onEndReachedThreshold={0.5}
-          ListEmptyComponent={
-            loading ? (
-              <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color="#4A90E2" />
-                <Text style={styles.loadingText}>{t('loading')}</Text>
-              </View>
-            ) : (
-              <Text style={styles.emptyText}>
-                {t('noActivities')}
-              </Text>
-            )
-          }
-          ListFooterComponent={
-            pagination.currentPage < pagination.pages && !loading ? (
-              <TouchableOpacity style={styles.loadMoreButton} onPress={loadMore}>
-                <Text style={styles.loadMoreButtonText}>{t('loadMore')}</Text>
-              </TouchableOpacity>
-            ) : pagination.currentPage > 1 && loading ? (
-              <View style={styles.loadingMoreContainer}>
-                <ActivityIndicator size="small" color="#4A90E2" />
-                <Text style={styles.loadingMoreText}>{t('loadingMore')}</Text>
-              </View>
-            ) : null
-          }
-        />
-      )}
-
-      {/* Leyenda de tipos de actividades */}
-      <View style={styles.legendContainer}>
-        <Text style={styles.legendTitle}>{t('activityTypes')}:</Text>
-        <View style={styles.legendItems}>
-          <View style={styles.legendItem}>
-            <View style={[styles.legendColor, { backgroundColor: getActivityColor('clock_in') }]} />
-            <Text style={styles.legendText}>Disponible</Text>
-          </View>
-          <View style={styles.legendItem}>
-            <View style={[styles.legendColor, { backgroundColor: getActivityColor('clock_out') }]} />
-            <Text style={styles.legendText}>No disponible</Text>
-          </View>
-          <View style={styles.legendItem}>
-            <View style={[styles.legendColor, { backgroundColor: getActivityColor('location_enter') }]} />
-            <Text style={styles.legendText}>Entrada ubicación</Text>
-          </View>
-          <View style={styles.legendItem}>
-            <View style={[styles.legendColor, { backgroundColor: getActivityColor('location_exit') }]} />
-            <Text style={styles.legendText}>Salida ubicación</Text>
-          </View>
-          <View style={styles.legendItem}>
-            <View style={[styles.legendColor, { backgroundColor: getActivityColor('task_complete') }]} />
-            <Text style={styles.legendText}>Tarea completada</Text>
-          </View>
-          <View style={styles.legendItem}>
-            <View style={[styles.legendColor, { backgroundColor: getActivityColor('task_create') }]} />
-            <Text style={styles.legendText}>Tarea creada</Text>
-          </View>
-          <View style={styles.legendItem}>
-            <View style={[styles.legendColor, { backgroundColor: getActivityColor('task_update') }]} />
-            <Text style={styles.legendText}>Tarea actualizada</Text>
-          </View>
-          <View style={styles.legendItem}>
-            <View style={[styles.legendColor, { backgroundColor: getActivityColor('task_delete') }]} />
-            <Text style={styles.legendText}>Tarea eliminada</Text>
-          </View>
-        </View>
-      </View>
-    </View>
+    </>
   );
+
+  if (viewMode === 'list') {
+    return (
+      <FlatList
+        data={getFilteredActivities()}
+        keyExtractor={(item) => item._id}
+        renderItem={renderActivityItem}
+        ItemSeparatorComponent={renderSeparator}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+        onEndReached={loadMore}
+        onEndReachedThreshold={0.5}
+        ListHeaderComponent={renderHeader}
+        ListEmptyComponent={
+          loading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color="#4A90E2" />
+              <Text style={styles.loadingText}>{t('loading')}</Text>
+            </View>
+          ) : (
+            <Text style={styles.emptyText}>
+              {t('noActivities')}
+            </Text>
+          )
+        }
+        ListFooterComponent={
+          pagination.currentPage < pagination.pages && !loading ? (
+            <TouchableOpacity style={styles.loadMoreButton} onPress={loadMore}>
+              <Text style={styles.loadMoreButtonText}>{t('loadMore')}</Text>
+            </TouchableOpacity>
+          ) : pagination.currentPage > 1 && loading ? (
+            <View style={styles.loadingMoreContainer}>
+              <ActivityIndicator size="small" color="#4A90E2" />
+              <Text style={styles.loadingMoreText}>{t('loadingMore')}</Text>
+            </View>
+          ) : null
+        }
+        contentContainerStyle={styles.listContentContainer}
+      />
+    );
+  } else {
+    return (
+      <SectionList
+        sections={getGroupedActivities()}
+        keyExtractor={(item) => item._id}
+        renderItem={renderActivityItem}
+        renderSectionHeader={renderSectionHeader}
+        ItemSeparatorComponent={renderSeparator}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+        onEndReached={loadMore}
+        onEndReachedThreshold={0.5}
+        ListHeaderComponent={renderHeader}
+        ListEmptyComponent={
+          loading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color="#4A90E2" />
+              <Text style={styles.loadingText}>{t('loading')}</Text>
+            </View>
+          ) : (
+            <Text style={styles.emptyText}>
+              {t('noActivities')}
+            </Text>
+          )
+        }
+        ListFooterComponent={
+          pagination.currentPage < pagination.pages && !loading ? (
+            <TouchableOpacity style={styles.loadMoreButton} onPress={loadMore}>
+              <Text style={styles.loadMoreButtonText}>{t('loadMore')}</Text>
+            </TouchableOpacity>
+          ) : pagination.currentPage > 1 && loading ? (
+            <View style={styles.loadingMoreContainer}>
+              <ActivityIndicator size="small" color="#4A90E2" />
+              <Text style={styles.loadingMoreText}>{t('loadingMore')}</Text>
+            </View>
+          ) : null
+        }
+        contentContainerStyle={styles.listContentContainer}
+      />
+    );
+  }
 };
 
 const styles = StyleSheet.create({
@@ -946,24 +809,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
   },
-  // Estilos para los botones de exportación
-  exportContainer: {
-    flexDirection: 'row',
-    marginBottom: 16,
-  },
-  exportButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: '#4CAF50',
-    marginRight: 8,
-  },
-  exportButtonText: {
-    fontSize: 14,
-    color: '#fff',
-    marginLeft: 4,
+  listContentContainer: {
+    paddingHorizontal: 16,
+    paddingBottom: 16,
   },
 });
 
