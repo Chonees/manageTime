@@ -1,4 +1,3 @@
-const PDFDocument = require('pdfkit');
 const moment = require('moment');
 const User = require('../models/user.model');
 const Activity = require('../models/activity.model');
@@ -49,133 +48,36 @@ const verifyAdminToken = async (req, res) => {
       return res.status(401).json({ message: `Error de autenticación: ${tokenError.message}` });
     }
   } else {
-    console.log('No se proporcionó token en los parámetros de consulta');
-    return res.status(401).json({ message: 'No se proporcionó token de autenticación' });
-  }
-  
-  return false;
-};
-
-/**
- * Genera un reporte PDF con todas las actividades de todos los usuarios
- * @param {Object} req - Objeto de solicitud
- * @param {Object} res - Objeto de respuesta
- */
-exports.generateActivityReport = async (req, res) => {
-  try {
-    console.log('Iniciando generación de reporte PDF');
-    console.log('Query params:', req.query);
-    console.log('Headers:', req.headers);
-    
-    // Usar la función auxiliar para verificar el token
-    if (!(await verifyAdminToken(req, res))) {
-      return; // La respuesta ya fue enviada por verifyAdminToken
-    }
-
-    // Verificar que el usuario sea administrador
-    if (!req.user || !req.user.isAdmin) {
-      console.log('Acceso denegado: No es admin o no hay usuario autenticado');
-      return res.status(403).json({ message: 'Acceso denegado: se requieren permisos de administrador' });
-    }
-
-    // Crear un nuevo documento PDF
-    const doc = new PDFDocument({ margin: 50 });
-    
-    // Configurar cabeceras para descargar el archivo
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename=actividades_${moment().format('YYYY-MM-DD')}.pdf`);
-    
-    // Pipe el PDF directo a la respuesta HTTP
-    doc.pipe(res);
-
-    // Título del reporte
-    doc.fontSize(25).text('Reporte de Actividades', { align: 'center' });
-    doc.moveDown();
-    doc.fontSize(12).text(`Generado el: ${moment().format('DD/MM/YYYY HH:mm:ss')}`, { align: 'center' });
-    doc.moveDown(2);
-
-    // Obtener todos los usuarios
-    const users = await User.find({}).select('username email role');
-    
-    // Para cada usuario, obtener sus actividades
-    for (const user of users) {
-      // Agregar información del usuario
-      doc.fontSize(16).fillColor('#2e2e2e').text(`Usuario: ${user.username} (${user.email})`);
-      doc.fontSize(12).fillColor('#555555').text(`Rol: ${user.role === 'admin' ? 'Administrador' : 'Usuario regular'}`);
-      doc.moveDown();
-      
-      // Obtener actividades del usuario
-      const activities = await Activity.find({ userId: user._id })
-        .populate('taskId')
-        .sort({ createdAt: -1 });
-      
-      if (activities.length === 0) {
-        doc.fontSize(12).fillColor('#777777').text('Este usuario no tiene actividades registradas.');
-        doc.moveDown();
-        continue;
-      }
-      
-      // Tabla de actividades
-      doc.fontSize(12).fillColor('#2e2e2e');
-      
-      // Encabezados de la tabla
-      const tableTop = doc.y;
-      const tableLeft = 50;
-      const colWidths = [150, 120, 200, 100];
-      
-      // Dibujar encabezados
-      doc.font('Helvetica-Bold')
-         .text('Tipo', tableLeft, tableTop)
-         .text('Fecha', tableLeft + colWidths[0], tableTop)
-         .text('Descripción', tableLeft + colWidths[0] + colWidths[1], tableTop)
-         .text('Ubicación', tableLeft + colWidths[0] + colWidths[1] + colWidths[2], tableTop);
-      
-      doc.moveDown();
-      let rowTop = doc.y;
-      
-      // Dibujar filas de datos
-      doc.font('Helvetica');
-      for (const activity of activities) {
-        // Si queda poco espacio en la página, crear una nueva
-        if (rowTop > doc.page.height - 150) {
-          doc.addPage();
-          rowTop = 50;
-        }
+    // Intentar desde encabezado de autorización
+    const authHeader = req.headers.authorization;
+    if (authHeader) {
+      try {
+        const token = authHeader.split(' ')[1];
+        const JWT_SECRET = process.env.JWT_SECRET || 'tokenSecretJWT';
+        const decoded = jwt.verify(token, JWT_SECRET);
         
-        // Determinar descripción según el tipo
-        let description = '';
-        if (activity.type === 'login') {
-          description = 'Inicio de sesión';
-        } else if (activity.type === 'logout') {
-          description = 'Cierre de sesión';
-        } else if (activity.type === 'location_check' && activity.location) {
-          description = `Check en ubicación: ${activity.location.name || 'Desconocida'}`;
-        } else if (activity.type === 'task_activity' && activity.taskId) {
-          description = `Actividad en tarea`;
+        if (decoded && decoded.id) {
+          // Buscar usuario para verificar si es admin
+          const user = await User.findById(decoded.id);
+          if (user && (user.isAdmin === true || decoded.isAdmin === true)) {
+            req.user = {
+              id: user._id,
+              role: 'admin',
+              isAdmin: true
+            };
+            return true;
+          } else {
+            return res.status(403).json({ message: 'Acceso denegado: se requieren permisos de administrador' });
+          }
         } else {
-          description = 'Actividad sin descripción';
+          return res.status(401).json({ message: 'Token inválido: falta información del usuario' });
         }
-        
-        // Dibujar fila
-        doc.text(activity.type, tableLeft, rowTop)
-           .text(moment(activity.createdAt).format('DD/MM/YYYY HH:mm'), tableLeft + colWidths[0], rowTop)
-           .text(description, tableLeft + colWidths[0] + colWidths[1], rowTop)
-           .text(activity.location ? activity.location.name : 'N/A', 
-                 tableLeft + colWidths[0] + colWidths[1] + colWidths[2], rowTop);
-        
-        rowTop = doc.y + 10;
-        doc.moveDown();
+      } catch (tokenError) {
+        return res.status(401).json({ message: `Error de autenticación: ${tokenError.message}` });
       }
-      
-      doc.moveDown(2);
+    } else {
+      return res.status(401).json({ message: 'No se proporcionó token de autenticación' });
     }
-    
-    // Finalizar el PDF
-    doc.end();
-    
-  } catch (error) {
-    console.error('Error al generar reporte PDF:', error);
-    res.status(500).json({ message: 'Error al generar el reporte PDF' });
   }
 };
 
