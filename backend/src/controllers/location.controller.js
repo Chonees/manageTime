@@ -27,8 +27,9 @@ exports.startWork = async (req, res) => {
     await location.save();
     
     // También crear una actividad para que aparezca en el panel de administrador
-    const activityType = type === 'tracking' ? 'location_check' : 'location_enter';
-    const activityMessage = type === 'tracking' ? 'Punto de seguimiento registrado' : 'Ubicación de inicio registrada';
+    // Si es un punto de seguimiento, usar location_check, si no, usar clock_in (Disponible)
+    const activityType = type === 'tracking' ? 'location_check' : 'clock_in';
+    const activityMessage = type === 'tracking' ? 'Punto de seguimiento registrado' : 'Disponible';
     
     const activity = new Activity({
       userId: req.user._id,
@@ -85,8 +86,8 @@ exports.endWork = async (req, res) => {
     // También crear una actividad para que aparezca en el panel de administrador
     const activity = new Activity({
       userId: req.user._id,
-      type: 'location_exit',
-      message: 'Ubicación de fin registrada',
+      type: 'clock_out',
+      message: 'No disponible',
       metadata: {
         latitude,
         longitude,
@@ -338,19 +339,35 @@ exports.saveBatchLocations = async (req, res) => {
     const savedLocations = await Location.insertMany(locationDocs);
     
     // También crear actividades para cada ubicación
-    const activityDocs = savedLocations.map(loc => ({
-      userId,
-      type: 'location_check',
-      message: 'Punto de seguimiento registrado (lote)',
-      metadata: {
-        latitude: loc.latitude,
-        longitude: loc.longitude,
-        locationType: loc.type,
-        locationId: loc._id,
+    const activityDocs = savedLocations.map(loc => {
+      // Determinar el tipo de actividad basado en el tipo de ubicación
+      let activityType, activityMessage;
+      
+      if (loc.type === 'start') {
+        activityType = 'clock_in';
+        activityMessage = 'Disponible';
+      } else if (loc.type === 'end') {
+        activityType = 'clock_out';
+        activityMessage = 'No disponible';
+      } else { // tracking
+        activityType = 'location_check';
+        activityMessage = 'Punto de seguimiento registrado';
+      }
+      
+      return {
+        userId,
+        type: activityType,
+        message: activityMessage,
+        metadata: {
+          latitude: loc.latitude,
+          longitude: loc.longitude,
+          locationType: loc.type,
+          locationId: loc._id,
+          timestamp: loc.timestamp
+        },
         timestamp: loc.timestamp
-      },
-      timestamp: loc.timestamp
-    }));
+      };
+    });
     
     // Insertar todas las actividades
     await Activity.insertMany(activityDocs);
