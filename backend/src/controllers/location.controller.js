@@ -1,5 +1,6 @@
 const Location = require('../models/location.model');
 const Task = require('../models/task.model');
+const Activity = require('../models/activity.model');
 const mongoose = require('mongoose');
 
 // Iniciar trabajo (registrar ubicación de inicio)
@@ -24,6 +25,24 @@ exports.startWork = async (req, res) => {
     
     // Guardar en la base de datos
     await location.save();
+    
+    // También crear una actividad para que aparezca en el panel de administrador
+    const activityType = type === 'tracking' ? 'location_check' : 'location_enter';
+    const activityMessage = type === 'tracking' ? 'Punto de seguimiento registrado' : 'Ubicación de inicio registrada';
+    
+    const activity = new Activity({
+      userId: req.user._id,
+      type: activityType,
+      message: activityMessage,
+      metadata: {
+        latitude,
+        longitude,
+        locationType: type || 'start',
+        locationId: location._id
+      }
+    });
+    
+    await activity.save();
     
     // Mensaje personalizado según el tipo
     const message = type === 'tracking' 
@@ -52,7 +71,7 @@ exports.endWork = async (req, res) => {
       });
     }
     
-    // Crear nuevo registro de ubicación
+    // Crear nuevo registro de ubicación de fin
     const location = new Location({
       userId: req.user._id,
       type: 'end',
@@ -62,6 +81,21 @@ exports.endWork = async (req, res) => {
     
     // Guardar en la base de datos
     await location.save();
+    
+    // También crear una actividad para que aparezca en el panel de administrador
+    const activity = new Activity({
+      userId: req.user._id,
+      type: 'location_exit',
+      message: 'Ubicación de fin registrada',
+      metadata: {
+        latitude,
+        longitude,
+        locationType: 'end',
+        locationId: location._id
+      }
+    });
+    
+    await activity.save();
     
     res.status(201).json({ 
       success: true, 
@@ -243,6 +277,21 @@ exports.saveTrackingPoint = async (req, res) => {
     // Guardar en la base de datos
     await location.save();
     
+    // También crear una actividad para que aparezca en el panel de administrador
+    const activity = new Activity({
+      userId: req.user._id,
+      type: 'location_check',
+      message: 'Punto de seguimiento registrado',
+      metadata: {
+        latitude,
+        longitude,
+        locationType: 'tracking',
+        locationId: location._id
+      }
+    });
+    
+    await activity.save();
+    
     res.status(201).json({ 
       success: true, 
       message: 'Punto de seguimiento guardado correctamente',
@@ -258,68 +307,62 @@ exports.saveTrackingPoint = async (req, res) => {
 exports.saveBatchLocations = async (req, res) => {
   try {
     const { locations } = req.body;
+    const userId = req.user._id;
     
-    // Validar que se haya enviado un array de ubicaciones
-    if (!locations || !Array.isArray(locations) || locations.length === 0) {
+    if (!Array.isArray(locations) || locations.length === 0) {
       return res.status(400).json({ 
-        message: 'Se requiere un array de ubicaciones para procesar' 
+        message: 'Se requiere un array de ubicaciones válido' 
       });
     }
     
-    console.log(`Procesando lote de ${locations.length} ubicaciones para el usuario ${req.user._id}`);
-    
-    // Array para almacenar los resultados
-    const savedLocations = [];
-    const errors = [];
-    
-    // Procesar cada ubicación en el lote
+    // Validar cada ubicación
     for (const loc of locations) {
-      try {
-        // Validar que tenga las propiedades necesarias
-        if (!loc.latitude || !loc.longitude) {
-          errors.push({
-            location: loc,
-            error: 'Coordenadas de ubicación faltantes'
-          });
-          continue;
-        }
-        
-        // Crear nuevo registro de ubicación
-        const location = new Location({
-          userId: req.user._id,
-          type: loc.type || 'tracking',
-          latitude: loc.latitude,
-          longitude: loc.longitude,
-          // Si la ubicación tiene timestamp, usarlo; de lo contrario, usar la fecha actual
-          timestamp: loc.timestamp || new Date()
-        });
-        
-        // Guardar en la base de datos
-        await location.save();
-        savedLocations.push(location);
-      } catch (locError) {
-        console.error('Error al guardar ubicación individual:', locError);
-        errors.push({
-          location: loc,
-          error: locError.message
+      if (!loc.latitude || !loc.longitude) {
+        return res.status(400).json({ 
+          message: 'Todas las ubicaciones deben tener latitud y longitud' 
         });
       }
     }
     
-    // Devolver los resultados
-    res.status(201).json({
-      success: true,
+    // Preparar documentos para inserción masiva
+    const locationDocs = locations.map(loc => ({
+      userId,
+      type: loc.type || 'tracking',
+      latitude: loc.latitude,
+      longitude: loc.longitude,
+      description: loc.description || '',
+      timestamp: loc.timestamp ? new Date(loc.timestamp) : new Date()
+    }));
+    
+    // Insertar todas las ubicaciones
+    const savedLocations = await Location.insertMany(locationDocs);
+    
+    // También crear actividades para cada ubicación
+    const activityDocs = savedLocations.map(loc => ({
+      userId,
+      type: 'location_check',
+      message: 'Punto de seguimiento registrado (lote)',
+      metadata: {
+        latitude: loc.latitude,
+        longitude: loc.longitude,
+        locationType: loc.type,
+        locationId: loc._id,
+        timestamp: loc.timestamp
+      },
+      timestamp: loc.timestamp
+    }));
+    
+    // Insertar todas las actividades
+    await Activity.insertMany(activityDocs);
+    
+    res.status(201).json({ 
+      success: true, 
       message: `${savedLocations.length} ubicaciones guardadas correctamente`,
-      savedCount: savedLocations.length,
-      errorCount: errors.length,
-      savedLocations,
-      errors
+      count: savedLocations.length,
+      locations: savedLocations
     });
   } catch (error) {
-    console.error('Error al procesar lote de ubicaciones:', error);
-    res.status(500).json({ 
-      message: 'Error al procesar lote de ubicaciones',
-      error: error.message
-    });
+    console.error('Error al guardar ubicaciones en lote:', error);
+    res.status(500).json({ message: 'Error al guardar ubicaciones en lote' });
   }
 };
