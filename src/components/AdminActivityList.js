@@ -6,7 +6,9 @@ import {
   TouchableOpacity, 
   ActivityIndicator,
   FlatList,
-  RefreshControl
+  RefreshControl,
+  SectionList,
+  Button
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { getAdminActivities } from '../services/api';
@@ -24,6 +26,8 @@ const AdminActivityList = () => {
     pages: 0
   });
   const [error, setError] = useState(null);
+  const [viewMode, setViewMode] = useState('list'); // 'list' o 'grouped'
+  const [filterType, setFilterType] = useState('all'); // 'all', 'availability', 'tasks', 'locations'
 
   // Cargar las actividades
   const loadActivities = async (page = 1) => {
@@ -78,9 +82,42 @@ const AdminActivityList = () => {
   const formatDateTime = (dateString) => {
     try {
       const date = new Date(dateString);
-      return date.toLocaleString();
+      return date.toLocaleString('es-ES', { 
+        day: '2-digit', 
+        month: '2-digit', 
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
     } catch (error) {
       return t('unknownDate');
+    }
+  };
+
+  // Formatear solo la fecha
+  const formatDate = (dateString) => {
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString('es-ES', { 
+        day: '2-digit', 
+        month: '2-digit', 
+        year: 'numeric'
+      });
+    } catch (error) {
+      return t('unknownDate');
+    }
+  };
+
+  // Formatear solo la hora
+  const formatTime = (dateString) => {
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleTimeString('es-ES', { 
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch (error) {
+      return '';
     }
   };
 
@@ -165,17 +202,17 @@ const AdminActivityList = () => {
   const getActivityTypeText = (type) => {
     switch (type) {
       case 'location_enter':
-        return t('locationEnter');
+        return 'Entrada a ubicación';
       case 'location_exit':
-        return t('locationExit');
+        return 'Salida de ubicación';
       case 'task_complete':
-        return t('taskComplete');
+        return 'Tarea completada';
       case 'task_create':
-        return t('taskCreate');
+        return 'Tarea creada';
       case 'task_update':
-        return t('taskUpdate');
+        return 'Tarea actualizada';
       case 'task_delete':
-        return t('taskDelete');
+        return 'Tarea eliminada';
       case 'started_working':
       case 'clock_in':
         return 'Disponible';
@@ -183,46 +220,119 @@ const AdminActivityList = () => {
       case 'clock_out':
         return 'No disponible';
       default:
-        return t('activity');
+        return 'Actividad';
     }
+  };
+
+  // Generar una descripción detallada de la actividad
+  const getDetailedDescription = (item) => {
+    const { type, message, metadata, taskId } = item;
+    
+    // Si hay un mensaje específico, usarlo
+    if (message && message !== 'Actividad sin descripción') {
+      return message;
+    }
+    
+    switch (type) {
+      case 'location_enter':
+        return metadata && metadata.latitude && metadata.longitude 
+          ? `Entrada registrada en coordenadas: ${metadata.latitude.toFixed(6)}, ${metadata.longitude.toFixed(6)}`
+          : 'Entrada a ubicación registrada';
+          
+      case 'location_exit':
+        return metadata && metadata.latitude && metadata.longitude 
+          ? `Salida registrada en coordenadas: ${metadata.latitude.toFixed(6)}, ${metadata.longitude.toFixed(6)}`
+          : 'Salida de ubicación registrada';
+          
+      case 'task_complete':
+        return taskId ? `Completó la tarea: "${taskId.title || 'Sin título'}"` : 'Completó una tarea';
+        
+      case 'task_create':
+        return taskId ? `Creó la tarea: "${taskId.title || 'Sin título'}"` : 'Creó una nueva tarea';
+        
+      case 'task_update':
+        return taskId ? `Actualizó la tarea: "${taskId.title || 'Sin título'}"` : 'Actualizó una tarea';
+        
+      case 'task_delete':
+        return 'Eliminó una tarea';
+        
+      case 'started_working':
+      case 'clock_in':
+        if (metadata && metadata.duration) {
+          return `Marcó como disponible (duración: ${Math.floor(metadata.duration / 60)} min)`;
+        } else if (metadata && metadata.latitude && metadata.longitude) {
+          return `Marcó como disponible en coordenadas: ${metadata.latitude.toFixed(6)}, ${metadata.longitude.toFixed(6)}`;
+        }
+        return 'Marcó como disponible';
+        
+      case 'stopped_working':
+      case 'clock_out':
+        if (metadata && metadata.duration) {
+          return `Marcó como no disponible (duración: ${Math.floor(metadata.duration / 60)} min)`;
+        } else if (metadata && metadata.latitude && metadata.longitude) {
+          return `Marcó como no disponible en coordenadas: ${metadata.latitude.toFixed(6)}, ${metadata.longitude.toFixed(6)}`;
+        }
+        return 'Marcó como no disponible';
+        
+      default:
+        return 'Actividad registrada';
+    }
+  };
+
+  // Filtrar actividades por tipo
+  const getFilteredActivities = () => {
+    if (filterType === 'all') {
+      return activities;
+    }
+    
+    return activities.filter(activity => {
+      const { type } = activity;
+      
+      if (filterType === 'availability') {
+        return ['clock_in', 'clock_out', 'started_working', 'stopped_working'].includes(type);
+      }
+      
+      if (filterType === 'tasks') {
+        return ['task_create', 'task_update', 'task_complete', 'task_delete'].includes(type);
+      }
+      
+      if (filterType === 'locations') {
+        return ['location_enter', 'location_exit'].includes(type);
+      }
+      
+      return true;
+    });
+  };
+
+  // Agrupar actividades por usuario
+  const getGroupedActivities = () => {
+    const filteredActivities = getFilteredActivities();
+    const groupedByUser = {};
+    
+    // Agrupar por usuario
+    filteredActivities.forEach(activity => {
+      const userName = activity.userId?.username || 'Usuario desconocido';
+      if (!groupedByUser[userName]) {
+        groupedByUser[userName] = [];
+      }
+      groupedByUser[userName].push(activity);
+    });
+    
+    // Convertir a formato para SectionList
+    return Object.keys(groupedByUser).map(userName => ({
+      title: userName,
+      data: groupedByUser[userName]
+    }));
   };
 
   // Renderizar un elemento de actividad
   const renderActivityItem = ({ item }) => {
-    const { type, message, createdAt, userId, taskId, metadata } = item;
-    const userName = userId?.username || t('unknownUser');
-    const taskName = taskId?.title || t('unknownTask');
-    const taskDescription = taskId?.description || '';
-    
-    // Detectar si es una actividad de disponibilidad basada en los metadatos
-    let isAvailabilityActivity = false;
-    let availabilityType = '';
-    
-    if (metadata && metadata.availability) {
-      isAvailabilityActivity = true;
-      availabilityType = metadata.availability === 'available' ? 'available' : 'unavailable';
-    }
-    
-    // Determinar el tipo de texto y color basado en el tipo real o el tipo de disponibilidad
-    let typeText = '';
-    let color = '';
-    let icon = '';
-    
-    if (isAvailabilityActivity) {
-      if (availabilityType === 'available') {
-        typeText = 'Disponible';
-        color = '#4CAF50'; // Verde
-        icon = 'play-circle-outline';
-      } else {
-        typeText = 'No disponible';
-        color = '#FF5722'; // Naranja rojizo
-        icon = 'stop-circle-outline';
-      }
-    } else {
-      typeText = getActivityTypeText(type);
-      color = getActivityColor(type);
-      icon = getActivityIcon(type);
-    }
+    const { type, createdAt, userId, taskId, metadata } = item;
+    const userName = userId?.username || 'Usuario desconocido';
+    const typeText = getActivityTypeText(type);
+    const color = getActivityColor(type);
+    const icon = getActivityIcon(type);
+    const detailedDescription = getDetailedDescription(item);
 
     return (
       <View style={styles.activityItem}>
@@ -233,25 +343,16 @@ const AdminActivityList = () => {
         <View style={styles.activityContent}>
           <View style={styles.activityHeader}>
             <Text style={styles.activityType}>{typeText}</Text>
-            <Text style={styles.activityTime}>{formatRelativeTime(createdAt)}</Text>
+            <Text style={styles.activityTime}>{formatTime(createdAt)}</Text>
           </View>
           
-          <Text style={styles.userName}>{userName}</Text>
-          
-          {taskId && !isAvailabilityActivity && (
-            <View style={styles.taskInfo}>
-              <Text style={styles.taskName}>{taskName}</Text>
-              {taskDescription !== '' && (
-                <Text style={styles.taskDescription} numberOfLines={2}>
-                  {taskDescription}
-                </Text>
-              )}
-            </View>
+          {viewMode === 'list' && (
+            <Text style={styles.userName}>{userName}</Text>
           )}
           
-          <Text style={styles.activityMessage}>{message}</Text>
+          <Text style={styles.activityDescription}>{detailedDescription}</Text>
           
-          <Text style={styles.activityDateTime}>{formatDateTime(createdAt)}</Text>
+          <Text style={styles.activityDateTime}>{formatDate(createdAt)}</Text>
           
           {metadata && metadata.duration && (
             <Text style={styles.activityDuration}>
@@ -263,8 +364,89 @@ const AdminActivityList = () => {
     );
   };
 
+  // Renderizar el encabezado de sección para la vista agrupada
+  const renderSectionHeader = ({ section: { title } }) => (
+    <View style={styles.sectionHeader}>
+      <Text style={styles.sectionHeaderText}>{title}</Text>
+    </View>
+  );
+
   // Renderizar el separador entre elementos
   const renderSeparator = () => <View style={styles.separator} />;
+
+  // Renderizar los botones de filtro
+  const renderFilterButtons = () => (
+    <View style={styles.filterContainer}>
+      <TouchableOpacity 
+        style={[styles.filterButton, filterType === 'all' && styles.filterButtonActive]}
+        onPress={() => setFilterType('all')}
+      >
+        <Text style={[styles.filterButtonText, filterType === 'all' && styles.filterButtonTextActive]}>
+          Todas
+        </Text>
+      </TouchableOpacity>
+      
+      <TouchableOpacity 
+        style={[styles.filterButton, filterType === 'availability' && styles.filterButtonActive]}
+        onPress={() => setFilterType('availability')}
+      >
+        <Text style={[styles.filterButtonText, filterType === 'availability' && styles.filterButtonTextActive]}>
+          Disponibilidad
+        </Text>
+      </TouchableOpacity>
+      
+      <TouchableOpacity 
+        style={[styles.filterButton, filterType === 'tasks' && styles.filterButtonActive]}
+        onPress={() => setFilterType('tasks')}
+      >
+        <Text style={[styles.filterButtonText, filterType === 'tasks' && styles.filterButtonTextActive]}>
+          Tareas
+        </Text>
+      </TouchableOpacity>
+      
+      <TouchableOpacity 
+        style={[styles.filterButton, filterType === 'locations' && styles.filterButtonActive]}
+        onPress={() => setFilterType('locations')}
+      >
+        <Text style={[styles.filterButtonText, filterType === 'locations' && styles.filterButtonTextActive]}>
+          Ubicaciones
+        </Text>
+      </TouchableOpacity>
+    </View>
+  );
+
+  // Renderizar los botones de modo de vista
+  const renderViewModeButtons = () => (
+    <View style={styles.viewModeContainer}>
+      <TouchableOpacity 
+        style={[styles.viewModeButton, viewMode === 'list' && styles.viewModeButtonActive]}
+        onPress={() => setViewMode('list')}
+      >
+        <Ionicons 
+          name="list" 
+          size={20} 
+          color={viewMode === 'list' ? '#fff' : '#333'} 
+        />
+        <Text style={[styles.viewModeButtonText, viewMode === 'list' && styles.viewModeButtonTextActive]}>
+          Lista
+        </Text>
+      </TouchableOpacity>
+      
+      <TouchableOpacity 
+        style={[styles.viewModeButton, viewMode === 'grouped' && styles.viewModeButtonActive]}
+        onPress={() => setViewMode('grouped')}
+      >
+        <Ionicons 
+          name="people" 
+          size={20} 
+          color={viewMode === 'grouped' ? '#fff' : '#333'} 
+        />
+        <Text style={[styles.viewModeButtonText, viewMode === 'grouped' && styles.viewModeButtonTextActive]}>
+          Por usuario
+        </Text>
+      </TouchableOpacity>
+    </View>
+  );
 
   // Renderizar el componente principal
   return (
@@ -278,6 +460,9 @@ const AdminActivityList = () => {
         )}
       </View>
 
+      {renderViewModeButtons()}
+      {renderFilterButtons()}
+
       {error && (
         <View style={styles.errorContainer}>
           <Text style={styles.errorText}>{error}</Text>
@@ -287,77 +472,116 @@ const AdminActivityList = () => {
         </View>
       )}
 
-      <FlatList
-        data={activities}
-        keyExtractor={(item) => item._id}
-        renderItem={renderActivityItem}
-        ItemSeparatorComponent={renderSeparator}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
-        onEndReached={loadMore}
-        onEndReachedThreshold={0.5}
-        ListEmptyComponent={
-          loading ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color="#4A90E2" />
-              <Text style={styles.loadingText}>{t('loading')}</Text>
-            </View>
-          ) : (
-            <Text style={styles.emptyText}>
-              {t('noActivities')}
-            </Text>
-          )
-        }
-        ListFooterComponent={
-          pagination.currentPage < pagination.pages && !loading ? (
-            <TouchableOpacity style={styles.loadMoreButton} onPress={loadMore}>
-              <Text style={styles.loadMoreButtonText}>{t('loadMore')}</Text>
-            </TouchableOpacity>
-          ) : pagination.currentPage > 1 && loading ? (
-            <View style={styles.loadingMoreContainer}>
-              <ActivityIndicator size="small" color="#4A90E2" />
-              <Text style={styles.loadingMoreText}>{t('loadingMore')}</Text>
-            </View>
-          ) : null
-        }
-      />
+      {viewMode === 'list' ? (
+        <FlatList
+          data={getFilteredActivities()}
+          keyExtractor={(item) => item._id}
+          renderItem={renderActivityItem}
+          ItemSeparatorComponent={renderSeparator}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
+          onEndReached={loadMore}
+          onEndReachedThreshold={0.5}
+          ListEmptyComponent={
+            loading ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color="#4A90E2" />
+                <Text style={styles.loadingText}>{t('loading')}</Text>
+              </View>
+            ) : (
+              <Text style={styles.emptyText}>
+                {t('noActivities')}
+              </Text>
+            )
+          }
+          ListFooterComponent={
+            pagination.currentPage < pagination.pages && !loading ? (
+              <TouchableOpacity style={styles.loadMoreButton} onPress={loadMore}>
+                <Text style={styles.loadMoreButtonText}>{t('loadMore')}</Text>
+              </TouchableOpacity>
+            ) : pagination.currentPage > 1 && loading ? (
+              <View style={styles.loadingMoreContainer}>
+                <ActivityIndicator size="small" color="#4A90E2" />
+                <Text style={styles.loadingMoreText}>{t('loadingMore')}</Text>
+              </View>
+            ) : null
+          }
+        />
+      ) : (
+        <SectionList
+          sections={getGroupedActivities()}
+          keyExtractor={(item) => item._id}
+          renderItem={renderActivityItem}
+          renderSectionHeader={renderSectionHeader}
+          ItemSeparatorComponent={renderSeparator}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
+          onEndReached={loadMore}
+          onEndReachedThreshold={0.5}
+          ListEmptyComponent={
+            loading ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color="#4A90E2" />
+                <Text style={styles.loadingText}>{t('loading')}</Text>
+              </View>
+            ) : (
+              <Text style={styles.emptyText}>
+                {t('noActivities')}
+              </Text>
+            )
+          }
+          ListFooterComponent={
+            pagination.currentPage < pagination.pages && !loading ? (
+              <TouchableOpacity style={styles.loadMoreButton} onPress={loadMore}>
+                <Text style={styles.loadMoreButtonText}>{t('loadMore')}</Text>
+              </TouchableOpacity>
+            ) : pagination.currentPage > 1 && loading ? (
+              <View style={styles.loadingMoreContainer}>
+                <ActivityIndicator size="small" color="#4A90E2" />
+                <Text style={styles.loadingMoreText}>{t('loadingMore')}</Text>
+              </View>
+            ) : null
+          }
+        />
+      )}
 
       {/* Leyenda de tipos de actividades */}
       <View style={styles.legendContainer}>
         <Text style={styles.legendTitle}>{t('activityTypes')}:</Text>
         <View style={styles.legendItems}>
           <View style={styles.legendItem}>
-            <View style={[styles.legendColor, { backgroundColor: getActivityColor('location_enter') }]} />
-            <Text style={styles.legendText}>{t('locationEnter')}</Text>
-          </View>
-          <View style={styles.legendItem}>
-            <View style={[styles.legendColor, { backgroundColor: getActivityColor('location_exit') }]} />
-            <Text style={styles.legendText}>{t('locationExit')}</Text>
-          </View>
-          <View style={styles.legendItem}>
-            <View style={[styles.legendColor, { backgroundColor: getActivityColor('task_complete') }]} />
-            <Text style={styles.legendText}>{t('taskComplete')}</Text>
-          </View>
-          <View style={styles.legendItem}>
-            <View style={[styles.legendColor, { backgroundColor: getActivityColor('task_create') }]} />
-            <Text style={styles.legendText}>{t('taskCreate')}</Text>
-          </View>
-          <View style={styles.legendItem}>
-            <View style={[styles.legendColor, { backgroundColor: getActivityColor('task_update') }]} />
-            <Text style={styles.legendText}>{t('taskUpdate')}</Text>
-          </View>
-          <View style={styles.legendItem}>
-            <View style={[styles.legendColor, { backgroundColor: getActivityColor('task_delete') }]} />
-            <Text style={styles.legendText}>{t('taskDelete')}</Text>
-          </View>
-          <View style={styles.legendItem}>
-            <View style={[styles.legendColor, { backgroundColor: getActivityColor('started_working') }]} />
+            <View style={[styles.legendColor, { backgroundColor: getActivityColor('clock_in') }]} />
             <Text style={styles.legendText}>Disponible</Text>
           </View>
           <View style={styles.legendItem}>
-            <View style={[styles.legendColor, { backgroundColor: getActivityColor('stopped_working') }]} />
+            <View style={[styles.legendColor, { backgroundColor: getActivityColor('clock_out') }]} />
             <Text style={styles.legendText}>No disponible</Text>
+          </View>
+          <View style={styles.legendItem}>
+            <View style={[styles.legendColor, { backgroundColor: getActivityColor('location_enter') }]} />
+            <Text style={styles.legendText}>Entrada ubicación</Text>
+          </View>
+          <View style={styles.legendItem}>
+            <View style={[styles.legendColor, { backgroundColor: getActivityColor('location_exit') }]} />
+            <Text style={styles.legendText}>Salida ubicación</Text>
+          </View>
+          <View style={styles.legendItem}>
+            <View style={[styles.legendColor, { backgroundColor: getActivityColor('task_complete') }]} />
+            <Text style={styles.legendText}>Tarea completada</Text>
+          </View>
+          <View style={styles.legendItem}>
+            <View style={[styles.legendColor, { backgroundColor: getActivityColor('task_create') }]} />
+            <Text style={styles.legendText}>Tarea creada</Text>
+          </View>
+          <View style={styles.legendItem}>
+            <View style={[styles.legendColor, { backgroundColor: getActivityColor('task_update') }]} />
+            <Text style={styles.legendText}>Tarea actualizada</Text>
+          </View>
+          <View style={styles.legendItem}>
+            <View style={[styles.legendColor, { backgroundColor: getActivityColor('task_delete') }]} />
+            <Text style={styles.legendText}>Tarea eliminada</Text>
           </View>
         </View>
       </View>
@@ -369,60 +593,100 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f5f5f5',
+    padding: 16,
   },
   header: {
-    padding: 15,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    marginBottom: 16,
   },
   title: {
-    fontSize: 18,
+    fontSize: 24,
     fontWeight: 'bold',
     color: '#333',
+    marginBottom: 4,
   },
   subtitle: {
     fontSize: 14,
     color: '#666',
-    marginTop: 5,
   },
-  errorContainer: {
-    backgroundColor: '#fce8e6',
-    padding: 15,
-    margin: 10,
+  // Estilos para los filtros
+  filterContainer: {
+    flexDirection: 'row',
+    marginBottom: 16,
+    flexWrap: 'wrap',
+  },
+  filterButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: '#f0f0f0',
+    marginRight: 8,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#ddd',
+  },
+  filterButtonActive: {
+    backgroundColor: '#4A90E2',
+    borderColor: '#4A90E2',
+  },
+  filterButtonText: {
+    fontSize: 14,
+    color: '#333',
+  },
+  filterButtonTextActive: {
+    color: '#fff',
+  },
+  // Estilos para los modos de vista
+  viewModeContainer: {
+    flexDirection: 'row',
+    marginBottom: 16,
+  },
+  viewModeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: '#f0f0f0',
+    marginRight: 8,
+    borderWidth: 1,
+    borderColor: '#ddd',
+  },
+  viewModeButtonActive: {
+    backgroundColor: '#4A90E2',
+    borderColor: '#4A90E2',
+  },
+  viewModeButtonText: {
+    fontSize: 14,
+    color: '#333',
+    marginLeft: 4,
+  },
+  viewModeButtonTextActive: {
+    color: '#fff',
+  },
+  // Estilos para las secciones (agrupación por usuario)
+  sectionHeader: {
+    backgroundColor: '#e0e0e0',
+    padding: 12,
     borderRadius: 8,
-    alignItems: 'center',
+    marginVertical: 8,
   },
-  errorText: {
-    color: '#d32f2f',
-    marginBottom: 10,
-  },
-  retryButton: {
-    backgroundColor: '#d32f2f',
-    padding: 8,
-    borderRadius: 4,
-  },
-  retryButtonText: {
-    color: 'white',
+  sectionHeaderText: {
+    fontSize: 16,
     fontWeight: 'bold',
+    color: '#333',
   },
-  loadingContainer: {
-    padding: 20,
-    alignItems: 'center',
-  },
-  loadingText: {
-    marginTop: 10,
-    color: '#666',
-  },
-  emptyText: {
-    padding: 20,
-    textAlign: 'center',
-    color: '#666',
-  },
+  // Estilos para los elementos de actividad
   activityItem: {
     flexDirection: 'row',
-    padding: 15,
     backgroundColor: '#fff',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 8,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
   },
   activityIconContainer: {
     width: 40,
@@ -430,7 +694,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 15,
+    marginRight: 12,
   },
   activityContent: {
     flex: 1,
@@ -439,96 +703,57 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 5,
+    marginBottom: 4,
   },
   activityType: {
+    fontSize: 16,
     fontWeight: 'bold',
     color: '#333',
   },
   activityTime: {
-    fontSize: 12,
-    color: '#888',
+    fontSize: 14,
+    color: '#666',
   },
   userName: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: 'bold',
     color: '#4A90E2',
-    marginBottom: 5,
+    marginBottom: 4,
   },
-  taskInfo: {
-    backgroundColor: '#f0f4f8',
-    padding: 8,
-    borderRadius: 5,
-    marginBottom: 8,
-  },
-  taskName: {
-    fontWeight: 'bold',
+  activityDescription: {
+    fontSize: 14,
     color: '#333',
-  },
-  taskDescription: {
-    color: '#666',
-    fontSize: 13,
-    marginTop: 3,
-  },
-  activityMessage: {
-    color: '#333',
-    marginBottom: 5,
+    marginVertical: 4,
   },
   activityDateTime: {
     fontSize: 12,
     color: '#888',
+    marginTop: 4,
   },
   activityDuration: {
     fontSize: 12,
-    color: '#666',
+    color: '#4A90E2',
     marginTop: 4,
-    fontStyle: 'italic'
-  },
-  metadataContainer: {
-    marginTop: 8,
-    backgroundColor: '#f8f8f8',
-    padding: 8,
-    borderRadius: 4,
-  },
-  metadataItem: {
-    fontSize: 12,
-    color: '#666',
   },
   separator: {
-    height: 1,
-    backgroundColor: '#e0e0e0',
-    marginLeft: 55,
+    height: 8,
   },
-  loadMoreButton: {
-    backgroundColor: '#4A90E2',
-    margin: 15,
-    padding: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  loadMoreButtonText: {
-    color: 'white',
-    fontWeight: 'bold',
-  },
-  loadingMoreContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 15,
-  },
-  loadingMoreText: {
-    marginLeft: 10,
-    color: '#666',
-  },
+  // Estilos para la leyenda
   legendContainer: {
-    padding: 15,
+    marginTop: 16,
     backgroundColor: '#fff',
-    borderTopWidth: 1,
-    borderTopColor: '#e0e0e0',
+    borderRadius: 8,
+    padding: 12,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
   },
   legendTitle: {
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: 'bold',
+    color: '#333',
     marginBottom: 8,
   },
   legendItems: {
@@ -538,17 +763,79 @@ const styles = StyleSheet.create({
   legendItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    width: '50%',
-    marginBottom: 5,
+    marginRight: 16,
+    marginBottom: 8,
+    width: '45%',
   },
   legendColor: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    marginRight: 5,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    marginRight: 8,
   },
   legendText: {
     fontSize: 12,
+    color: '#666',
+  },
+  // Estilos para estados de carga y error
+  loadingContainer: {
+    padding: 24,
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 8,
+    fontSize: 14,
+    color: '#666',
+  },
+  emptyText: {
+    padding: 24,
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+  },
+  errorContainer: {
+    padding: 16,
+    backgroundColor: '#ffebee',
+    borderRadius: 8,
+    marginBottom: 16,
+  },
+  errorText: {
+    fontSize: 14,
+    color: '#d32f2f',
+    marginBottom: 8,
+  },
+  retryButton: {
+    backgroundColor: '#d32f2f',
+    padding: 8,
+    borderRadius: 4,
+    alignItems: 'center',
+  },
+  retryButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  loadMoreButton: {
+    backgroundColor: '#4A90E2',
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginVertical: 16,
+  },
+  loadMoreButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  loadingMoreContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+  },
+  loadingMoreText: {
+    marginLeft: 8,
+    fontSize: 14,
     color: '#666',
   },
 });
