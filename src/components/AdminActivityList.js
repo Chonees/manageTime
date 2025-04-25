@@ -19,7 +19,7 @@ const AdminActivityList = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [pagination, setPagination] = useState({
     currentPage: 1,
-    limit: 20,
+    limit: 100,
     total: 0,
     pages: 0
   });
@@ -31,13 +31,19 @@ const AdminActivityList = () => {
       setLoading(true);
       const response = await getAdminActivities({ 
         page, 
-        limit: pagination.limit 
+        limit: pagination.limit,
+        sort: '-createdAt'
       });
       
-      setActivities(response.activities || []);
+      if (page === 1) {
+        setActivities(response.activities || []);
+      } else {
+        setActivities(prevActivities => [...prevActivities, ...(response.activities || [])]);
+      }
+      
       setPagination(response.pagination || {
         currentPage: 1,
-        limit: 20,
+        limit: 100,
         total: 0,
         pages: 0
       });
@@ -118,6 +124,12 @@ const AdminActivityList = () => {
         return 'create-outline';
       case 'task_delete':
         return 'trash-outline';
+      case 'started_working':
+      case 'clock_in':
+        return 'play-circle-outline';
+      case 'stopped_working':
+      case 'clock_out':
+        return 'stop-circle-outline';
       default:
         return 'information-circle-outline';
     }
@@ -138,6 +150,12 @@ const AdminActivityList = () => {
         return '#ff9800'; // Naranja
       case 'task_delete':
         return '#795548'; // Marrón
+      case 'started_working':
+      case 'clock_in':
+        return '#4CAF50'; // Verde
+      case 'stopped_working':
+      case 'clock_out':
+        return '#FF5722'; // Naranja rojizo
       default:
         return '#607d8b'; // Gris azulado
     }
@@ -158,6 +176,12 @@ const AdminActivityList = () => {
         return t('taskUpdate');
       case 'task_delete':
         return t('taskDelete');
+      case 'started_working':
+      case 'clock_in':
+        return 'Disponible';
+      case 'stopped_working':
+      case 'clock_out':
+        return 'No disponible';
       default:
         return t('activity');
     }
@@ -169,9 +193,36 @@ const AdminActivityList = () => {
     const userName = userId?.username || t('unknownUser');
     const taskName = taskId?.title || t('unknownTask');
     const taskDescription = taskId?.description || '';
-    const typeText = getActivityTypeText(type);
-    const color = getActivityColor(type);
-    const icon = getActivityIcon(type);
+    
+    // Detectar si es una actividad de disponibilidad basada en los metadatos
+    let isAvailabilityActivity = false;
+    let availabilityType = '';
+    
+    if (metadata && metadata.availability) {
+      isAvailabilityActivity = true;
+      availabilityType = metadata.availability === 'available' ? 'available' : 'unavailable';
+    }
+    
+    // Determinar el tipo de texto y color basado en el tipo real o el tipo de disponibilidad
+    let typeText = '';
+    let color = '';
+    let icon = '';
+    
+    if (isAvailabilityActivity) {
+      if (availabilityType === 'available') {
+        typeText = 'Disponible';
+        color = '#4CAF50'; // Verde
+        icon = 'play-circle-outline';
+      } else {
+        typeText = 'No disponible';
+        color = '#FF5722'; // Naranja rojizo
+        icon = 'stop-circle-outline';
+      }
+    } else {
+      typeText = getActivityTypeText(type);
+      color = getActivityColor(type);
+      icon = getActivityIcon(type);
+    }
 
     return (
       <View style={styles.activityItem}>
@@ -187,7 +238,7 @@ const AdminActivityList = () => {
           
           <Text style={styles.userName}>{userName}</Text>
           
-          {taskId && (
+          {taskId && !isAvailabilityActivity && (
             <View style={styles.taskInfo}>
               <Text style={styles.taskName}>{taskName}</Text>
               {taskDescription !== '' && (
@@ -202,14 +253,10 @@ const AdminActivityList = () => {
           
           <Text style={styles.activityDateTime}>{formatDateTime(createdAt)}</Text>
           
-          {metadata && Object.keys(metadata).length > 0 && (
-            <View style={styles.metadataContainer}>
-              {Object.entries(metadata).map(([key, value]) => (
-                <Text key={key} style={styles.metadataItem}>
-                  {key}: {typeof value === 'object' ? JSON.stringify(value) : value.toString()}
-                </Text>
-              ))}
-            </View>
+          {metadata && metadata.duration && (
+            <Text style={styles.activityDuration}>
+              Duración: {Math.floor(metadata.duration / 60)} minutos
+            </Text>
           )}
         </View>
       </View>
@@ -303,6 +350,14 @@ const AdminActivityList = () => {
           <View style={styles.legendItem}>
             <View style={[styles.legendColor, { backgroundColor: getActivityColor('task_delete') }]} />
             <Text style={styles.legendText}>{t('taskDelete')}</Text>
+          </View>
+          <View style={styles.legendItem}>
+            <View style={[styles.legendColor, { backgroundColor: getActivityColor('started_working') }]} />
+            <Text style={styles.legendText}>Disponible</Text>
+          </View>
+          <View style={styles.legendItem}>
+            <View style={[styles.legendColor, { backgroundColor: getActivityColor('stopped_working') }]} />
+            <Text style={styles.legendText}>No disponible</Text>
           </View>
         </View>
       </View>
@@ -422,6 +477,12 @@ const styles = StyleSheet.create({
   activityDateTime: {
     fontSize: 12,
     color: '#888',
+  },
+  activityDuration: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 4,
+    fontStyle: 'italic'
   },
   metadataContainer: {
     marginTop: 8,

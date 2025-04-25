@@ -1279,7 +1279,7 @@ export const saveActivity = async (activityData) => {
 
 /**
  * Obtener todas las actividades de todos los usuarios (solo para administradores)
- * @param {Object} options - Opciones de paginación: { limit, page }
+ * @param {Object} options - Opciones de paginación: { limit, page, sort }
  * @returns {Promise<Object>} Respuesta de la API con actividades y datos de paginación
  */
 export const getAdminActivities = async (options = {}) => {
@@ -1295,10 +1295,11 @@ export const getAdminActivities = async (options = {}) => {
     const queryParams = new URLSearchParams();
     if (options && options.limit) queryParams.append('limit', options.limit);
     if (options && options.page) queryParams.append('page', options.page);
+    if (options && options.sort) queryParams.append('sort', options.sort);
 
     const url = `${getApiUrl()}/api/activities/admin/all${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
     console.log(`Obteniendo actividades de administrador: ${url}`);
-
+    
     // Crear opciones manualmente para asegurar que el token esté presente
     const fetchOptions = {
       method: 'GET',

@@ -9,7 +9,13 @@ import * as api from '../services/api';
 import { mapConfig } from '../services/platform-config';
 import VerificationPrompt from './VerificationPrompt';
 
-const LocationComponent = ({ onLocationChange, showWorkControls = false }) => {
+const LocationComponent = ({ 
+  onLocationChange, 
+  showWorkControls = false, 
+  mapOnly = false,
+  customHeight,
+  transparentContainer = false 
+}) => {
   const { user } = useAuth();
   const { t } = useLanguage();
   const { startTracking, stopTracking } = useLocationTracking();
@@ -352,6 +358,12 @@ const LocationComponent = ({ onLocationChange, showWorkControls = false }) => {
     );
   };
 
+  // Aplicar la altura personalizada al mapa si se proporciona
+  const mapStyle = [
+    styles.map,
+    customHeight ? { height: customHeight } : null
+  ];
+
   // Render different content based on state
   let content;
   
@@ -425,7 +437,7 @@ const LocationComponent = ({ onLocationChange, showWorkControls = false }) => {
             {Platform.OS === 'ios' ? (
               // iOS specific rendering to avoid undefined errors
               <MapView 
-                style={styles.map}
+                style={mapStyle}
                 initialRegion={{
                   latitude: Number(latitude) || 0,
                   longitude: Number(longitude) || 0,
@@ -457,7 +469,7 @@ const LocationComponent = ({ onLocationChange, showWorkControls = false }) => {
             ) : (
               // Android rendering
               <MapView 
-                style={styles.map}
+                style={mapStyle}
                 provider={PROVIDER_GOOGLE}
                 initialRegion={{
                   latitude: latitude,
@@ -526,24 +538,28 @@ const LocationComponent = ({ onLocationChange, showWorkControls = false }) => {
   }
 
   return (
-    <View style={styles.container}>
-      <View style={styles.card}>
-        <View style={styles.cardHeader}>
-          <Text style={styles.cardTitle}>{t('myLocation')}</Text>
+    <View style={[styles.container, transparentContainer && styles.transparentContainer]}>
+      {!transparentContainer ? (
+        <View style={[styles.card, transparentContainer && styles.transparentCard]}>
+          <View style={styles.cardHeader}>
+            <Text style={styles.cardTitle}>{t('myLocation')}</Text>
+          </View>
+          {content}
+          {user?.isAdmin && (
+            <TouchableOpacity 
+              style={styles.refreshButton} 
+              onPress={getLocation}
+              disabled={loading}
+            >
+              <Text style={styles.refreshButtonText}>
+                {loading ? t('updating') : t('updateLocation')}
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
-        {content}
-        {user?.isAdmin && (
-          <TouchableOpacity 
-            style={styles.refreshButton} 
-            onPress={getLocation}
-            disabled={loading}
-          >
-            <Text style={styles.refreshButtonText}>
-              {loading ? t('updating') : t('updateLocation')}
-            </Text>
-          </TouchableOpacity>
-        )}
-      </View>
+      ) : (
+        <>{content}</>
+      )}
       
       {/* Componente de verificación periódica */}
       <VerificationPrompt 
@@ -559,6 +575,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 15,
     paddingVertical: 10,
   },
+  transparentContainer: {
+    padding: 0,
+    margin: 0,
+  },
   card: {
     backgroundColor: '#fff',
     borderRadius: 8,
@@ -568,6 +588,11 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
     overflow: 'hidden',
+  },
+  transparentCard: {
+    backgroundColor: 'transparent',
+    shadowColor: 'transparent',
+    elevation: 0,
   },
   cardHeader: {
     backgroundColor: '#4A90E2',
@@ -601,16 +626,13 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 250,
     borderRadius: 8,
-    marginBottom: 15,
+    marginBottom: 10,
     overflow: 'hidden',
-    backgroundColor: '#f5f5f5',
   },
   map: {
     width: '100%',
     height: '100%',
     borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   locationLabel: {
     fontSize: 16,

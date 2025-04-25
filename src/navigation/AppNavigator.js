@@ -24,6 +24,7 @@ import UserManagementScreen from '../screens/admin/UserManagementScreen';
 // Contexto de autenticación
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
+import { useTheme } from '../context/ThemeContext';
 import { LocationTrackingProvider } from '../context/LocationTrackingContext';
 
 // Crear navegadores
@@ -288,6 +289,7 @@ const AdminNavigator = () => {
 const AppNavigator = () => {
   const { user, loading } = useAuth();
   const { t } = useLanguage();
+  const theme = useTheme(); // El hook useTheme devuelve directamente el objeto theme
 
   // Configurar el monitoreo de ubicación basado en la autenticación
   useEffect(() => {
@@ -311,9 +313,9 @@ const AppNavigator = () => {
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#4A90E2" />
-        <Text style={styles.loadingText}>{t('loading')}</Text>
+      <View style={[styles.loadingContainer, { backgroundColor: theme.colors.background }]}>
+        <ActivityIndicator size="large" color={theme.colors.primary} />
+        <Text style={[styles.loadingText, { color: theme.colors.text.secondary }]}>{t('loading')}</Text>
       </View>
     );
   }
@@ -335,12 +337,12 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f5f5f5',
+    // El color de fondo se aplica dinámicamente
   },
   loadingText: {
     marginTop: 10,
-    color: '#666',
     fontSize: 16,
+    // El color del texto se aplica dinámicamente
   },
 });
 
