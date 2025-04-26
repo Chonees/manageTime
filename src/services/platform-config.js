@@ -147,8 +147,8 @@ export const getPlatformOptions = (section) => {
 
 // Exportar configuración específica para mapas
 export const mapConfig = {
-  provider: Platform.OS === 'android' ? 'google' : null,
-  apiKey: platformConfig.map.googleMapsApiKey,
+  provider: Platform.OS === 'android' ? 'google' : 'apple',
+  apiKey: Platform.OS === 'android' ? platformConfig.map.googleMapsApiKey : null,
   showsUserLocation: true,
   showsMyLocationButton: true,
   toolbarEnabled: Platform.OS === 'android' ? true : undefined,
