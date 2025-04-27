@@ -177,16 +177,6 @@ const LoginScreen = ({ navigation }) => {
               <Text style={styles.registerLink}>{t('signUp')}</Text>
             </TouchableOpacity>
           </View>
-          
-          {/* El botón de diagnóstico se puede mantener para desarrollo, pero se puede ocultar en producción */}
-          {__DEV__ && (
-            <TouchableOpacity
-              style={[styles.loginButton, { marginTop: 30, backgroundColor: theme.colors.darkGrey, borderWidth: 1, borderColor: theme.colors.input.border }]}
-              onPress={() => navigation.navigate('Diagnostic')}
-            >
-              <Text style={[styles.loginButtonText, { color: theme.colors.white }]}>Diagnostic</Text>
-            </TouchableOpacity>
-          )}
         </View>
       </ScrollView>
     </KeyboardAvoidingView>

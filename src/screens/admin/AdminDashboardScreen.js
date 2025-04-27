@@ -378,13 +378,6 @@ const AdminDashboardScreen = ({ navigation }) => {
           </TouchableOpacity>
           
           <TouchableOpacity 
-            style={styles.actionButton}
-            onPress={() => navigation.navigate('LocationHistory')}
-          >
-            <Text style={styles.actionButtonText}>{t('locationHistory')}</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity 
             style={[styles.actionButton, { backgroundColor: '#9c27b0' }]}
             onPress={() => navigation.navigate('AdminActivities')}
           >
