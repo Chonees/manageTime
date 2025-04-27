@@ -9,17 +9,24 @@ import {
   Alert,
   FlatList,
   RefreshControl,
-  Platform
+  Platform,
+  StatusBar,
+  SafeAreaView,
+  Dimensions
 } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
+import { useTheme } from '../../context/ThemeContext';
 import * as api from '../../services/api';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import { Ionicons } from '@expo/vector-icons';
 
+const { width, height } = Dimensions.get('window');
+
 const AdminDashboardScreen = ({ navigation }) => {
   const { user, logout } = useAuth();
   const { t, language } = useLanguage();
+  const theme = useTheme();
   const [stats, setStats] = useState({
     users: { total: 0 },
     tasks: { total: 0, completed: 0, pending: 0, completionRate: 0 },
@@ -296,222 +303,242 @@ const AdminDashboardScreen = ({ navigation }) => {
   };
 
   return (
-    <ScrollView 
-      style={styles.container}
-      refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-      }
-    >
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.welcomeText}>{t('adminDashboard')}</Text>
-          <Text style={styles.subHeaderText}>{t('welcomeAdmin')}, {user?.username || 'Admin'}</Text>
-        </View>
-        <TouchableOpacity 
-          style={styles.logoutButton}
-          onPress={handleLogout}
-        >
-          <Text style={styles.logoutButtonText}>{t('logOut')}</Text>
-        </TouchableOpacity>
-      </View>
-
-      {error && <Text style={styles.errorText}>{error}</Text>}
-
-      <View style={styles.statsContainer}>
-        <Text style={styles.sectionTitle}>{t('statistics')}</Text>
-        
-        {loading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#4A90E2" />
-            <Text style={styles.loadingText}>{t('loading')}</Text>
+    <SafeAreaView style={styles.container}>
+      <StatusBar backgroundColor={theme.colors.darkGrey} barStyle="light-content" />
+      <ScrollView 
+        style={styles.scrollContainer}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[theme.colors.lightCream]}
+            tintColor={theme.colors.lightCream}
+          />
+        }
+      >
+        <View style={styles.header}>
+          <View>
+            <Text style={styles.welcomeText}>{t('adminDashboard')}</Text>
+            <Text style={styles.subHeaderText}>{t('welcomeAdmin')}, {user?.username || 'Admin'}</Text>
           </View>
-        ) : (
-          <View style={styles.statsGrid}>
-            <View style={styles.statCard}>
-              <Text style={styles.statValue}>{stats.users.total}</Text>
-              <Text style={styles.statLabel}>{t('totalUsers')}</Text>
-            </View>
-            
-            <View style={styles.statCard}>
-              <Text style={styles.statValue}>{stats.users.active}</Text>
-              <Text style={styles.statLabel}>{t('activeUsers')}</Text>
-            </View>
-            
-            <View style={styles.statCard}>
-              <Text style={styles.statValue}>{stats.tasks.total}</Text>
-              <Text style={styles.statLabel}>{t('totalTasks')}</Text>
-            </View>
-            
-            <View style={styles.statCard}>
-              <Text style={styles.statValue}>{stats.tasks.completed}</Text>
-              <Text style={styles.statLabel}>{t('completedTasks')}</Text>
-            </View>
-            
-            <View style={styles.statCard}>
-              <Text style={styles.statValue}>{stats.tasks.pending}</Text>
-              <Text style={styles.statLabel}>{t('pendingTasks')}</Text>
-            </View>
-            
-            <View style={styles.statCard}>
-              <Text style={styles.statValue}>{stats.tasks.completionRate}%</Text>
-              <Text style={styles.statLabel}>{t('completionRate')}</Text>
-            </View>
-          </View>
-        )}
-      </View>
-
-      <View style={styles.actionsContainer}>
-        <Text style={styles.sectionTitle}>{t('quickActions')}</Text>
-        <View style={styles.actionButtonsContainer}>
           <TouchableOpacity 
-            style={styles.actionButton}
-            onPress={() => navigation.navigate('UserManagement')}
+            style={styles.logoutButton}
+            onPress={handleLogout}
           >
-            <Text style={styles.actionButtonText}>{t('userManagement')}</Text>
+            <Text style={styles.logoutButtonText}>{t('logOut')}</Text>
           </TouchableOpacity>
+        </View>
+
+        {error && <Text style={styles.errorText}>{error}</Text>}
+
+        <View style={styles.statsContainer}>
+          <Text style={styles.sectionTitle}>{t('statistics')}</Text>
           
-          <TouchableOpacity 
-            style={styles.actionButton}
-            onPress={() => navigation.navigate('TaskScreen')}
-          >
-            <Text style={styles.actionButtonText}>{t('taskManagement')}</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={[styles.actionButton, { backgroundColor: '#9c27b0' }]}
-            onPress={() => navigation.navigate('AdminActivities')}
-          >
-            <Text style={styles.actionButtonText}>{t('viewAllActivities')}</Text>
-          </TouchableOpacity>
+          {loading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color="#4A90E2" />
+              <Text style={styles.loadingText}>{t('loading')}</Text>
+            </View>
+          ) : (
+            <View style={styles.statsGrid}>
+              <View style={styles.statCard}>
+                <Text style={styles.statValue}>{stats.users.total}</Text>
+                <Text style={styles.statLabel}>{t('totalUsers')}</Text>
+              </View>
+              
+              <View style={styles.statCard}>
+                <Text style={styles.statValue}>{stats.users.active}</Text>
+                <Text style={styles.statLabel}>{t('activeUsers')}</Text>
+              </View>
+              
+              <View style={styles.statCard}>
+                <Text style={styles.statValue}>{stats.tasks.total}</Text>
+                <Text style={styles.statLabel}>{t('totalTasks')}</Text>
+              </View>
+              
+              <View style={styles.statCard}>
+                <Text style={styles.statValue}>{stats.tasks.completed}</Text>
+                <Text style={styles.statLabel}>{t('completedTasks')}</Text>
+              </View>
+              
+              <View style={styles.statCard}>
+                <Text style={styles.statValue}>{stats.tasks.pending}</Text>
+                <Text style={styles.statLabel}>{t('pendingTasks')}</Text>
+              </View>
+              
+              <View style={styles.statCard}>
+                <Text style={styles.statValue}>{stats.tasks.completionRate}%</Text>
+                <Text style={styles.statLabel}>{t('completionRate')}</Text>
+              </View>
+            </View>
+          )}
         </View>
-      </View>
 
-      {/* Sección de Ubicaciones en Tiempo Real */}
-      <View style={styles.realTimeLocationsContainer}>
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>{t('Real Time Location Of Users')}</Text>
-          <TouchableOpacity 
-            style={styles.refreshButton}
-            onPress={() => loadRealTimeLocations(false)}
-          >
-            <Ionicons name="refresh" size={20} color="#4A90E2" />
-          </TouchableOpacity>
-        </View>
-        
-        {loadingLocations ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#4A90E2" />
-            <Text style={styles.loadingText}>{t('loadingLocations')}</Text>
-          </View>
-        ) : realTimeLocations.length > 0 ? (
-          <View style={styles.mapContainer}>
-            <MapView
-              ref={mapRef}
-              style={styles.map}
-              provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
-              initialRegion={{
-                latitude: realTimeLocations[0]?.latitude || -34.603722,
-                longitude: realTimeLocations[0]?.longitude || -58.381592,
-                latitudeDelta: 0.0922,
-                longitudeDelta: 0.0421,
-              }}
-              onMapReady={() => setMapReady(true)}
+        <View style={styles.actionsContainer}>
+          <Text style={styles.sectionTitle}>{t('quickActions')}</Text>
+          <View style={styles.actionButtonsContainer}>
+            <TouchableOpacity 
+              style={styles.actionButton}
+              onPress={() => navigation.navigate('UserManagement')}
             >
-              {realTimeLocations.map((location, index) => 
-                renderSafeMarker(location, index)
-              )}
-            </MapView>
+              <Text style={styles.actionButtonText}>{t('userManagement')}</Text>
+            </TouchableOpacity>
             
-            <View style={styles.mapLegend}>
-              <Text style={styles.mapLegendTitle}>{t('locationLegend')}</Text>
-              <FlatList
-                data={realTimeLocations}
-                keyExtractor={(item, index) => `legend-${item.userId}-${index}`}
-                renderItem={({ item }) => {
-                  // Verificar que las coordenadas sean válidas
-                  const safeLocation = parseSafeLocation(item);
-                  if (!safeLocation) return null;
-                  
-                  return (
-                    <View style={styles.legendItem}>
-                      <View style={styles.legendIcon} />
-                      <View style={styles.legendInfo}>
-                        <Text style={styles.legendName}>{item.username}</Text>
-                        <Text style={styles.legendTimestamp}>
-                          {new Date(item.timestamp).toLocaleString()}
-                        </Text>
-                      </View>
-                    </View>
-                  );
-                }}
-                style={styles.legendList}
-              />
-            </View>
+            <TouchableOpacity 
+              style={styles.actionButton}
+              onPress={() => navigation.navigate('TaskScreen')}
+            >
+              <Text style={styles.actionButtonText}>{t('taskManagement')}</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={[styles.actionButton, { backgroundColor: '#9c27b0' }]}
+              onPress={() => navigation.navigate('AdminActivities')}
+            >
+              <Text style={styles.actionButtonText}>{t('viewAllActivities')}</Text>
+            </TouchableOpacity>
           </View>
-        ) : (
-          <View style={styles.noLocationsContainer}>
-            <Text style={styles.noLocationsText}>{t('noActiveUsers')}</Text>
-          </View>
-        )}
-      </View>
+        </View>
 
-      <View style={styles.recentActivityContainer}>
-        <Text style={styles.sectionTitle}>{t('recentActivity')}</Text>
-        {loading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#4A90E2" />
-            <Text style={styles.loadingText}>{t('loading')}</Text>
+        {/* Sección de Ubicaciones en Tiempo Real */}
+        <View style={styles.realTimeLocationsContainer}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>{t('Real Time Location Of Users')}</Text>
+            <TouchableOpacity 
+              style={styles.refreshButton}
+              onPress={() => loadRealTimeLocations(false)}
+            >
+              <Ionicons name="refresh" size={20} color="#4A90E2" />
+            </TouchableOpacity>
           </View>
-        ) : (
-          <ScrollView 
-            style={styles.activityList}
-            nestedScrollEnabled={true}
-          >
-            <FlatList
-              data={recentActivity}
-              renderItem={renderActivityItem}
-              keyExtractor={(item) => item.id}
-              scrollEnabled={false}
-            />
-          </ScrollView>
-        )}
-      </View>
-    </ScrollView>
+          
+          {loadingLocations ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color="#4A90E2" />
+              <Text style={styles.loadingText}>{t('loadingLocations')}</Text>
+            </View>
+          ) : realTimeLocations.length > 0 ? (
+            <View style={styles.mapContainer}>
+              <MapView
+                ref={mapRef}
+                style={styles.map}
+                provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
+                initialRegion={{
+                  latitude: realTimeLocations[0]?.latitude || -34.603722,
+                  longitude: realTimeLocations[0]?.longitude || -58.381592,
+                  latitudeDelta: 0.0922,
+                  longitudeDelta: 0.0421,
+                }}
+                onMapReady={() => setMapReady(true)}
+              >
+                {realTimeLocations.map((location, index) => 
+                  renderSafeMarker(location, index)
+                )}
+              </MapView>
+              
+              <View style={styles.mapLegend}>
+                <Text style={styles.mapLegendTitle}>{t('locationLegend')}</Text>
+                <FlatList
+                  data={realTimeLocations}
+                  keyExtractor={(item, index) => `legend-${item.userId}-${index}`}
+                  renderItem={({ item }) => {
+                    // Verificar que las coordenadas sean válidas
+                    const safeLocation = parseSafeLocation(item);
+                    if (!safeLocation) return null;
+                    
+                    return (
+                      <View style={styles.legendItem}>
+                        <View style={styles.legendIcon} />
+                        <View style={styles.legendInfo}>
+                          <Text style={styles.legendName}>{item.username}</Text>
+                          <Text style={styles.legendTimestamp}>
+                            {new Date(item.timestamp).toLocaleString()}
+                          </Text>
+                        </View>
+                      </View>
+                    );
+                  }}
+                  style={styles.legendList}
+                />
+              </View>
+            </View>
+          ) : (
+            <View style={styles.noLocationsContainer}>
+              <Text style={styles.noLocationsText}>{t('noActiveUsers')}</Text>
+            </View>
+          )}
+        </View>
+
+        <View style={styles.recentActivityContainer}>
+          <Text style={styles.sectionTitle}>{t('recentActivity')}</Text>
+          {loading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color="#4A90E2" />
+              <Text style={styles.loadingText}>{t('loading')}</Text>
+            </View>
+          ) : (
+            <ScrollView 
+              style={styles.activityList}
+              nestedScrollEnabled={true}
+            >
+              <FlatList
+                data={recentActivity}
+                renderItem={renderActivityItem}
+                keyExtractor={(item) => item.id}
+                scrollEnabled={false}
+              />
+            </ScrollView>
+          )}
+        </View>
+      </ScrollView>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#2e2e2e',
+  },
+  scrollContainer: {
+    flex: 1,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    backgroundColor: '#2e2e2e',
     padding: 15,
-    backgroundColor: '#4A90E2',
+    paddingTop: Platform.OS === 'ios' ? 10 : 15,
     borderBottomWidth: 1,
-    borderBottomColor: '#3A80D2',
+    borderBottomColor: 'rgba(255, 243, 229, 0.1)',
   },
-  welcomeText: {
-    fontSize: 20,
+  headerTitle: {
+    fontSize: Math.min(width * 0.06, 24),
     fontWeight: 'bold',
-    color: '#fff',
+    color: '#fff3e5',
+    marginBottom: 5,
   },
-  subHeaderText: {
-    fontSize: 14,
-    color: '#fff',
+  headerSubtitle: {
+    fontSize: Math.min(width * 0.04, 16),
+    color: '#ffffff',
     opacity: 0.8,
   },
   logoutButton: {
-    padding: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    borderRadius: 5,
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 10 : 15,
+    right: 15,
+    backgroundColor: '#1c1c1c',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 243, 229, 0.2)',
   },
   logoutButtonText: {
-    color: '#fff',
+    color: '#fff3e5',
     fontWeight: 'bold',
+    fontSize: Math.min(width * 0.035, 14),
   },
   errorText: {
     color: '#e74c3c',
@@ -525,10 +552,12 @@ const styles = StyleSheet.create({
     margin: 15,
   },
   sectionTitle: {
-    fontSize: 18,
+    fontSize: Math.min(width * 0.05, 18),
     fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 10,
+    color: '#fff3e5',
+    marginBottom: 15,
+    marginHorizontal: 15,
+    marginTop: 15,
   },
   loadingContainer: {
     alignItems: 'center',
@@ -545,8 +574,8 @@ const styles = StyleSheet.create({
   },
   statCard: {
     width: '48%',
-    backgroundColor: '#fff',
-    borderRadius: 8,
+    backgroundColor: '#1c1c1c',
+    borderRadius: 15,
     padding: 15,
     marginBottom: 15,
     shadowColor: '#000',
@@ -554,16 +583,19 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 243, 229, 0.1)',
   },
   statValue: {
-    fontSize: 24,
+    fontSize: Math.min(width * 0.07, 28),
     fontWeight: 'bold',
-    color: '#4A90E2',
+    color: '#fff3e5',
     marginBottom: 5,
   },
   statLabel: {
-    fontSize: 14,
-    color: '#666',
+    fontSize: Math.min(width * 0.035, 14),
+    color: '#ffffff',
+    opacity: 0.7,
   },
   actionsContainer: {
     margin: 15,
@@ -572,8 +604,8 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
   },
   actionButton: {
-    backgroundColor: '#4A90E2',
-    borderRadius: 8,
+    backgroundColor: '#1c1c1c',
+    borderRadius: 15,
     padding: 15,
     marginBottom: 10,
     alignItems: 'center',
@@ -582,19 +614,21 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 243, 229, 0.2)',
   },
   actionButtonText: {
-    color: '#fff',
+    color: '#fff3e5',
     fontWeight: 'bold',
-    fontSize: 16,
+    fontSize: Math.min(width * 0.04, 16),
   },
   recentActivityContainer: {
     margin: 15,
     flex: 1,
   },
   activityList: {
-    backgroundColor: '#fff',
-    borderRadius: 8,
+    backgroundColor: '#1c1c1c',
+    borderRadius: 15,
     padding: 15,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -602,13 +636,15 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
     maxHeight: 300,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 243, 229, 0.1)',
   },
   activityItem: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 8,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: 'rgba(255, 243, 229, 0.1)',
   },
   activityDot: {
     width: 8,
@@ -620,25 +656,29 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   activityText: {
-    fontSize: 14,
-    color: '#333',
+    fontSize: Math.min(width * 0.035, 14),
+    color: '#ffffff',
+    opacity: 0.9,
   },
   activityTime: {
-    fontSize: 12,
-    color: '#666',
+    fontSize: Math.min(width * 0.03, 12),
+    color: '#ffffff',
+    opacity: 0.6,
     marginTop: 2,
   },
   // Estilos para ubicaciones en tiempo real
   realTimeLocationsContainer: {
     marginTop: 15,
-    backgroundColor: '#fff',
-    borderRadius: 10,
+    backgroundColor: '#1c1c1c',
+    borderRadius: 15,
     padding: 15,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 243, 229, 0.1)',
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -647,7 +687,9 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   refreshButton: {
-    padding: 5,
+    padding: 8,
+    backgroundColor: 'rgba(255, 243, 229, 0.1)',
+    borderRadius: 20,
   },
   mapContainer: {
     height: 250,
@@ -662,18 +704,22 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 10,
     right: 10,
-    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    backgroundColor: 'rgba(28, 28, 28, 0.8)',
     paddingVertical: 5,
     paddingHorizontal: 10,
-    borderRadius: 20,
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 243, 229, 0.2)',
   },
   mapLegendTitle: {
-    fontSize: 12,
+    fontSize: Math.min(width * 0.03, 12),
     fontWeight: 'bold',
+    color: '#fff3e5',
   },
   mapLegendText: {
-    fontSize: 12,
+    fontSize: Math.min(width * 0.03, 12),
     fontWeight: 'bold',
+    color: '#fff3e5',
   },
   markerContainer: {
     width: 40,
@@ -705,12 +751,15 @@ const styles = StyleSheet.create({
     height: 150,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f8f9fa',
-    borderRadius: 8,
+    backgroundColor: '#1c1c1c',
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 243, 229, 0.1)',
   },
   noLocationsText: {
-    color: '#6c757d',
-    fontSize: 16,
+    color: '#ffffff',
+    opacity: 0.7,
+    fontSize: Math.min(width * 0.04, 16),
   },
   legendItem: {
     flexDirection: 'row',
@@ -728,12 +777,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   legendName: {
-    fontSize: 14,
-    color: '#333',
+    fontSize: Math.min(width * 0.035, 14),
+    color: '#fff3e5',
   },
   legendTimestamp: {
-    fontSize: 12,
-    color: '#666',
+    fontSize: Math.min(width * 0.03, 12),
+    color: '#ffffff',
+    opacity: 0.6,
   },
   legendList: {
     maxHeight: 150,
