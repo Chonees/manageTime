@@ -7,16 +7,23 @@ import {
   Text,
   ActivityIndicator,
   Alert,
-  Linking
+  Linking,
+  StatusBar,
+  Dimensions,
+  Platform
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useLanguage } from '../../context/LanguageContext';
+import { useTheme } from '../../context/ThemeContext';
 import AdminActivityList from '../../components/AdminActivityList';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as api from '../../services/api';
 
+const { width, height } = Dimensions.get('window');
+
 const AdminActivitiesScreen = ({ navigation }) => {
   const { t } = useLanguage();
+  const theme = useTheme();
   const [isGeneratingExcel, setIsGeneratingExcel] = React.useState(false);
 
   const downloadExcelReport = async () => {
@@ -60,12 +67,13 @@ const AdminActivitiesScreen = ({ navigation }) => {
 
   return (
     <SafeAreaView style={styles.container}>
+      <StatusBar backgroundColor={theme.colors.darkGrey} barStyle="light-content" />
       <View style={styles.header}>
         <TouchableOpacity 
           style={styles.backButton}
           onPress={() => navigation.goBack()}
         >
-          <Ionicons name="arrow-back" size={24} color="#fff3e5" />
+          <Ionicons name="arrow-back" size={24} color={theme.colors.lightCream} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>{t('viewAllActivities')}</Text>
         <View style={styles.buttonGroup}>
@@ -74,8 +82,8 @@ const AdminActivitiesScreen = ({ navigation }) => {
             onPress={downloadExcelReport}
             disabled={isGeneratingExcel}
           >
-            <Ionicons name="calculator-outline" size={18} color="#fff3e5" />
-            {isGeneratingExcel && <ActivityIndicator size="small" color="#fff3e5" style={{marginLeft: 5}} />}
+            <Ionicons name="calculator-outline" size={20} color={theme.colors.white} />
+            {isGeneratingExcel && <ActivityIndicator size="small" color={theme.colors.white} style={{marginLeft: 5}} />}
           </TouchableOpacity>
         </View>
       </View>
@@ -88,31 +96,36 @@ const AdminActivitiesScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#2e2e2e',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#2e2e2e',
     padding: 15,
-    paddingTop: 40, // Extra padding for status bar
+    paddingTop: Platform.OS === 'ios' ? 20 : 40, // Extra padding for status bar
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 243, 229, 0.1)',
   },
   backButton: {
     marginRight: 15,
+    padding: 5,
   },
   headerTitle: {
-    fontSize: 18,
+    fontSize: Math.min(width * 0.05, 18),
     fontWeight: 'bold',
     color: '#fff3e5',
     flex: 1,
   },
   excelButton: {
-    backgroundColor: '#1a1a1a',
-    padding: 8,
-    borderRadius: 6,
+    backgroundColor: '#1c1c1c',
+    padding: 10,
+    borderRadius: 15,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 243, 229, 0.2)',
   },
   buttonGroup: {
     flexDirection: 'row',

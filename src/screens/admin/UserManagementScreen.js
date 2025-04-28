@@ -8,16 +8,24 @@ import {
   ActivityIndicator,
   Alert,
   TextInput,
-  Modal
+  Modal,
+  StatusBar,
+  SafeAreaView,
+  Dimensions,
+  Platform
 } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
 import * as api from '../../services/api';
 import { Ionicons } from '@expo/vector-icons';
+import { useTheme } from '../../context/ThemeContext';
+
+const { width, height } = Dimensions.get('window');
 
 const UserManagementScreen = () => {
   const { user } = useAuth();
   const { t, toggleLanguage, language } = useLanguage();
+  const theme = useTheme();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -54,7 +62,7 @@ const UserManagementScreen = () => {
     if (loading) {
       return (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#0066cc" />
+          <ActivityIndicator size="large" color={theme.colors.lightCream} />
           <Text style={styles.loadingText}>{t('loadingUsers')}</Text>
         </View>
       );
@@ -98,10 +106,7 @@ const UserManagementScreen = () => {
                 <Text style={styles.username}>{item.username}</Text>
                 <Text style={styles.email}>{item.email || t('noEmail')}</Text>
                 <View style={styles.userMeta}>
-                  <Text style={[
-                    styles.userStatus,
-                    { color: item.isActive ? '#2ecc71' : '#e74c3c' }
-                  ]}>
+                  <Text style={[styles.userStatus, { color: item.isActive ? '#4CAF50' : '#ff5252' }]}>
                     {item.isActive ? t('active') : t('inactive')}
                   </Text>
                   <Text style={styles.userRole}>
@@ -225,7 +230,7 @@ const UserManagementScreen = () => {
               <Text style={styles.detailLabel}>{t('status')}:</Text>
               <Text style={[
                 styles.detailValue,
-                { color: selectedUser.isActive ? '#2ecc71' : '#e74c3c' }
+                { color: selectedUser.isActive ? '#4CAF50' : '#ff5252' }
               ]}>
                 {selectedUser.isActive ? t('active') : t('inactive')}
               </Text>
@@ -281,7 +286,8 @@ const UserManagementScreen = () => {
   };
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
+      <StatusBar backgroundColor={theme.colors.darkGrey} barStyle="light-content" />
       <View style={styles.header}>
         <Text style={styles.headerTitle}>{t('userManagement')}</Text>
       </View>
@@ -300,47 +306,48 @@ const UserManagementScreen = () => {
       {renderUserList()}
       
       {renderUserDetailsModal()}
-    </View>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#2e2e2e',
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#2c3e50',
+    backgroundColor: '#1c1c1c',
     padding: 15,
-    paddingTop: 40,
+    paddingTop: Platform.OS === 'ios' ? 0 : 15,
   },
   headerTitle: {
-    color: '#fff',
-    fontSize: 20,
+    color: '#fff3e5',
+    fontSize: Math.min(width * 0.05, 20),
     fontWeight: 'bold',
   },
   searchContainer: {
     padding: 15,
-    backgroundColor: '#fff',
+    backgroundColor: '#1c1c1c',
     borderBottomWidth: 1,
-    borderBottomColor: '#ddd',
+    borderBottomColor: 'rgba(255, 243, 229, 0.1)',
   },
   searchInput: {
     height: 40,
     borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 5,
+    borderColor: 'rgba(255, 243, 229, 0.2)',
+    borderRadius: 15,
     paddingHorizontal: 15,
-    backgroundColor: '#f8f8f8',
+    backgroundColor: '#2e2e2e',
+    color: '#fff3e5',
   },
   errorText: {
-    color: '#e74c3c',
+    color: '#ff5252',
     padding: 15,
     textAlign: 'center',
-    backgroundColor: 'rgba(231, 76, 60, 0.1)',
+    backgroundColor: 'rgba(255, 82, 82, 0.1)',
   },
   loadingContainer: {
     flex: 1,
@@ -349,52 +356,58 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     marginTop: 10,
-    color: '#666',
+    color: '#fff3e5',
+    opacity: 0.7,
+    fontSize: Math.min(width * 0.035, 14),
   },
   statsContainer: {
     flexDirection: 'row',
-    backgroundColor: '#fff',
+    backgroundColor: '#1c1c1c',
     padding: 15,
     marginBottom: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#ddd',
+    borderBottomColor: 'rgba(255, 243, 229, 0.1)',
   },
   statItem: {
     flex: 1,
     alignItems: 'center',
   },
   statValue: {
-    fontSize: 18,
+    fontSize: Math.min(width * 0.045, 18),
     fontWeight: 'bold',
-    color: '#4A90E2',
+    color: '#fff3e5',
   },
   statLabel: {
-    fontSize: 12,
-    color: '#666',
+    fontSize: Math.min(width * 0.03, 12),
+    color: '#fff3e5',
+    opacity: 0.7,
   },
   userItem: {
-    backgroundColor: '#fff',
+    backgroundColor: '#1c1c1c',
     padding: 15,
     marginBottom: 10,
     marginHorizontal: 15,
-    borderRadius: 8,
+    borderRadius: 15,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 2,
     elevation: 2,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 243, 229, 0.1)',
   },
   userInfo: {
     marginBottom: 10,
   },
   username: {
-    fontSize: 16,
+    fontSize: Math.min(width * 0.04, 16),
     fontWeight: 'bold',
-    color: '#333',
+    color: '#fff3e5',
   },
   email: {
-    fontSize: 14,
-    color: '#666',
+    fontSize: Math.min(width * 0.035, 14),
+    color: '#ffffff',
+    opacity: 0.7,
     marginTop: 2,
   },
   userMeta: {
@@ -413,8 +426,8 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   userRole: {
-    fontSize: 12,
-    color: '#4A90E2',
+    fontSize: Math.min(width * 0.03, 12),
+    color: '#fff3e5',
     fontWeight: 'bold',
     paddingVertical: 3,
   },
@@ -425,22 +438,24 @@ const styles = StyleSheet.create({
   actionButton: {
     flex: 1,
     paddingVertical: 8,
-    borderRadius: 5,
+    borderRadius: 15,
     marginHorizontal: 3,
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 243, 229, 0.2)',
   },
   statusButton: {
-    backgroundColor: '#3498db',
+    backgroundColor: '#1c1c1c',
   },
   roleButton: {
-    backgroundColor: '#9b59b6',
+    backgroundColor: '#1c1c1c',
   },
   deleteButton: {
-    backgroundColor: '#e74c3c',
+    backgroundColor: '#1c1c1c',
   },
   buttonText: {
-    color: '#fff',
-    fontSize: 12,
+    color: '#fff3e5',
+    fontSize: Math.min(width * 0.03, 12),
     fontWeight: 'bold',
   },
   emptyContainer: {
@@ -448,18 +463,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   emptyText: {
-    color: '#666',
+    color: '#fff3e5',
+    opacity: 0.7,
     textAlign: 'center',
+    fontSize: Math.min(width * 0.035, 14),
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   modalContent: {
-    backgroundColor: '#fff',
-    borderRadius: 10,
+    backgroundColor: '#2e2e2e',
+    borderRadius: 15,
     padding: 20,
     width: '80%',
     shadowColor: '#000',
@@ -467,11 +484,13 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
     elevation: 5,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 243, 229, 0.1)',
   },
   modalTitle: {
-    fontSize: 18,
+    fontSize: Math.min(width * 0.045, 18),
     fontWeight: 'bold',
-    color: '#333',
+    color: '#fff3e5',
     marginBottom: 15,
     textAlign: 'center',
   },
@@ -481,13 +500,14 @@ const styles = StyleSheet.create({
   },
   detailLabel: {
     flex: 1,
-    fontSize: 14,
-    color: '#666',
+    fontSize: Math.min(width * 0.035, 14),
+    color: '#ffffff',
+    opacity: 0.7,
   },
   detailValue: {
     flex: 2,
-    fontSize: 14,
-    color: '#333',
+    fontSize: Math.min(width * 0.035, 14),
+    color: '#fff3e5',
     fontWeight: '500',
   },
   modalActions: {
@@ -498,16 +518,19 @@ const styles = StyleSheet.create({
   modalButton: {
     flex: 1,
     paddingVertical: 10,
-    borderRadius: 5,
+    borderRadius: 15,
     marginHorizontal: 5,
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 243, 229, 0.2)',
   },
   closeButton: {
-    backgroundColor: '#95a5a6',
+    backgroundColor: '#1c1c1c',
   },
   closeButtonText: {
-    color: '#fff',
+    color: '#fff3e5',
     fontWeight: 'bold',
+    fontSize: Math.min(width * 0.035, 14),
   },
 });
 

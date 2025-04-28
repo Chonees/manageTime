@@ -7,18 +7,26 @@ import {
   FlatList,
   Alert,
   ActivityIndicator,
+  StatusBar,
+  Dimensions,
+  SafeAreaView,
+  Platform
 } from 'react-native';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 import * as api from '../services/api';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import * as Linking from 'expo-linking';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+const { width, height } = Dimensions.get('window');
+
 const AdminPanelScreen = () => {
   const { t } = useLanguage();
   const { user } = useAuth();
+  const theme = useTheme();
   const [tasks, setTasks] = useState([]);
   const [users, setUsers] = useState([]);
   const [activities, setActivities] = useState([]);
@@ -291,7 +299,7 @@ const AdminPanelScreen = () => {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#4A90E2" />
+        <ActivityIndicator size="large" color={theme.colors.lightCream} />
         <Text style={styles.loadingText}>{t('loading')}</Text>
       </View>
     );
@@ -312,7 +320,8 @@ const AdminPanelScreen = () => {
   }
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
+      <StatusBar backgroundColor={theme.colors.darkGrey} barStyle="light-content" />
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>{t('recentActivity')}</Text>
@@ -346,6 +355,13 @@ const AdminPanelScreen = () => {
             <Text style={styles.emptyText}>{t('noRecentActivity')}</Text>
           </View>
         )}
+        
+        <TouchableOpacity 
+          style={styles.viewAllButton}
+          onPress={() => navigation.navigate('AdminActivities')}
+        >
+          <Text style={styles.viewAllButtonText}>{t('viewAllActivities') || 'Ver todas las actividades'}</Text>
+        </TouchableOpacity>
       </View>
 
       <View style={styles.section}>
@@ -362,25 +378,27 @@ const AdminPanelScreen = () => {
           }
         />
       </View>
-    </View>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#2e2e2e',
   },
   section: {
-    backgroundColor: '#fff',
+    backgroundColor: '#1c1c1c',
     margin: 10,
     padding: 15,
-    borderRadius: 8,
+    borderRadius: 15,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 2,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 243, 229, 0.1)',
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -389,29 +407,33 @@ const styles = StyleSheet.create({
     marginBottom: 15,
   },
   sectionTitle: {
-    fontSize: 18,
+    fontSize: Math.min(width * 0.05, 18),
     fontWeight: 'bold',
-    color: '#333',
+    color: '#fff3e5',
     marginBottom: 15,
     flex: 1,
   },
   reportButton: {
-    backgroundColor: '#2e2e2e',
+    backgroundColor: '#1c1c1c',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     padding: 12,
-    borderRadius: 8,
+    borderRadius: 15,
     marginTop: 15,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 243, 229, 0.2)',
   },
   reportButtonSmall: {
-    backgroundColor: '#2e2e2e',
+    backgroundColor: '#1c1c1c',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 6,
+    paddingVertical: 8,
     paddingHorizontal: 12,
-    borderRadius: 6,
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 243, 229, 0.2)',
   },
   reportButtonIcon: {
     marginRight: 8,
@@ -419,14 +441,29 @@ const styles = StyleSheet.create({
   reportButtonText: {
     color: '#fff3e5',
     fontWeight: 'bold',
-    fontSize: 14,
+    fontSize: Math.min(width * 0.035, 14),
+  },
+  viewAllButton: {
+    backgroundColor: '#fff3e5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 12,
+    borderRadius: 15,
+    marginTop: 15,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.1)',
+  },
+  viewAllButtonText: {
+    color: '#000',
+    fontWeight: 'bold',
+    fontSize: Math.min(width * 0.035, 14),
   },
   activityItem: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: 'rgba(255, 243, 229, 0.1)',
   },
   activityIcon: {
     marginRight: 10,
@@ -435,15 +472,18 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   activityText: {
-    fontSize: 14,
-    color: '#333',
+    fontSize: Math.min(width * 0.035, 14),
+    color: '#ffffff',
+    opacity: 0.9,
   },
   username: {
     fontWeight: 'bold',
+    color: '#fff3e5',
   },
   activityTime: {
-    fontSize: 12,
-    color: '#666',
+    fontSize: Math.min(width * 0.03, 12),
+    color: '#ffffff',
+    opacity: 0.6,
     marginTop: 2,
   },
   loadingContainer: {
@@ -453,7 +493,9 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     marginTop: 10,
-    color: '#666',
+    color: '#ffffff',
+    opacity: 0.7,
+    fontSize: Math.min(width * 0.035, 14),
   },
   errorContainer: {
     flex: 1,
@@ -462,22 +504,26 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   errorText: {
-    color: '#F44336',
+    color: '#ff5252',
     textAlign: 'center',
     marginBottom: 20,
+    fontSize: Math.min(width * 0.035, 14),
   },
   retryButton: {
-    backgroundColor: '#4A90E2',
+    backgroundColor: '#1c1c1c',
     padding: 10,
-    borderRadius: 5,
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 243, 229, 0.2)',
   },
   retryButtonText: {
-    color: '#fff',
+    color: '#fff3e5',
     fontWeight: 'bold',
+    fontSize: Math.min(width * 0.035, 14),
   },
   taskItem: {
-    backgroundColor: '#fff',
-    borderRadius: 8,
+    backgroundColor: '#1c1c1c',
+    borderRadius: 15,
     padding: 15,
     marginBottom: 10,
     shadowColor: '#000',
@@ -485,6 +531,8 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 2,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 243, 229, 0.1)',
   },
   taskHeader: {
     flexDirection: 'row',
@@ -493,15 +541,15 @@ const styles = StyleSheet.create({
     marginBottom: 5,
   },
   taskTitle: {
-    fontSize: 16,
+    fontSize: Math.min(width * 0.04, 16),
     fontWeight: 'bold',
-    color: '#333',
+    color: '#fff3e5',
   },
   deleteButton: {
     padding: 5,
   },
   deleteButtonText: {
-    color: '#F44336',
+    color: '#ff5252',
     fontSize: 20,
     fontWeight: 'bold',
   },
@@ -509,8 +557,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   taskDescription: {
-    fontSize: 14,
-    color: '#666',
+    fontSize: Math.min(width * 0.035, 14),
+    color: '#ffffff',
+    opacity: 0.9,
     marginBottom: 5,
   },
   assignedToContainer: {
@@ -519,13 +568,14 @@ const styles = StyleSheet.create({
     marginTop: 5,
   },
   assignedToLabel: {
-    fontSize: 12,
+    fontSize: Math.min(width * 0.03, 12),
     fontWeight: 'bold',
-    color: '#4A90E2',
+    color: '#fff3e5',
   },
   assignedToValue: {
-    fontSize: 14,
-    color: '#666',
+    fontSize: Math.min(width * 0.035, 14),
+    color: '#ffffff',
+    opacity: 0.7,
     marginLeft: 5,
   },
   taskFooter: {
@@ -535,8 +585,9 @@ const styles = StyleSheet.create({
     marginTop: 5,
   },
   taskDate: {
-    fontSize: 12,
-    color: '#666',
+    fontSize: Math.min(width * 0.03, 12),
+    color: '#ffffff',
+    opacity: 0.6,
   },
   completeButton: {
     padding: 5,
@@ -545,13 +596,16 @@ const styles = StyleSheet.create({
     height: 30,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f0f0f0',
+    backgroundColor: '#1c1c1c',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 243, 229, 0.2)',
   },
   completedButton: {
     backgroundColor: '#4CAF50',
+    borderColor: '#4CAF50',
   },
   completeButtonText: {
-    color: '#fff',
+    color: '#fff3e5',
     fontWeight: 'bold',
   },
   emptyContainer: {
@@ -560,10 +614,11 @@ const styles = StyleSheet.create({
     padding: 30,
   },
   emptyText: {
-    fontSize: 18,
-    color: '#666',
+    fontSize: Math.min(width * 0.045, 18),
+    color: '#ffffff',
+    opacity: 0.7,
     marginBottom: 10,
   },
 });
 
-export default AdminPanelScreen; 
+export default AdminPanelScreen;

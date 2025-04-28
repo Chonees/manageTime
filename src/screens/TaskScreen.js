@@ -9,18 +9,26 @@ import {
   Alert,
   ActivityIndicator,
   Modal,
-  ScrollView
+  ScrollView,
+  StatusBar,
+  SafeAreaView,
+  Dimensions,
+  Platform
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
+import { useTheme } from '../context/ThemeContext';
 import LanguageToggle from '../components/LanguageToggle';
 import * as api from '../services/api';
 import LocationRadiusSelector from '../components/LocationRadiusSelector';
 
+const { width, height } = Dimensions.get('window');
+
 const TaskScreen = ({ navigation }) => {
   const { user } = useAuth();
   const { t } = useLanguage();
+  const theme = useTheme();
   const [tasks, setTasks] = useState([]);
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -670,9 +678,10 @@ const TaskScreen = ({ navigation }) => {
   };
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
+      <StatusBar backgroundColor={theme.colors.darkGrey} barStyle="light-content" />
       <View style={styles.header}>
-        <Text style={styles.title}>{t('tasks')}</Text>
+        <Text style={styles.headerTitle}>{t('tasks')}</Text>
       </View>
       <View style={styles.statsContainer}>
         <View style={styles.statItem}>
@@ -733,14 +742,14 @@ const TaskScreen = ({ navigation }) => {
       )}
       
       {renderUserSelector()}
-    </View>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#2e2e2e',
   },
   header: {
     flexDirection: 'row',
@@ -748,17 +757,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 15,
     paddingVertical: 10,
-    backgroundColor: '#4A90E2',
+    backgroundColor: '#1c1c1c',
   },
-  title: {
-    fontSize: 18,
+  headerTitle: {
+    fontSize: Math.min(width * 0.05, 20),
     fontWeight: 'bold',
-    color: '#fff',
+    color: '#fff3e5',
   },
   statsContainer: {
     flexDirection: 'row',
-    backgroundColor: '#fff',
-    borderRadius: 8,
+    backgroundColor: '#1c1c1c',
+    borderRadius: 15,
     marginHorizontal: 15,
     marginBottom: 15,
     shadowColor: '#000',
@@ -766,38 +775,43 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 243, 229, 0.1)',
   },
   statItem: {
     flex: 1,
     alignItems: 'center',
     padding: 15,
     borderRightWidth: 1,
-    borderRightColor: '#f0f0f0',
+    borderRightColor: 'rgba(255, 243, 229, 0.1)',
   },
   statValue: {
-    fontSize: 20,
+    fontSize: Math.min(width * 0.05, 20),
     fontWeight: 'bold',
-    color: '#4A90E2',
+    color: '#fff3e5',
   },
   statLabel: {
-    fontSize: 12,
-    color: '#666',
+    fontSize: Math.min(width * 0.03, 12),
+    color: '#fff3e5',
+    opacity: 0.7,
     marginTop: 5,
   },
   addTaskButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#4A90E2',
+    backgroundColor: '#fff3e5',
     padding: 15,
-    borderRadius: 8,
+    borderRadius: 15,
     marginHorizontal: 15,
     marginBottom: 15,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.1)',
   },
   addTaskButtonText: {
-    color: '#fff',
+    color: '#000',
     fontWeight: 'bold',
-    fontSize: 16,
+    fontSize: Math.min(width * 0.04, 16),
     marginLeft: 8,
   },
   taskList: {
@@ -805,8 +819,8 @@ const styles = StyleSheet.create({
     marginHorizontal: 15,
   },
   taskItem: {
-    backgroundColor: '#fff',
-    borderRadius: 8,
+    backgroundColor: '#1c1c1c',
+    borderRadius: 15,
     padding: 15,
     marginBottom: 10,
     shadowColor: '#000',
@@ -814,6 +828,8 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 2,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 243, 229, 0.1)',
   },
   taskHeader: {
     flexDirection: 'row',
@@ -822,24 +838,25 @@ const styles = StyleSheet.create({
     marginBottom: 5,
   },
   taskTitle: {
-    fontSize: 16,
+    fontSize: Math.min(width * 0.04, 16),
     fontWeight: 'bold',
-    color: '#333',
+    color: '#fff3e5',
   },
   deleteButton: {
     padding: 5,
   },
   deleteButtonText: {
-    color: '#F44336',
-    fontSize: 20,
+    color: '#ff5252',
+    fontSize: Math.min(width * 0.05, 20),
     fontWeight: 'bold',
   },
   taskDetails: {
     flex: 1,
   },
   taskDescription: {
-    fontSize: 14,
-    color: '#666',
+    fontSize: Math.min(width * 0.035, 14),
+    color: '#ffffff',
+    opacity: 0.7,
     marginBottom: 5,
   },
   assignedToContainer: {
@@ -848,13 +865,14 @@ const styles = StyleSheet.create({
     marginTop: 5,
   },
   assignedToLabel: {
-    fontSize: 12,
+    fontSize: Math.min(width * 0.03, 12),
     fontWeight: 'bold',
-    color: '#4A90E2',
+    color: '#fff3e5',
   },
   assignedToValue: {
-    fontSize: 14,
-    color: '#666',
+    fontSize: Math.min(width * 0.035, 14),
+    color: '#ffffff',
+    opacity: 0.7,
     marginLeft: 5,
   },
   taskFooter: {
