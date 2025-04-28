@@ -9,17 +9,22 @@ import {
   RefreshControl,
   SectionList,
   Button,
-  Linking
+  Linking,
+  Dimensions
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { getAdminActivities } from '../services/api';
 import { useLanguage } from '../context/LanguageContext';
+import { useTheme } from '../context/ThemeContext';
 import { formatDistanceToNow } from 'date-fns';
 import { es, enUS } from 'date-fns/locale';
 
+const { width, height } = Dimensions.get('window');
+
 const AdminActivityList = () => {
   const { t } = useLanguage();
+  const theme = useTheme();
   const [activities, setActivities] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -377,79 +382,65 @@ const AdminActivityList = () => {
   const renderSeparator = () => <View style={styles.separator} />;
 
   // Renderizar los botones de filtro
-  const renderFilterButtons = () => (
-    <View style={styles.filterContainer}>
-      <TouchableOpacity 
-        style={[styles.filterButton, filterType === 'all' && styles.filterButtonActive]}
-        onPress={() => setFilterType('all')}
-      >
-        <Text style={[styles.filterButtonText, filterType === 'all' && styles.filterButtonTextActive]}>
-          Todas
-        </Text>
-      </TouchableOpacity>
-      
-      <TouchableOpacity 
-        style={[styles.filterButton, filterType === 'availability' && styles.filterButtonActive]}
-        onPress={() => setFilterType('availability')}
-      >
-        <Text style={[styles.filterButtonText, filterType === 'availability' && styles.filterButtonTextActive]}>
-          Disponibilidad
-        </Text>
-      </TouchableOpacity>
-      
-      <TouchableOpacity 
-        style={[styles.filterButton, filterType === 'tasks' && styles.filterButtonActive]}
-        onPress={() => setFilterType('tasks')}
-      >
-        <Text style={[styles.filterButtonText, filterType === 'tasks' && styles.filterButtonTextActive]}>
-          Tareas
-        </Text>
-      </TouchableOpacity>
-      
-      <TouchableOpacity 
-        style={[styles.filterButton, filterType === 'locations' && styles.filterButtonActive]}
-        onPress={() => setFilterType('locations')}
-      >
-        <Text style={[styles.filterButtonText, filterType === 'locations' && styles.filterButtonTextActive]}>
-          Ubicaciones
-        </Text>
-      </TouchableOpacity>
-    </View>
-  );
-
+  const renderFilterButtons = () => {
+    return (
+      <View style={styles.filterContainer}>
+        <TouchableOpacity
+          style={[styles.filterButton, filterType === 'all' && styles.filterButtonActive]}
+          onPress={() => setFilterType('all')}
+        >
+          <Ionicons name="list-outline" size={16} color={filterType === 'all' ? theme.colors.darkGrey : theme.colors.lightCream} />
+          <Text style={[styles.filterButtonText, filterType === 'all' && styles.filterButtonTextActive]}>{t('all')}</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity
+          style={[styles.filterButton, filterType === 'availability' && styles.filterButtonActive]}
+          onPress={() => setFilterType('availability')}
+        >
+          <Ionicons name="person-outline" size={16} color={filterType === 'availability' ? theme.colors.darkGrey : theme.colors.lightCream} />
+          <Text style={[styles.filterButtonText, filterType === 'availability' && styles.filterButtonTextActive]}>{t('availability')}</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity
+          style={[styles.filterButton, filterType === 'location' && styles.filterButtonActive]}
+          onPress={() => setFilterType('location')}
+        >
+          <Ionicons name="location-outline" size={16} color={filterType === 'location' ? theme.colors.darkGrey : theme.colors.lightCream} />
+          <Text style={[styles.filterButtonText, filterType === 'location' && styles.filterButtonTextActive]}>{t('location')}</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity
+          style={[styles.filterButton, filterType === 'task' && styles.filterButtonActive]}
+          onPress={() => setFilterType('task')}
+        >
+          <Ionicons name="checkbox-outline" size={16} color={filterType === 'task' ? theme.colors.darkGrey : theme.colors.lightCream} />
+          <Text style={[styles.filterButtonText, filterType === 'task' && styles.filterButtonTextActive]}>{t('tasks')}</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  };
   // Renderizar los botones de modo de vista
-  const renderViewModeButtons = () => (
-    <View style={styles.viewModeContainer}>
-      <TouchableOpacity 
-        style={[styles.viewModeButton, viewMode === 'list' && styles.viewModeButtonActive]}
-        onPress={() => setViewMode('list')}
-      >
-        <Ionicons 
-          name="list" 
-          size={20} 
-          color={viewMode === 'list' ? '#fff' : '#333'} 
-        />
-        <Text style={[styles.viewModeButtonText, viewMode === 'list' && styles.viewModeButtonTextActive]}>
-          {t('listMode')}
-        </Text>
-      </TouchableOpacity>
-      
-      <TouchableOpacity 
-        style={[styles.viewModeButton, viewMode === 'grouped' && styles.viewModeButtonActive]}
-        onPress={() => setViewMode('grouped')}
-      >
-        <Ionicons 
-          name="people" 
-          size={20} 
-          color={viewMode === 'grouped' ? '#fff' : '#333'} 
-        />
-        <Text style={[styles.viewModeButtonText, viewMode === 'grouped' && styles.viewModeButtonTextActive]}>
-          {t('groupedMode')}
-        </Text>
-      </TouchableOpacity>
-    </View>
-  );
-
+  const renderViewModeButtons = () => {
+    return (
+      <View style={styles.viewModeContainer}>
+        <TouchableOpacity
+          style={[styles.viewModeButton, viewMode === 'list' && styles.viewModeButtonActive]}
+          onPress={() => setViewMode('list')}
+        >
+          <Ionicons name="list-outline" size={16} color={viewMode === 'list' ? theme.colors.darkGrey : theme.colors.lightCream} />
+          <Text style={[styles.viewModeButtonText, viewMode === 'list' && styles.viewModeButtonTextActive]}>{t('list')}</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity
+          style={[styles.viewModeButton, viewMode === 'byUser' && styles.viewModeButtonActive]}
+          onPress={() => setViewMode('byUser')}
+        >
+          <Ionicons name="people-outline" size={16} color={viewMode === 'byUser' ? theme.colors.darkGrey : theme.colors.lightCream} />
+          <Text style={[styles.viewModeButtonText, viewMode === 'byUser' && styles.viewModeButtonTextActive]}>{t('byUser')}</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  };
   // Renderizar el componente principal
   const renderHeader = () => (
     <>
@@ -563,21 +554,22 @@ const AdminActivityList = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#2e2e2e',
     padding: 16,
   },
   header: {
     marginBottom: 16,
   },
   title: {
-    fontSize: 24,
+    fontSize: Math.min(width * 0.06, 24),
     fontWeight: 'bold',
-    color: '#333',
+    color: '#fff3e5',
     marginBottom: 4,
   },
   subtitle: {
-    fontSize: 14,
-    color: '#666',
+    fontSize: Math.min(width * 0.035, 14),
+    color: '#ffffff',
+    opacity: 0.7,
   },
   // Estilos para los filtros
   filterContainer: {
@@ -586,25 +578,28 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   filterButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: '#f0f0f0',
+    borderRadius: 15,
+    backgroundColor: '#1c1c1c',
     marginRight: 8,
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: 'rgba(255, 243, 229, 0.2)',
   },
   filterButtonActive: {
-    backgroundColor: '#4A90E2',
-    borderColor: '#4A90E2',
+    backgroundColor: '#fff3e5',
+    borderColor: '#fff3e5',
   },
   filterButtonText: {
-    fontSize: 14,
-    color: '#333',
+    fontSize: Math.min(width * 0.035, 14),
+    color: '#fff3e5',
+    marginLeft: 4,
   },
   filterButtonTextActive: {
-    color: '#fff',
+    color: '#2e2e2e',
   },
   // Estilos para los modos de vista
   viewModeContainer: {
@@ -616,41 +611,43 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: '#f0f0f0',
+    borderRadius: 15,
+    backgroundColor: '#1c1c1c',
     marginRight: 8,
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: 'rgba(255, 243, 229, 0.2)',
   },
   viewModeButtonActive: {
-    backgroundColor: '#4A90E2',
-    borderColor: '#4A90E2',
+    backgroundColor: '#fff3e5',
+    borderColor: '#fff3e5',
   },
   viewModeButtonText: {
-    fontSize: 14,
-    color: '#333',
+    fontSize: Math.min(width * 0.035, 14),
+    color: '#fff3e5',
     marginLeft: 4,
   },
   viewModeButtonTextActive: {
-    color: '#fff',
+    color: '#2e2e2e',
   },
   // Estilos para las secciones (agrupación por usuario)
   sectionHeader: {
-    backgroundColor: '#e0e0e0',
+    backgroundColor: '#1c1c1c',
     padding: 12,
-    borderRadius: 8,
+    borderRadius: 15,
     marginVertical: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 243, 229, 0.2)',
   },
   sectionHeaderText: {
-    fontSize: 16,
+    fontSize: Math.min(width * 0.04, 16),
     fontWeight: 'bold',
-    color: '#333',
+    color: '#fff3e5',
   },
   // Estilos para los elementos de actividad
   activityItem: {
     flexDirection: 'row',
-    backgroundColor: '#fff',
-    borderRadius: 8,
+    backgroundColor: '#1c1c1c',
+    borderRadius: 15,
     padding: 12,
     marginBottom: 8,
     elevation: 2,
@@ -658,6 +655,8 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 2,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 243, 229, 0.1)',
   },
   activityIconContainer: {
     width: 40,
@@ -677,33 +676,36 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   activityType: {
-    fontSize: 16,
+    fontSize: Math.min(width * 0.04, 16),
     fontWeight: 'bold',
-    color: '#333',
+    color: '#fff3e5',
   },
   activityTime: {
-    fontSize: 14,
-    color: '#666',
+    fontSize: Math.min(width * 0.035, 14),
+    color: '#ffffff',
+    opacity: 0.7,
   },
   userName: {
-    fontSize: 14,
+    fontSize: Math.min(width * 0.035, 14),
     fontWeight: 'bold',
-    color: '#4A90E2',
+    color: '#fff3e5',
     marginBottom: 4,
   },
   activityDescription: {
-    fontSize: 14,
-    color: '#333',
+    fontSize: Math.min(width * 0.035, 14),
+    color: '#ffffff',
+    opacity: 0.9,
     marginVertical: 4,
   },
   activityDateTime: {
-    fontSize: 12,
-    color: '#888',
+    fontSize: Math.min(width * 0.03, 12),
+    color: '#ffffff',
+    opacity: 0.6,
     marginTop: 4,
   },
   activityDuration: {
-    fontSize: 12,
-    color: '#4A90E2',
+    fontSize: Math.min(width * 0.03, 12),
+    color: '#fff3e5',
     marginTop: 4,
   },
   separator: {
@@ -712,19 +714,21 @@ const styles = StyleSheet.create({
   // Estilos para la leyenda
   legendContainer: {
     marginTop: 16,
-    backgroundColor: '#fff',
-    borderRadius: 8,
+    backgroundColor: '#1c1c1c',
+    borderRadius: 15,
     padding: 12,
     elevation: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 2,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 243, 229, 0.1)',
   },
   legendTitle: {
-    fontSize: 16,
+    fontSize: Math.min(width * 0.04, 16),
     fontWeight: 'bold',
-    color: '#333',
+    color: '#fff3e5',
     marginBottom: 8,
   },
   legendItems: {
@@ -745,8 +749,9 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   legendText: {
-    fontSize: 12,
-    color: '#666',
+    fontSize: Math.min(width * 0.03, 12),
+    color: '#ffffff',
+    opacity: 0.7,
   },
   // Estilos para estados de carga y error
   loadingContainer: {
@@ -755,47 +760,55 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     marginTop: 8,
-    fontSize: 14,
-    color: '#666',
+    fontSize: Math.min(width * 0.035, 14),
+    color: '#ffffff',
+    opacity: 0.7,
   },
   emptyText: {
     padding: 24,
-    fontSize: 16,
-    color: '#666',
+    fontSize: Math.min(width * 0.04, 16),
+    color: '#ffffff',
+    opacity: 0.7,
     textAlign: 'center',
   },
   errorContainer: {
     padding: 16,
-    backgroundColor: '#ffebee',
-    borderRadius: 8,
+    backgroundColor: 'rgba(211, 47, 47, 0.2)',
+    borderRadius: 15,
     marginBottom: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(211, 47, 47, 0.3)',
   },
   errorText: {
-    fontSize: 14,
-    color: '#d32f2f',
+    fontSize: Math.min(width * 0.035, 14),
+    color: '#ff5252',
     marginBottom: 8,
   },
   retryButton: {
-    backgroundColor: '#d32f2f',
-    padding: 8,
-    borderRadius: 4,
+    backgroundColor: '#1c1c1c',
+    padding: 10,
+    borderRadius: 15,
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 243, 229, 0.2)',
   },
   retryButtonText: {
-    color: '#fff',
-    fontSize: 14,
+    color: '#fff3e5',
+    fontSize: Math.min(width * 0.035, 14),
     fontWeight: 'bold',
   },
   loadMoreButton: {
-    backgroundColor: '#4A90E2',
+    backgroundColor: '#1c1c1c',
     padding: 12,
-    borderRadius: 8,
+    borderRadius: 15,
     alignItems: 'center',
     marginVertical: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 243, 229, 0.2)',
   },
   loadMoreButtonText: {
-    color: '#fff',
-    fontSize: 14,
+    color: '#fff3e5',
+    fontSize: Math.min(width * 0.035, 14),
     fontWeight: 'bold',
   },
   loadingMoreContainer: {
@@ -806,8 +819,9 @@ const styles = StyleSheet.create({
   },
   loadingMoreText: {
     marginLeft: 8,
-    fontSize: 14,
-    color: '#666',
+    fontSize: Math.min(width * 0.035, 14),
+    color: '#ffffff',
+    opacity: 0.7,
   },
   listContentContainer: {
     paddingHorizontal: 16,
