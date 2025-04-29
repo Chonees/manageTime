@@ -285,8 +285,38 @@ exports.generateActivityExcelReport = async (req, res) => {
             cell.style = headerStyle;
           });
           
-          // Añadir secciones por tipo de actividad
-          await createActivitySections(userSheet, activities);
+          // Agrupar actividades por tarea si se ha solicitado
+          if (req.query.groupByTask === 'true') {
+            // Primero obtener todas las tareas asociadas a las actividades
+            const taskIds = [...new Set(activities
+              .filter(a => a.taskId)
+              .map(a => a.taskId._id.toString()))];
+            
+            console.log(`Encontradas ${taskIds.length} tareas distintas para agrupar`);
+            
+            // Actividades sin tarea asociada
+            const activitiesWithoutTask = activities.filter(a => !a.taskId);
+            
+            // Para cada tarea, obtener sus actividades y crear una sección
+            for (const taskId of taskIds) {
+              const taskActivities = activities.filter(a => 
+                a.taskId && a.taskId._id.toString() === taskId
+              );
+              
+              if (taskActivities.length > 0) {
+                const taskName = taskActivities[0].taskId.title || 'Tarea sin título';
+                await addTaskSection(userSheet, `TAREA: ${taskName}`, taskActivities);
+              }
+            }
+            
+            // Añadir actividades sin tarea asociada al final
+            if (activitiesWithoutTask.length > 0) {
+              await createActivitySections(userSheet, activitiesWithoutTask);
+            }
+          } else {
+            // Si no se agrupan por tarea, usar el método original
+            await createActivitySections(userSheet, activities);
+          }
           
           // Añadir todas las actividades del usuario a la hoja general
           for (const activity of activities) {
@@ -495,6 +525,11 @@ const getActivityInfo = async (activity) => {
         activityType = 'Cierre de sesión';
         description = 'Usuario cerró sesión';
         break;
+      case 'voice_note':
+        activityType = 'Bitácora';
+        // Usar el texto de la nota como descripción si existe
+        description = activity.text || activity.metadata?.text || description;
+        break;
       default:
         activityType = activity.type || 'Desconocido';
         break;
@@ -561,13 +596,14 @@ const createActivitySections = async (sheet, activities) => {
     
     const taskActivities = activities.filter(a => 
       a.type === 'task_create' || a.type === 'task_update' || 
-      a.type === 'task_complete' || a.type === 'task_delete'
+      a.type === 'task_complete' || a.type === 'task_delete' ||
+      a.type === 'voice_note' // Incluir voice_note en actividades de tareas
     );
     
     const otherActivities = activities.filter(a => 
       !['clock_in', 'clock_out', 'started_working', 'stopped_working',
         'location_enter', 'location_exit',
-        'task_create', 'task_update', 'task_complete', 'task_delete'
+        'task_create', 'task_update', 'task_complete', 'task_delete', 'voice_note'
       ].includes(a.type)
     );
     
@@ -624,6 +660,52 @@ const createActivitySections = async (sheet, activities) => {
     
   } catch (error) {
     console.error('Error al crear secciones de actividad:', error);
+    // Continuar sin secciones
+  }
+};
+
+/**
+ * Función auxiliar para crear una sección de actividades por tarea
+ * @param {Object} sheet - Hoja de Excel
+ * @param {String} title - Título de la sección
+ * @param {Array} activities - Lista de actividades
+ */
+const addTaskSection = async (sheet, title, activities) => {
+  try {
+    // Añadir encabezado de sección
+    const headerRow = sheet.addRow({
+      date: title
+    });
+    
+    // Estilo para el encabezado de sección
+    headerRow.eachCell((cell) => {
+      cell.font = { bold: true };
+      cell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFF3E5FF' }
+      };
+    });
+    
+    // Añadir actividades de esta sección
+    for (const activity of activities) {
+      const activityInfo = await getActivityInfo(activity);
+      
+      sheet.addRow({
+        date: activityInfo.date,
+        time: activityInfo.time,
+        activityType: activityInfo.activityType,
+        description: activityInfo.description,
+        coordinates: activityInfo.coordinates,
+        task: activityInfo.task,
+        duration: activityInfo.duration
+      });
+    }
+    
+    // Añadir una fila en blanco después de cada sección
+    sheet.addRow({});
+  } catch (error) {
+    console.error('Error al crear sección de tarea:', error);
     // Continuar sin secciones
   }
 };
