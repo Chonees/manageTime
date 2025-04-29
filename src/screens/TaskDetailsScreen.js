@@ -681,36 +681,40 @@ const TaskDetailsScreen = ({ route, navigation }) => {
       </View>
       
       <View style={styles.infoContainer}>
-        <Text style={styles.label}>{t('description')}:</Text>
-        <Text style={styles.description}>{task.description || t('noDescription')}</Text>
-      </View>
-      
-      {(user?.isAdmin || task.userId === user?._id) && (
-        <View style={styles.infoContainer}>
-          <Text style={styles.label}>{t('assignedTo')}:</Text>
-          <Text style={styles.value}>
-            {assignedUser ? assignedUser.username : 
-             (typeof task.userId === 'object' && task.userId.username) ? task.userId.username : 
-             t('noUserAssigned')}
-          </Text>
+        {/* Descripción */}
+        <View style={styles.infoSection}>
+          <Text style={styles.infoLabel}>{t('description')}:</Text>
+          <Text style={styles.description}>{task.description || t('noDescription')}</Text>
         </View>
-      )}
-      
-      <View style={styles.infoContainer}>
-        <Text style={styles.label}>{t('createdAt')}:</Text>
-        <Text style={styles.value}>
-          {new Date(task.createdAt).toLocaleString()}
-        </Text>
-      </View>
-      
-      {task.updatedAt && task.updatedAt !== task.createdAt && (
-        <View style={styles.infoContainer}>
-          <Text style={styles.label}>{t('updatedAt')}:</Text>
-          <Text style={styles.value}>
-            {new Date(task.updatedAt).toLocaleString()}
-          </Text>
+        
+        {/* Fechas en una sola fila */}
+        <View style={styles.datesContainer}>
+          <View style={styles.dateSection}>
+            <Text style={styles.infoLabel}>{t('created')}:</Text>
+            <Text style={styles.dateValue}>
+              {task.createdAt ? new Date(task.createdAt).toLocaleString() : t('unknown')}
+            </Text>
+          </View>
+          
+          <View style={styles.dateSection}>
+            <Text style={styles.infoLabel}>{t('updated')}:</Text>
+            <Text style={styles.dateValue}>
+              {task.updatedAt ? new Date(task.updatedAt).toLocaleString() : t('unknown')}
+            </Text>
+          </View>
         </View>
-      )}
+        
+        {(user?.isAdmin || task.userId === user?._id) && (
+          <View style={styles.infoSection}>
+            <Text style={styles.infoLabel}>{t('assignedTo')}:</Text>
+            <Text style={styles.value}>
+              {assignedUser ? assignedUser.username : 
+               (typeof task.userId === 'object' && task.userId.username) ? task.userId.username : 
+               t('noUserAssigned')}
+            </Text>
+          </View>
+        )}
+      </View>
       
       {hasLocation && (
         <View style={styles.mapContainer}>
@@ -802,6 +806,8 @@ const TaskDetailsScreen = ({ route, navigation }) => {
           value={activityInput}
           onChangeText={setActivityInput}
           placeholder={t('enterActivity')}
+          placeholderTextColor="rgba(255, 243, 229, 0.5)"
+          color="#fff3e5"
         />
         <TouchableOpacity 
           style={styles.submitActivityButton}
@@ -816,7 +822,7 @@ const TaskDetailsScreen = ({ route, navigation }) => {
       
       {/* Nuevo componente para mostrar palabras clave */}
       <View style={styles.keywordsContainer}>
-        <Text style={styles.keywordsLabel}>{t('keywordsToSay') || 'Palabras clave que debes decir'}:</Text>
+        <Text style={styles.keywordsLabel}>{t('keywordsToSay')}</Text>
         <View style={styles.keywordsList}>
           {getTaskKeywords().map((keyword, index) => {
             // Verificar si la palabra clave ya ha sido pronunciada (normalizando para comparación)
@@ -854,23 +860,25 @@ const TaskDetailsScreen = ({ route, navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#2e2e2e',
   },
   centerContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
+    backgroundColor: '#2e2e2e',
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 15,
-    paddingVertical: 10,
-    backgroundColor: '#fff',
+    paddingVertical: 25,
+    paddingTop: 33,
+    backgroundColor: '#2e2e2e',
     borderBottomWidth: 1,
-    borderBottomColor: '#ddd',
+    borderBottomColor: '#3e3e3e',
   },
   taskStatusContainer: {
     flexDirection: 'row',
@@ -881,65 +889,89 @@ const styles = StyleSheet.create({
     height: 30,
     borderRadius: 15,
     borderWidth: 2,
-    borderColor: '#4A90E2',
+    borderColor: '#fff3e5',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 10,
   },
   completedButton: {
-    backgroundColor: '#4A90E2',
+    backgroundColor: '#fff3e5',
   },
   completeButtonText: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#4A90E2',
+    color: '#fff3e5',
   },
   taskStatus: {
     fontSize: 16,
-    color: '#666',
+    color: '#fff',
   },
   deleteButton: {
     padding: 8,
   },
   titleContainer: {
     padding: 15,
-    backgroundColor: '#fff',
+    backgroundColor: '#2e2e2e',
     marginBottom: 10,
   },
   title: {
     fontSize: 22,
     fontWeight: 'bold',
-    color: '#333',
+    color: '#fff3e5',
   },
   infoContainer: {
-    padding: 15,
-    backgroundColor: '#fff',
+    padding: 12,
+    backgroundColor: '#2e2e2e',
     marginBottom: 10,
+    borderRadius: 10,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
   },
-  label: {
-    fontSize: 16,
+  infoSection: {
+    marginBottom: 6,
+  },
+  infoLabel: {
+    fontSize: 14,
     fontWeight: 'bold',
-    color: '#666',
-    marginBottom: 5,
+    color: '#fff3e5',
+    marginBottom: 2,
   },
   description: {
-    fontSize: 16,
-    color: '#333',
-    lineHeight: 24,
+    fontSize: 14,
+    color: '#fff',
+    lineHeight: 20,
   },
-  value: {
-    fontSize: 16,
-    color: '#333',
+  datesContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 4,
+  },
+  dateSection: {
+    flex: 1,
+    marginRight: 8,
+  },
+  dateValue: {
+    fontSize: 13,
+    color: '#ccc',
   },
   mapContainer: {
     padding: 15,
-    backgroundColor: '#fff',
+    backgroundColor: '#2e2e2e',
     marginBottom: 10,
+    borderRadius: 10,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
   },
   mapLabel: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#666',
+    color: '#fff3e5',
     marginBottom: 10,
   },
   map: {
@@ -949,12 +981,12 @@ const styles = StyleSheet.create({
   },
   locationName: {
     fontSize: 16,
-    color: '#333',
+    color: '#fff',
     marginBottom: 5,
   },
   radius: {
     fontSize: 14,
-    color: '#666',
+    color: '#ccc',
     marginBottom: 5,
   },
   withinRadius: {
@@ -971,8 +1003,14 @@ const styles = StyleSheet.create({
   },
   taskActionContainer: {
     padding: 15,
-    backgroundColor: '#fff',
+    backgroundColor: '#2e2e2e',
     marginBottom: 10,
+    borderRadius: 10,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
   },
   startButton: {
     backgroundColor: '#4CAF50',
@@ -991,7 +1029,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   disabledButton: {
-    backgroundColor: '#cccccc',
+    backgroundColor: '#444',
   },
   startButtonText: {
     color: '#fff',
@@ -1007,36 +1045,45 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   errorText: {
-    color: '#e74c3c',
+    color: '#F44336',
     fontSize: 16,
     marginBottom: 15,
     textAlign: 'center',
   },
   retryButton: {
-    backgroundColor: '#4A90E2',
+    backgroundColor: '#fff3e5',
     padding: 12,
     borderRadius: 8,
   },
   retryButtonText: {
-    color: '#fff',
+    color: '#2e2e2e',
     fontSize: 16,
     fontWeight: 'bold',
   },
   activityContainer: {
     padding: 15,
-    backgroundColor: '#fff',
+    backgroundColor: '#2e2e2e',
     marginBottom: 10,
+    borderRadius: 10,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
   },
   activityInput: {
     height: 40,
-    borderColor: '#ccc',
+    borderColor: '#fff3e5',
     borderWidth: 1,
     paddingHorizontal: 10,
     paddingVertical: 5,
     fontSize: 16,
+    borderRadius: 8,
+    color: '#fff3e5',
+    backgroundColor: 'rgba(255, 243, 229, 0.1)',
   },
   submitActivityButton: {
-    backgroundColor: '#4A90E2',
+    backgroundColor: '#fff3e5',
     padding: 10,
     borderRadius: 8,
     alignItems: 'center',
@@ -1044,34 +1091,50 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   submitActivityButtonText: {
-    color: '#fff',
+    color: '#2e2e2e',
     fontSize: 16,
     fontWeight: 'bold',
   },
   keywordsContainer: {
     padding: 15,
-    backgroundColor: '#fff',
+    backgroundColor: '#2e2e2e',
     marginBottom: 10,
+    borderRadius: 10,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
   },
   keywordsLabel: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#666',
-    marginBottom: 5,
+    color: '#fff3e5',
+    marginBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#3e3e3e',
+    paddingBottom: 8,
   },
   keywordsList: {
     flexDirection: 'row',
     flexWrap: 'wrap',
+    marginTop: 5,
   },
   keywordWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginRight: 10,
-    marginBottom: 5,
+    backgroundColor: 'rgba(255, 243, 229, 0.15)',
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    marginRight: 8,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 243, 229, 0.3)',
   },
   keyword: {
     fontSize: 14,
-    color: '#333',
+    color: '#fff',
   },
   spokenKeyword: {
     color: '#4CAF50',

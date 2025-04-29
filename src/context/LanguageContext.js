@@ -484,6 +484,35 @@ export const translations = {
     cancel: 'Cancel',
     speakCode: 'Speak the code',
     timeRemaining: 'Time remaining: {{time}}s',
+    
+    // Location tracking messages
+    startingLocationTracking: "Starting location tracking...",
+    locationPermissionDenied: "Location permission was denied",
+    gettingInitialLocation: "Getting initial location reading with highest accuracy...",
+    initialLocationReading: "Initial location reading obtained",
+    settingUpLocationTracking: "Setting up continuous location tracking...",
+    locationUpdateReceived: "Location update received",
+    locationCoordinates: "Location: ${lat}, ${lng} (±${accuracy}m)",
+    locationTrackingStarted: "Location tracking successfully started",
+    locationTrackingError: "Error starting location tracking: ${error}",
+    
+    // Radius check messages
+    radiusCheckDivider: "---------- RADIUS CHECK ----------",
+    checkingTaskRadius: "Checking if within task radius - Task ID: ${taskId}",
+    taskMissingCoordinates: "Task missing valid coordinates: ${location}",
+    taskPosition: "Task position: ${position}",
+    taskRadius: "Task radius: ${radius} meters",
+    userPosition: "User position: ${position}",
+    distanceToTask: "Distance to task: ${km} km / ${meters} meters",
+    withinTaskRadius: "WITHIN RADIUS",
+    outsideTaskRadius: "OUTSIDE RADIUS",
+    updatingRadiusState: "Updating within radius state from ${from} to ${to}",
+    
+    // Keywords
+    keywordsToSay: "Keywords to say",
+    spokenKeywords: "Spoken keywords",
+    keywordDetected: "Keyword detected",
+    keywordsConfigured: "Keywords configured in task",
   },
   es: {
     login: 'Iniciar Sesión',
@@ -967,6 +996,12 @@ export const translations = {
     cancel: 'Cancelar',
     speakCode: 'Diga el código',
     timeRemaining: 'Tiempo restante: {{time}}s',
+    
+    // Keywords
+    keywordsToSay: "Palabras clave para decir",
+    spokenKeywords: "Palabras clave dichas",
+    keywordDetected: "Palabra clave detectada",
+    keywordsConfigured: "Palabras clave configuradas en la tarea",
   }
 };
 
