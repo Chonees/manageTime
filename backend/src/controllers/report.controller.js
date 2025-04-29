@@ -1,4 +1,5 @@
 const moment = require('moment');
+require('moment-timezone'); // Agregar soporte para zonas horarias
 const User = require('../models/user.model');
 const Activity = require('../models/activity.model');
 const Task = require('../models/task.model');
@@ -261,7 +262,7 @@ exports.generateActivityExcelReport = async (req, res) => {
           unavailableCount,
           completedTasks: userCompletedTasks,
           createdTasks: createdTasksCount,
-          lastAccess: lastLogin ? moment(lastLogin.createdAt).format('DD/MM/YYYY HH:mm') : 'Nunca'
+          lastAccess: lastLogin ? moment(lastLogin.createdAt).tz('America/Chicago').format('DD/MM/YYYY HH:mm') : 'Nunca'
         });
         
         // Si hay actividades, crear una hoja detallada para el usuario
@@ -371,13 +372,13 @@ exports.generateActivityExcelReport = async (req, res) => {
     statsSheet.addRow({ metric: 'Total de Tareas', value: totalTasks });
     statsSheet.addRow({ metric: 'Tareas Completadas', value: completedTasks });
     statsSheet.addRow({ metric: 'Tareas Pendientes', value: pendingTasks });
-    statsSheet.addRow({ metric: 'Fecha de Generación', value: moment().format('DD/MM/YYYY HH:mm:ss') });
+    statsSheet.addRow({ metric: 'Fecha de Generación', value: moment().tz('America/Chicago').format('DD/MM/YYYY HH:mm:ss') });
     
     // Añadir información sobre los filtros aplicados
     if (startDate || endDate || activityType || userId) {
       statsSheet.addRow({ metric: '--- Filtros Aplicados ---', value: '' });
-      if (startDate) statsSheet.addRow({ metric: 'Fecha Inicio', value: moment(startDate).format('DD/MM/YYYY') });
-      if (endDate) statsSheet.addRow({ metric: 'Fecha Fin', value: moment(endDate).format('DD/MM/YYYY') });
+      if (startDate) statsSheet.addRow({ metric: 'Fecha Inicio', value: moment(startDate).tz('America/Chicago').format('DD/MM/YYYY') });
+      if (endDate) statsSheet.addRow({ metric: 'Fecha Fin', value: moment(endDate).tz('America/Chicago').format('DD/MM/YYYY') });
       if (activityType) {
         let activityTypeText = '';
         switch (activityType) {
@@ -439,7 +440,7 @@ exports.generateActivityExcelReport = async (req, res) => {
     
     // Configurar cabeceras para descargar el archivo
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', `attachment; filename=actividades_${moment().format('YYYY-MM-DD')}.xlsx`);
+    res.setHeader('Content-Disposition', `attachment; filename=actividades_${moment().tz('America/Chicago').format('YYYY-MM-DD')}.xlsx`);
     
     try {
       // Enviar el Excel como respuesta
@@ -474,9 +475,12 @@ exports.generateActivityExcelReport = async (req, res) => {
  */
 const getActivityInfo = async (activity) => {
   try {
-    // Formatear fecha y hora
-    const date = moment(activity.createdAt).format('DD/MM/YYYY');
-    const time = moment(activity.createdAt).format('HH:mm:ss');
+    // Usar la zona horaria de Brownsville, TX (America/Chicago)
+    const TIMEZONE = 'America/Chicago';
+    
+    // Formatear fecha y hora con la zona horaria correcta
+    const date = moment(activity.createdAt).tz(TIMEZONE).format('DD/MM/YYYY');
+    const time = moment(activity.createdAt).tz(TIMEZONE).format('HH:mm:ss');
     
     // Determinar el tipo de actividad y descripción
     let activityType = '';
@@ -566,8 +570,8 @@ const getActivityInfo = async (activity) => {
   } catch (error) {
     console.error('Error al procesar información de actividad:', error);
     return {
-      date: moment(activity.createdAt).format('DD/MM/YYYY'),
-      time: moment(activity.createdAt).format('HH:mm:ss'),
+      date: moment(activity.createdAt).tz('America/Chicago').format('DD/MM/YYYY'),
+      time: moment(activity.createdAt).tz('America/Chicago').format('HH:mm:ss'),
       activityType: activity.type || 'Desconocido',
       description: 'Error al procesar descripción',
       coordinates: '',
@@ -584,6 +588,9 @@ const getActivityInfo = async (activity) => {
  */
 const createActivitySections = async (sheet, activities) => {
   try {
+    // Zona horaria de Brownsville, TX
+    const TIMEZONE = 'America/Chicago';
+    
     // Agrupar actividades por tipo
     const availabilityActivities = activities.filter(a => 
       a.type === 'clock_in' || a.type === 'clock_out' || 
@@ -672,6 +679,9 @@ const createActivitySections = async (sheet, activities) => {
  */
 const addTaskSection = async (sheet, title, activities) => {
   try {
+    // Usar la zona horaria de Brownsville, TX
+    const TIMEZONE = 'America/Chicago';
+    
     // Añadir encabezado de sección
     const headerRow = sheet.addRow({
       date: title
