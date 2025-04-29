@@ -531,8 +531,33 @@ const getActivityInfo = async (activity) => {
         break;
       case 'voice_note':
         activityType = 'Bitácora';
-        // Usar el texto de la nota como descripción si existe
-        description = activity.text || activity.metadata?.text || description;
+        
+        // Priorizar la palabra clave guardada en los metadatos (nuevo flujo)
+        if (activity.metadata && activity.metadata.keyword) {
+          description = activity.metadata.keyword;
+        } 
+        // Usar el mensaje directamente si contiene la palabra clave (nuevo flujo)
+        else if (activity.message && activity.message !== 'Sin descripción') {
+          description = activity.message;
+        }
+        // Mantener compatibilidad con registros antiguos
+        else if (activity.taskId && activity.taskId.keywords) {
+          // Las palabras clave pueden estar como string o array
+          const keywords = typeof activity.taskId.keywords === 'string'
+            ? activity.taskId.keywords.split(',').map(k => k.trim())
+            : activity.taskId.keywords;
+            
+          // Comprobar si alguna de las palabras clave está en el mensaje
+          const messageText = activity.metadata?.fullText || activity.message || '';
+          const foundKeyword = keywords.find(keyword => 
+            messageText.toLowerCase().includes(keyword.toLowerCase())
+          );
+          
+          // Si encontramos una coincidencia exacta, mostrar solo la palabra clave
+          if (foundKeyword) {
+            description = foundKeyword;
+          }
+        }
         break;
       default:
         activityType = activity.type || 'Desconocido';
