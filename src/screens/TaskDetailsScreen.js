@@ -36,13 +36,20 @@ const TaskDetailsScreen = ({ route, navigation }) => {
   const [activityInput, setActivityInput] = useState('');
   const [isSubmittingActivity, setIsSubmittingActivity] = useState(false);
   const [taskActivities, setTaskActivities] = useState([]);
+  const [spokenKeywords, setSpokenKeywords] = useState([]); // Nuevo estado para palabras clave ya pronunciadas
 
   useEffect(() => {
     loadTaskDetails();
 
     return () => {
       if (locationSubscription) {
-        Location.removeWatchAsync(locationSubscription);
+        try {
+          // La forma correcta es llamar .remove() directamente en el objeto de suscripción
+          locationSubscription.remove();
+          console.log('Subscription removed correctly');
+        } catch (error) {
+          console.error('Error removing location subscription:', error);
+        }
       }
     };
   }, [taskId]);
@@ -432,13 +439,20 @@ const TaskDetailsScreen = ({ route, navigation }) => {
 
   const handleEndTask = async () => {
     try {
-      // Update task status to completed
+      // Primero asegurarse de detener el modo manos libres
+      setTaskStarted(false);
+      
+      // Luego actualizar la tarea en el backend
       const updatedTask = await api.updateTask(taskId, { 
         status: 'completed',
         completed: true 
       });
       setTask(updatedTask);
-      setTaskStarted(false);
+
+      // Si la tarea tenía handsFreeMode, registrar que se ha desactivado
+      if (task.handsFreeMode) {
+        console.log('Desactivando modo manos libres para la tarea completada');
+      }
 
       Alert.alert(t('success'), t('taskCompleted'));
     } catch (error) {
@@ -556,6 +570,42 @@ const TaskDetailsScreen = ({ route, navigation }) => {
       loadTaskActivities();
     }
   }, [task]);
+
+  // Función para manejar cuando se detecta una palabra clave
+  const handleKeywordDetected = (keyword) => {
+    console.log(`Palabra clave detectada: "${keyword}"`);
+    
+    // Normalizar la palabra clave detectada para comparación
+    const normalizedKeyword = keyword.trim().toLowerCase();
+    
+    setSpokenKeywords(prev => {
+      // Verificar si ya existe considerando mayúsculas/minúsculas
+      const alreadyExists = prev.some(k => k.toLowerCase().trim() === normalizedKeyword);
+      
+      if (!alreadyExists) {
+        console.log(`Añadiendo palabra clave nueva: "${keyword}"`);
+        return [...prev, keyword];
+      }
+      
+      console.log(`La palabra clave "${keyword}" ya estaba registrada`);
+      return prev;
+    });
+  };
+
+  // Función para extraer palabras clave de la tarea
+  const getTaskKeywords = () => {
+    if (!task || !task.keywords) return [];
+    
+    if (typeof task.keywords === 'string') {
+      return task.keywords.split(',').map(k => k.trim()).filter(k => k.length > 0);
+    }
+    
+    if (Array.isArray(task.keywords)) {
+      return task.keywords;
+    }
+    
+    return [];
+  };
 
   if (loading) {
     return (
@@ -746,15 +796,6 @@ const TaskDetailsScreen = ({ route, navigation }) => {
         </View>
       )}
       
-      <View style={styles.actionsContainer}>
-        <TouchableOpacity 
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-        >
-          <Text style={styles.backButtonText}>{t('backToTasks')}</Text>
-        </TouchableOpacity>
-      </View>
-      
       <View style={styles.activityContainer}>
         <TextInput
           style={styles.activityInput}
@@ -771,19 +812,41 @@ const TaskDetailsScreen = ({ route, navigation }) => {
         </TouchableOpacity>
       </View>
       
-      {taskActivities.length > 0 && (
-        <View style={styles.activitiesContainer}>
-          <Text style={styles.activitiesTitle}>{t('taskActivities')}</Text>
-          {taskActivities.map(activity => (
-            <View key={activity._id} style={styles.activityItem}>
-              <Text style={styles.activityItemText}>{activity.description}</Text>
-              <Text style={styles.activityItemTimestamp}>{new Date(activity.createdAt).toLocaleString()}</Text>
-            </View>
-          ))}
-        </View>
-      )}
+      {taskStarted && <VoiceListener isTaskActive={taskStarted} taskData={task} onKeywordDetected={handleKeywordDetected} />}
       
-      {taskStarted && <VoiceListener isTaskActive={taskStarted} taskData={task} />}
+      {/* Nuevo componente para mostrar palabras clave */}
+      <View style={styles.keywordsContainer}>
+        <Text style={styles.keywordsLabel}>{t('keywordsToSay') || 'Palabras clave que debes decir'}:</Text>
+        <View style={styles.keywordsList}>
+          {getTaskKeywords().map((keyword, index) => {
+            // Verificar si la palabra clave ya ha sido pronunciada (normalizando para comparación)
+            const isSpoken = spokenKeywords.some(
+              spoken => spoken.toLowerCase().trim() === keyword.toLowerCase().trim()
+            );
+            
+            return (
+              <View key={index} style={styles.keywordWrapper}>
+                <Text 
+                  style={[
+                    styles.keyword, 
+                    isSpoken && styles.spokenKeyword
+                  ]}
+                >
+                  {keyword}
+                </Text>
+                {isSpoken && (
+                  <Ionicons 
+                    name="checkmark-circle" 
+                    size={16} 
+                    color="#4CAF50" 
+                    style={styles.keywordCheckmark} 
+                  />
+                )}
+              </View>
+            );
+          })}
+        </View>
+      </View>
     </ScrollView>
   );
 };
@@ -943,21 +1006,6 @@ const styles = StyleSheet.create({
   buttonIcon: {
     marginRight: 8,
   },
-  actionsContainer: {
-    padding: 15,
-    marginBottom: 20,
-  },
-  backButton: {
-    backgroundColor: '#4A90E2',
-    padding: 15,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  backButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
   errorText: {
     color: '#e74c3c',
     fontSize: 16,
@@ -1000,29 +1048,38 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
   },
-  activitiesContainer: {
+  keywordsContainer: {
     padding: 15,
     backgroundColor: '#fff',
     marginBottom: 10,
   },
-  activitiesTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 10,
-  },
-  activityItem: {
-    padding: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#ddd',
-  },
-  activityItemText: {
+  keywordsLabel: {
     fontSize: 16,
+    fontWeight: 'bold',
+    color: '#666',
+    marginBottom: 5,
+  },
+  keywordsList: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  keywordWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 10,
+    marginBottom: 5,
+  },
+  keyword: {
+    fontSize: 14,
     color: '#333',
   },
-  activityItemTimestamp: {
-    fontSize: 14,
-    color: '#666',
+  spokenKeyword: {
+    color: '#4CAF50',
+    textDecorationLine: 'line-through',
+    fontWeight: 'bold',
+  },
+  keywordCheckmark: {
+    marginLeft: 5,
   },
 });
 
