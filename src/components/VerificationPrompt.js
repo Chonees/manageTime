@@ -360,7 +360,7 @@ const VerificationPrompt = ({ isAvailable, onVerificationFailed }) => {
         
         // Actualizar estado
         setIsListening(true);
-        setRecognitionStatus('Escuchando...');
+        setRecognitionStatus(t('listening'));
         
         // Vibrar para indicar inicio de escucha
         try {
@@ -374,11 +374,11 @@ const VerificationPrompt = ({ isAvailable, onVerificationFailed }) => {
           clearTimeout(listeningTimerRef.current);
         }
         
-        // Tiempo de escucha reducido a 4 segundos para mayor rapidez
+        // Tiempo de escucha de 5 segundos para mayor precisión
         listeningTimerRef.current = setTimeout(() => {
           addDebugInfo('Tiempo de escucha completado, procesando entrada...');
           processVoiceInput();
-        }, 4000);
+        }, 5000);
         
         return true;
         
@@ -482,7 +482,7 @@ const VerificationPrompt = ({ isAvailable, onVerificationFailed }) => {
         return;
       }
       
-      setRecognitionStatus('Procesando...');
+      setRecognitionStatus(t('processing'));
       
       try {
         // Obtener el código que el usuario debe verificar (el código actual)
@@ -497,7 +497,7 @@ const VerificationPrompt = ({ isAvailable, onVerificationFailed }) => {
         // Si no se reconoció texto, manejar el error de forma silenciosa
         if (!recognizedText || recognizedText.trim() === '') {
           addDebugInfo('No se reconoció texto en el audio');
-          setRecognitionStatus('No se pudo reconocer la voz. Intente ingresar el código manualmente.');
+          setRecognitionStatus(t('voiceNotRecognized'));
           return;
         }
         
@@ -613,18 +613,18 @@ const VerificationPrompt = ({ isAvailable, onVerificationFailed }) => {
           
           // Si llegamos aquí, no se encontró coincidencia
           addDebugInfo(`No se encontró el código en el texto reconocido: "${recognizedText}"`);
-          setRecognitionStatus('Código no reconocido. Intente ingresar manualmente.');
+          setRecognitionStatus(t('codeNotRecognized'));
         } else {
           addDebugInfo(`No se encontraron números en el texto reconocido: "${recognizedText}"`);
-          setRecognitionStatus('No se reconocieron números. Intente ingresar manualmente.');
+          setRecognitionStatus(t('noNumbersRecognized'));
         }
       } catch (recognitionError) {
         addDebugInfo(`Error al procesar voz: ${recognitionError.message}`);
-        setRecognitionStatus('Error al procesar voz. Intente ingresar manualmente.');
+        setRecognitionStatus(t('voiceProcessingError'));
       }
     } catch (error) {
       addDebugInfo(`Error general en processVoiceInput: ${error.message}`);
-      setRecognitionStatus('Error al procesar entrada de voz');
+      setRecognitionStatus(t('voiceProcessingError'));
     }
   };
 
@@ -1005,8 +1005,7 @@ const VerificationPrompt = ({ isAvailable, onVerificationFailed }) => {
           
           {isListening ? (
             <View style={styles.listeningContainer}>
-              <ActivityIndicator size="large" color="#4A90E2" />
-              <Text style={styles.listeningText}>{t('listening')}</Text>
+              <ActivityIndicator size="large" color="#fff3e5" />
               <Text style={styles.speakCodeText}>{t('speakCode')}</Text>
             </View>
           ) : (
@@ -1016,6 +1015,7 @@ const VerificationPrompt = ({ isAvailable, onVerificationFailed }) => {
                 value={verificationCode}
                 onChangeText={setVerificationCode}
                 placeholder={t('enterCode')}
+                placeholderTextColor="#fff3e5"
                 keyboardType="numeric"
                 maxLength={4}
               />
@@ -1033,7 +1033,7 @@ const VerificationPrompt = ({ isAvailable, onVerificationFailed }) => {
                 }
               }}
             >
-              <Text style={styles.buttonText}>{t('verify')}</Text>
+              <Text style={[styles.buttonText, styles.verifyButtonText]}>{t('verify')}</Text>
             </TouchableOpacity>
             
             <TouchableOpacity
@@ -1043,7 +1043,7 @@ const VerificationPrompt = ({ isAvailable, onVerificationFailed }) => {
                 cleanupResources();
               }}
             >
-              <Text style={styles.buttonText}>{t('cancel')}</Text>
+              <Text style={[styles.buttonText, styles.cancelButtonText]}>{t('cancel')}</Text>
             </TouchableOpacity>
           </View>
           
@@ -1061,62 +1061,70 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
   },
   modalContent: {
     width: Dimensions.get('window').width * 0.9,
-    backgroundColor: 'white',
+    backgroundColor: '#2e2e2e',
     borderRadius: 20,
     padding: 25,
     alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
-      height: 2,
+      height: 4,
     },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 5,
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    elevation: 10,
+    borderWidth: 1,
+    borderColor: '#fff3e5',
   },
   modalTitle: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: 'bold',
     marginBottom: 15,
-    color: '#4A90E2',
+    color: '#fff3e5',
   },
   modalSubtitle: {
     marginBottom: 15,
     textAlign: 'center',
     fontSize: 16,
-    color: '#333',
+    color: '#ffffff',
   },
   codeDisplay: {
-    fontSize: 36,
+    fontSize: 42,
     fontWeight: 'bold',
-    letterSpacing: 2,
-    color: '#4A90E2',
+    letterSpacing: 5,
+    color: '#fff3e5',
     marginBottom: 20,
+    textShadowColor: 'rgba(255, 243, 229, 0.2)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
   },
   timeRemaining: {
     fontSize: 16,
-    color: '#e74c3c',
+    color: '#ff6b6b',
     marginBottom: 20,
+    fontWeight: 'bold',
   },
   inputContainer: {
     width: '100%',
     height: 60,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: '#fff3e5',
+    borderRadius: 12,
     marginBottom: 20,
     justifyContent: 'center',
+    backgroundColor: 'rgba(255, 243, 229, 0.05)',
   },
   codeInput: {
     width: '100%',
     height: '100%',
     textAlign: 'center',
-    fontSize: 24,
+    fontSize: 28,
     padding: 10,
+    color: '#ffffff',
   },
   buttonContainer: {
     flexDirection: 'row',
@@ -1127,20 +1135,35 @@ const styles = StyleSheet.create({
   },
   button: {
     padding: 15,
-    borderRadius: 10,
+    borderRadius: 12,
     width: '45%',
     alignItems: 'center',
   },
   verifyButton: {
-    backgroundColor: '#4A90E2',
+    backgroundColor: '#fff3e5',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 3,
   },
   cancelButton: {
-    backgroundColor: '#e74c3c',
+    backgroundColor: 'rgba(255, 107, 107, 0.8)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 3,
   },
   buttonText: {
-    color: 'white',
     fontWeight: 'bold',
     fontSize: 16,
+  },
+  verifyButtonText: {
+    color: '#2e2e2e',
+  },
+  cancelButtonText: {
+    color: '#ffffff',
   },
   listeningContainer: {
     width: '100%',
@@ -1148,24 +1171,27 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 20,
-  },
-  listeningText: {
-    marginTop: 10,
-    fontSize: 16,
-    color: '#4A90E2',
-    fontWeight: 'bold',
+    backgroundColor: 'rgba(255, 243, 229, 0.05)',
+    borderRadius: 12,
+    padding: 10,
   },
   speakCodeText: {
     marginTop: 10,
     fontSize: 16,
-    color: '#4A90E2',
+    color: '#fff3e5',
     fontWeight: 'bold',
   },
   recognitionStatus: {
-    marginTop: 10,
+    marginTop: 15,
     fontSize: 16,
-    color: '#e74c3c',
+    color: '#ff6b6b',
     fontWeight: 'bold',
+    backgroundColor: 'rgba(255, 107, 107, 0.1)',
+    paddingHorizontal: 15,
+    paddingVertical: 8,
+    borderRadius: 10,
+    width: '100%',
+    textAlign: 'center',
   },
 });
 

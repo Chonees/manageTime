@@ -469,6 +469,21 @@ export const translations = {
     startTracking: 'Start Tracking',
     stopTracking: 'Stop Tracking',
     locationsRecorded: 'locations recorded',
+    
+    // Verification prompt translations
+    listening: 'Listening...',
+    processing: 'Processing...',
+    voiceNotRecognized: 'Voice not recognized. Please enter the code manually.',
+    codeNotRecognized: 'Code not recognized. Please enter manually.',
+    noNumbersRecognized: 'No numbers recognized. Please enter manually.',
+    voiceProcessingError: 'Error processing voice. Please enter manually.',
+    enterCode: 'Enter code',
+    pleaseEnterCode: 'Please enter the code',
+    incorrectCode: 'Incorrect code',
+    verify: 'Verify',
+    cancel: 'Cancel',
+    speakCode: 'Speak the code',
+    timeRemaining: 'Time remaining: {{time}}s',
   },
   es: {
     login: 'Iniciar Sesión',
@@ -937,6 +952,21 @@ export const translations = {
     startTracking: 'Iniciar Seguimiento',
     stopTracking: 'Detener Seguimiento',
     locationsRecorded: 'ubicaciones registradas',
+    
+    // Verification prompt translations
+    listening: 'Escuchando...',
+    processing: 'Procesando...',
+    voiceNotRecognized: 'No se pudo reconocer la voz. Intente ingresar el código manualmente.',
+    codeNotRecognized: 'Código no reconocido. Intente ingresar manualmente.',
+    noNumbersRecognized: 'No se reconocieron números. Intente ingresar manualmente.',
+    voiceProcessingError: 'Error al procesar voz. Intente ingresar manualmente.',
+    enterCode: 'Ingrese código',
+    pleaseEnterCode: 'Por favor ingrese el código',
+    incorrectCode: 'Código incorrecto',
+    verify: 'Verificar',
+    cancel: 'Cancelar',
+    speakCode: 'Diga el código',
+    timeRemaining: 'Tiempo restante: {{time}}s',
   }
 };
 
