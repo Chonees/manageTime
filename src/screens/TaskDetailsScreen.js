@@ -530,65 +530,54 @@ const TaskDetailsScreen = ({ route, navigation }) => {
         taskTitle: task?.title
       }, null, 2));
       
-      // Crear un único objeto de actividad que sirva tanto para la tarea como para la bitácora
-      const activityData = {
-        taskId: task._id,
-        message: inputText,
-        text: inputText, // Añadir campo 'text' para mantener consistencia con notas de voz
-        type: 'bitacora', // Cambiado de 'task_activity' a 'bitacora' para que aparezca en el Excel correctamente
-        metadata: {
-          taskTitle: task.title,
-          manualEntry: true,
-          source: 'user_input',
-          isLogEntry: true, // Marcar explícitamente como entrada de bitácora
-          activityType: 'manual_log' // Especificar el tipo de actividad para el Excel
-        },
-        timestamp: new Date().toISOString()
+      // Crear un objeto de nota exactamente igual al formato usado por VoiceListener
+      const noteData = {
+        text: inputText,
+        type: 'voice_note', // Usar el mismo tipo que las notas de voz
+        timestamp: new Date().toISOString(),
+        keyword: '', // Campo vacío pero incluido para mantener consistencia
+        source: 'manual_input' // Identificar que es entrada manual
       };
 
-      console.log('📤 Enviando actividad al backend:', JSON.stringify(activityData, null, 2));
-
-      // Verificando URL y headers en api.saveActivity
-      console.log('🔍 Revisando api.js internamente...');
+      console.log('📤 Enviando nota manual al backend:', JSON.stringify(noteData, null, 2));
       
-      // Enviar al backend una sola vez
-      console.log('🚀 Llamando a api.saveActivity()...');
-      const result = await api.saveActivity(activityData);
-      
-      console.log('📩 Respuesta del backend:', JSON.stringify(result, null, 2));
-      
-      // Nueva lógica para manejar respuestas: si tiene _id, se considera exitosa
-      const isSuccessfulResponse = result && (result.success || result._id);
-      
-      if (isSuccessfulResponse) {
-        console.log('✅ Actividad guardada exitosamente');
-        // Añadir la actividad a la lista local
-        const newActivity = {
-          ...activityData,
-          _id: result._id || result.activity?._id || new Date().getTime().toString(),
-          createdAt: result.createdAt || result.activity?.createdAt || new Date().toISOString()
-        };
-        
-        setTaskActivities(prevActivities => [newActivity, ...prevActivities]);
-        setActivityInput(''); // Limpiar el input
-        
-        // Mostrar mensaje de éxito
-        Alert.alert(t('success'), t('activityRecorded'));
-      } else {
-        console.log('❌ La respuesta del backend indica error:', result);
-        // Mostrar mensaje de error específico si está disponible
-        const errorMessage = typeof result === 'string' ? result : 
-                            result?.message || 'Error al registrar la actividad';
-        throw new Error(errorMessage);
+      // Obtener token de autenticación
+      const token = await AsyncStorage.getItem('token');
+      if (!token) {
+        throw new Error('No hay token de autenticación para guardar la nota');
       }
+      
+      // Usar el mismo endpoint que usa VoiceListener
+      const url = `https://managetime-backend-48f256c2dfe5.herokuapp.com/api/tasks/${task._id}/note`;
+      
+      // Enviar la nota al backend usando el mismo formato que VoiceListener
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(noteData)
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`Nota manual no guardada, error ${response.status}:`, errorText);
+        throw new Error(`Error al guardar nota manual: ${response.status} - ${errorText}`);
+      }
+
+      const responseData = await response.json();
+      console.log('✅ Nota manual guardada exitosamente:', responseData);
+      
+      // Limpiar input y mostrar mensaje de éxito
+      setActivityInput('');
+      Alert.alert(t('success'), t('activityRecorded'));
+      
     } catch (error) {
       console.log('❌❌❌ ERROR CAPTURADO:', error);
-      console.error('Error al enviar actividad:', error);
-      console.log('Tipo de error:', typeof error);
-      console.log('Propiedades del error:', Object.keys(error));
-      console.log('Error convertido a string:', String(error));
+      console.error('Error al enviar nota manual:', error);
       
-      // Mostrar el mensaje de error exacto del backend
+      // Mostrar el mensaje de error
       const errorMessage = error.message || t('errorSubmittingActivity');
       console.log('Mensaje final mostrado al usuario:', errorMessage);
       Alert.alert(t('error'), errorMessage);
