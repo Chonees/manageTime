@@ -38,14 +38,17 @@ const TaskDetailsScreen = ({ route, navigation }) => {
   const [activityInput, setActivityInput] = useState('');
   const [isSubmittingActivity, setIsSubmittingActivity] = useState(false);
   const [taskActivities, setTaskActivities] = useState([]);
+  const [spokenKeywords, setSpokenKeywords] = useState([]); // Nuevo estado para palabras clave ya pronunciadas
 
   useEffect(() => {
     loadTaskDetails();
 
     return () => {
       if (locationSubscription) {
+
         // En versiones recientes de Expo Location, la suscripción tiene un método remove
         locationSubscription.remove();
+
       }
     };
   }, [taskId]);
@@ -435,13 +438,20 @@ const TaskDetailsScreen = ({ route, navigation }) => {
 
   const handleEndTask = async () => {
     try {
-      // Update task status to completed
+      // Primero asegurarse de detener el modo manos libres
+      setTaskStarted(false);
+      
+      // Luego actualizar la tarea en el backend
       const updatedTask = await api.updateTask(taskId, { 
         status: 'completed',
         completed: true 
       });
       setTask(updatedTask);
-      setTaskStarted(false);
+
+      // Si la tarea tenía handsFreeMode, registrar que se ha desactivado
+      if (task.handsFreeMode) {
+        console.log('Desactivando modo manos libres para la tarea completada');
+      }
 
       Alert.alert(t('success'), t('taskCompleted'));
     } catch (error) {
@@ -560,6 +570,42 @@ const TaskDetailsScreen = ({ route, navigation }) => {
     }
   }, [task]);
 
+  // Función para manejar cuando se detecta una palabra clave
+  const handleKeywordDetected = (keyword) => {
+    console.log(`Palabra clave detectada: "${keyword}"`);
+    
+    // Normalizar la palabra clave detectada para comparación
+    const normalizedKeyword = keyword.trim().toLowerCase();
+    
+    setSpokenKeywords(prev => {
+      // Verificar si ya existe considerando mayúsculas/minúsculas
+      const alreadyExists = prev.some(k => k.toLowerCase().trim() === normalizedKeyword);
+      
+      if (!alreadyExists) {
+        console.log(`Añadiendo palabra clave nueva: "${keyword}"`);
+        return [...prev, keyword];
+      }
+      
+      console.log(`La palabra clave "${keyword}" ya estaba registrada`);
+      return prev;
+    });
+  };
+
+  // Función para extraer palabras clave de la tarea
+  const getTaskKeywords = () => {
+    if (!task || !task.keywords) return [];
+    
+    if (typeof task.keywords === 'string') {
+      return task.keywords.split(',').map(k => k.trim()).filter(k => k.length > 0);
+    }
+    
+    if (Array.isArray(task.keywords)) {
+      return task.keywords;
+    }
+    
+    return [];
+  };
+
   if (loading) {
     return (
       <View style={styles.centerContainer}>
@@ -636,36 +682,40 @@ const TaskDetailsScreen = ({ route, navigation }) => {
       </View>
       
       <View style={styles.infoContainer}>
-        <Text style={styles.label}>{t('description')}:</Text>
-        <Text style={styles.description}>{task.description || t('noDescription')}</Text>
-      </View>
-      
-      {(user?.isAdmin || task.userId === user?._id) && (
-        <View style={styles.infoContainer}>
-          <Text style={styles.label}>{t('assignedTo')}:</Text>
-          <Text style={styles.value}>
-            {assignedUser ? assignedUser.username : 
-             (typeof task.userId === 'object' && task.userId.username) ? task.userId.username : 
-             t('noUserAssigned')}
-          </Text>
+        {/* Descripción */}
+        <View style={styles.infoSection}>
+          <Text style={styles.infoLabel}>{t('description')}:</Text>
+          <Text style={styles.description}>{task.description || t('noDescription')}</Text>
         </View>
-      )}
-      
-      <View style={styles.infoContainer}>
-        <Text style={styles.label}>{t('createdAt')}:</Text>
-        <Text style={styles.value}>
-          {new Date(task.createdAt).toLocaleString()}
-        </Text>
-      </View>
-      
-      {task.updatedAt && task.updatedAt !== task.createdAt && (
-        <View style={styles.infoContainer}>
-          <Text style={styles.label}>{t('updatedAt')}:</Text>
-          <Text style={styles.value}>
-            {new Date(task.updatedAt).toLocaleString()}
-          </Text>
+        
+        {/* Fechas en una sola fila */}
+        <View style={styles.datesContainer}>
+          <View style={styles.dateSection}>
+            <Text style={styles.infoLabel}>{t('created')}:</Text>
+            <Text style={styles.dateValue}>
+              {task.createdAt ? new Date(task.createdAt).toLocaleString() : t('unknown')}
+            </Text>
+          </View>
+          
+          <View style={styles.dateSection}>
+            <Text style={styles.infoLabel}>{t('updated')}:</Text>
+            <Text style={styles.dateValue}>
+              {task.updatedAt ? new Date(task.updatedAt).toLocaleString() : t('unknown')}
+            </Text>
+          </View>
         </View>
-      )}
+        
+        {(user?.isAdmin || task.userId === user?._id) && (
+          <View style={styles.infoSection}>
+            <Text style={styles.infoLabel}>{t('assignedTo')}:</Text>
+            <Text style={styles.value}>
+              {assignedUser ? assignedUser.username : 
+               (typeof task.userId === 'object' && task.userId.username) ? task.userId.username : 
+               t('noUserAssigned')}
+            </Text>
+          </View>
+        )}
+      </View>
       
       {hasLocation && (
         <View style={styles.mapContainer}>
@@ -750,21 +800,14 @@ const TaskDetailsScreen = ({ route, navigation }) => {
         </View>
       )}
       
-      <View style={styles.actionsContainer}>
-        <TouchableOpacity 
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-        >
-          <Text style={styles.backButtonText}>{t('backToTasks')}</Text>
-        </TouchableOpacity>
-      </View>
-      
       <View style={styles.activityContainer}>
         <TextInput
           style={styles.activityInput}
           value={activityInput}
           onChangeText={setActivityInput}
           placeholder={t('enterActivity')}
+          placeholderTextColor="rgba(255, 243, 229, 0.5)"
+          color="#fff3e5"
         />
         <TouchableOpacity 
           style={styles.submitActivityButton}
@@ -775,19 +818,41 @@ const TaskDetailsScreen = ({ route, navigation }) => {
         </TouchableOpacity>
       </View>
       
-      {taskActivities.length > 0 && (
-        <View style={styles.activitiesContainer}>
-          <Text style={styles.activitiesTitle}>{t('taskActivities')}</Text>
-          {taskActivities.map(activity => (
-            <View key={activity._id} style={styles.activityItem}>
-              <Text style={styles.activityItemText}>{activity.description}</Text>
-              <Text style={styles.activityItemTimestamp}>{new Date(activity.createdAt).toLocaleString()}</Text>
-            </View>
-          ))}
-        </View>
-      )}
+      {taskStarted && <VoiceListener isTaskActive={taskStarted} taskData={task} onKeywordDetected={handleKeywordDetected} />}
       
-      {taskStarted && <VoiceListener isTaskActive={taskStarted} taskData={task} />}
+      {/* Nuevo componente para mostrar palabras clave */}
+      <View style={styles.keywordsContainer}>
+        <Text style={styles.keywordsLabel}>{t('keywordsToSay')}</Text>
+        <View style={styles.keywordsList}>
+          {getTaskKeywords().map((keyword, index) => {
+            // Verificar si la palabra clave ya ha sido pronunciada (normalizando para comparación)
+            const isSpoken = spokenKeywords.some(
+              spoken => spoken.toLowerCase().trim() === keyword.toLowerCase().trim()
+            );
+            
+            return (
+              <View key={index} style={styles.keywordWrapper}>
+                <Text 
+                  style={[
+                    styles.keyword, 
+                    isSpoken && styles.spokenKeyword
+                  ]}
+                >
+                  {keyword}
+                </Text>
+                {isSpoken && (
+                  <Ionicons 
+                    name="checkmark-circle" 
+                    size={16} 
+                    color="#4CAF50" 
+                    style={styles.keywordCheckmark} 
+                  />
+                )}
+              </View>
+            );
+          })}
+        </View>
+      </View>
     </ScrollView>
     </SafeAreaView>
   );
@@ -814,10 +879,12 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 15,
+
     paddingVertical: 10,
     backgroundColor: '#1c1c1c',
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(255, 243, 229, 0.1)',
+
   },
   taskStatusContainer: {
     flexDirection: 'row',
@@ -834,8 +901,10 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   completedButton: {
+
     backgroundColor: '#4CAF50',
     borderColor: '#4CAF50',
+
   },
   completeButtonText: {
     fontSize: 18,
@@ -844,14 +913,18 @@ const styles = StyleSheet.create({
   },
   taskStatus: {
     fontSize: 16,
+
     color: '#fff3e5',
+
   },
   deleteButton: {
     padding: 8,
   },
   titleContainer: {
     padding: 15,
+
     backgroundColor: '#1c1c1c',
+
     marginBottom: 10,
     borderRadius: 15,
     marginHorizontal: 10,
@@ -865,6 +938,7 @@ const styles = StyleSheet.create({
     color: '#fff3e5',
   },
   infoContainer: {
+
     padding: 15,
     backgroundColor: '#1c1c1c',
     marginBottom: 10,
@@ -872,10 +946,15 @@ const styles = StyleSheet.create({
     marginHorizontal: 10,
     borderWidth: 1,
     borderColor: 'rgba(255, 243, 229, 0.1)',
+
   },
-  label: {
-    fontSize: 16,
+  infoSection: {
+    marginBottom: 6,
+  },
+  infoLabel: {
+    fontSize: 14,
     fontWeight: 'bold',
+
     color: 'rgba(255, 243, 229, 0.7)',
     marginBottom: 5,
   },
@@ -896,11 +975,14 @@ const styles = StyleSheet.create({
     marginHorizontal: 10,
     borderWidth: 1,
     borderColor: 'rgba(255, 243, 229, 0.1)',
+
   },
   mapLabel: {
     fontSize: 16,
     fontWeight: 'bold',
+
     color: 'rgba(255, 243, 229, 0.7)',
+
     marginBottom: 10,
   },
   map: {
@@ -911,12 +993,16 @@ const styles = StyleSheet.create({
   },
   locationName: {
     fontSize: 16,
+
     color: '#fff3e5',
+
     marginBottom: 5,
   },
   radius: {
     fontSize: 14,
+
     color: 'rgba(255, 243, 229, 0.7)',
+
     marginBottom: 5,
   },
   withinRadius: {
@@ -931,8 +1017,11 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     marginBottom: 5,
   },
+
   mapActionButtonContainer: {
     marginTop: 15,
+
+
   },
   startButton: {
     backgroundColor: '#4CAF50',
@@ -951,7 +1040,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   disabledButton: {
+
     backgroundColor: 'rgba(255, 243, 229, 0.2)',
+
   },
   startButtonText: {
     color: '#fff',
@@ -966,6 +1057,7 @@ const styles = StyleSheet.create({
   buttonIcon: {
     marginRight: 8,
   },
+
   actionsContainer: {
     padding: 15,
     marginBottom: 20,
@@ -986,24 +1078,30 @@ const styles = StyleSheet.create({
   },
   errorText: {
     color: '#ff5252',
+
     fontSize: 16,
     marginBottom: 15,
     textAlign: 'center',
   },
   retryButton: {
+
     backgroundColor: '#1c1c1c',
+
     padding: 12,
     borderRadius: 15,
     borderWidth: 1,
     borderColor: 'rgba(255, 243, 229, 0.2)',
   },
   retryButtonText: {
+
     color: '#fff3e5',
+
     fontSize: 16,
     fontWeight: 'bold',
   },
   activityContainer: {
     padding: 15,
+
     backgroundColor: '#1c1c1c',
     marginBottom: 10,
     borderRadius: 15,
@@ -1014,13 +1112,16 @@ const styles = StyleSheet.create({
   activityInput: {
     height: 40,
     borderColor: 'rgba(255, 243, 229, 0.2)',
+
     borderWidth: 1,
     paddingHorizontal: 10,
     paddingVertical: 5,
     fontSize: 16,
+
     color: '#fff3e5',
     backgroundColor: '#2e2e2e',
     borderRadius: 10,
+
   },
   submitActivityButton: {
     backgroundColor: '#fff3e5',
@@ -1031,12 +1132,15 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   submitActivityButtonText: {
+
     color: '#000',
+
     fontSize: 16,
     fontWeight: 'bold',
   },
-  activitiesContainer: {
+  keywordsContainer: {
     padding: 15,
+
     backgroundColor: '#1c1c1c',
     marginBottom: 10,
     marginTop: 15,
@@ -1044,25 +1148,27 @@ const styles = StyleSheet.create({
     marginHorizontal: 10,
     borderWidth: 1,
     borderColor: 'rgba(255, 243, 229, 0.1)',
+
   },
-  activitiesTitle: {
-    fontSize: 18,
+  keywordsLabel: {
+    fontSize: 16,
     fontWeight: 'bold',
     color: '#fff3e5',
     marginBottom: 10,
-  },
-  activityItem: {
-    padding: 10,
     borderBottomWidth: 1,
+
     borderBottomColor: 'rgba(255, 243, 229, 0.1)',
   },
   activityItemText: {
     fontSize: 16,
     color: '#fff3e5',
+
   },
-  activityItemTimestamp: {
+  keyword: {
     fontSize: 14,
+
     color: 'rgba(255, 243, 229, 0.7)',
+
   },
 });
 

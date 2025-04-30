@@ -470,6 +470,50 @@ export const translations = {
     startTracking: 'Start Tracking',
     stopTracking: 'Stop Tracking',
     locationsRecorded: 'locations recorded',
+    
+    // Verification prompt translations
+    listening: 'Listening...',
+    processing: 'Processing...',
+    voiceNotRecognized: 'Voice not recognized. Please enter the code manually.',
+    codeNotRecognized: 'Code not recognized. Please enter manually.',
+    noNumbersRecognized: 'No numbers recognized. Please enter manually.',
+    voiceProcessingError: 'Error processing voice. Please enter manually.',
+    enterCode: 'Enter code',
+    pleaseEnterCode: 'Please enter the code',
+    incorrectCode: 'Incorrect code',
+    verify: 'Verify',
+    cancel: 'Cancel',
+    speakCode: 'Speak the code',
+    timeRemaining: 'Time remaining: {{time}}s',
+    
+    // Location tracking messages
+    startingLocationTracking: "Starting location tracking...",
+    locationPermissionDenied: "Location permission was denied",
+    gettingInitialLocation: "Getting initial location reading with highest accuracy...",
+    initialLocationReading: "Initial location reading obtained",
+    settingUpLocationTracking: "Setting up continuous location tracking...",
+    locationUpdateReceived: "Location update received",
+    locationCoordinates: "Location: ${lat}, ${lng} (±${accuracy}m)",
+    locationTrackingStarted: "Location tracking successfully started",
+    locationTrackingError: "Error starting location tracking: ${error}",
+    
+    // Radius check messages
+    radiusCheckDivider: "---------- RADIUS CHECK ----------",
+    checkingTaskRadius: "Checking if within task radius - Task ID: ${taskId}",
+    taskMissingCoordinates: "Task missing valid coordinates: ${location}",
+    taskPosition: "Task position: ${position}",
+    taskRadius: "Task radius: ${radius} meters",
+    userPosition: "User position: ${position}",
+    distanceToTask: "Distance to task: ${km} km / ${meters} meters",
+    withinTaskRadius: "WITHIN RADIUS",
+    outsideTaskRadius: "OUTSIDE RADIUS",
+    updatingRadiusState: "Updating within radius state from ${from} to ${to}",
+    
+    // Keywords
+    keywordsToSay: "Keywords to say",
+    spokenKeywords: "Spoken keywords",
+    keywordDetected: "Keyword detected",
+    keywordsConfigured: "Keywords configured in task",
   },
   es: {
     login: 'Iniciar Sesión',
@@ -939,6 +983,27 @@ export const translations = {
     startTracking: 'Iniciar Seguimiento',
     stopTracking: 'Detener Seguimiento',
     locationsRecorded: 'ubicaciones registradas',
+    
+    // Verification prompt translations
+    listening: 'Escuchando...',
+    processing: 'Procesando...',
+    voiceNotRecognized: 'No se pudo reconocer la voz. Intente ingresar el código manualmente.',
+    codeNotRecognized: 'Código no reconocido. Intente ingresar manualmente.',
+    noNumbersRecognized: 'No se reconocieron números. Intente ingresar manualmente.',
+    voiceProcessingError: 'Error al procesar voz. Intente ingresar manualmente.',
+    enterCode: 'Ingrese código',
+    pleaseEnterCode: 'Por favor ingrese el código',
+    incorrectCode: 'Código incorrecto',
+    verify: 'Verificar',
+    cancel: 'Cancelar',
+    speakCode: 'Diga el código',
+    timeRemaining: 'Tiempo restante: {{time}}s',
+    
+    // Keywords
+    keywordsToSay: "Palabras clave para decir",
+    spokenKeywords: "Palabras clave dichas",
+    keywordDetected: "Palabra clave detectada",
+    keywordsConfigured: "Palabras clave configuradas en la tarea",
   }
 };
 

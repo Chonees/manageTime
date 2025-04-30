@@ -623,11 +623,14 @@ exports.addSimpleVoiceNote = async (req, res) => {
   try {
     // Extraer datos de la petición
     const { taskId } = req.params;
-    const { text, type } = req.body;
+    const { text, type, keyword } = req.body;
     const userId = req.user._id || req.user.id;
     
     console.log(`[SIMPLE VOICE NOTE] Recibida petición para añadir nota a tarea ${taskId}`);
     console.log(`[SIMPLE VOICE NOTE] Texto: "${text}"`);
+    if (keyword) {
+      console.log(`[SIMPLE VOICE NOTE] Palabra clave detectada: "${keyword}"`);
+    }
     console.log(`[SIMPLE VOICE NOTE] Usuario: ${userId}`);
     
     // Verificar que hay texto válido
@@ -669,10 +672,12 @@ exports.addSimpleVoiceNote = async (req, res) => {
       userId,
       taskId: taskObjectId,
       type: type || 'voice_note',
-      message: text, // Usar message en lugar de text para el modelo Activity
+      message: keyword || text, // Usar la palabra clave si está disponible, si no usar el texto completo
       metadata: {
         source: 'voice_assistant',
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        fullText: text, // Guardar el texto completo en metadatos
+        keyword: keyword // Guardar la palabra clave en metadatos
       },
       createdAt: new Date()
     });

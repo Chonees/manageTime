@@ -392,10 +392,12 @@ const AdminDashboardScreen = ({ navigation }) => {
             </TouchableOpacity>
             
             <TouchableOpacity 
+
               style={[styles.actionButton, { backgroundColor: '#fff3e5', borderColor: 'rgba(0, 0, 0, 0.1)' }]}
+
               onPress={() => navigation.navigate('AdminActivities')}
             >
-              <Text style={[styles.actionButtonText, { color: '#000' }]}>{t('viewAllActivities')}</Text>
+              <Text style={styles.actionButtonText}>{t('viewAllActivities')}</Text>
             </TouchableOpacity>
           </View>
         </View>

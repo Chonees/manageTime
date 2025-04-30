@@ -390,16 +390,6 @@ const DashboardScreen = ({ navigation }) => {
             {t('myTasks')}
           </Text>
         </TouchableOpacity>
-        
-        <TouchableOpacity
-          style={[styles.navButton, { backgroundColor: theme.colors.input.background }]}
-          onPress={() => navigation.navigate('LocationHistory')}
-        >
-          <Ionicons name="location" size={20} color={theme.colors.text.primary} />
-          <Text style={[styles.navButtonText, { color: theme.colors.text.primary }]}> 
-            {t('locationHistory')}
-          </Text>
-        </TouchableOpacity>
       </View>
     </ScrollView>
   );
@@ -499,7 +489,7 @@ const styles = StyleSheet.create({
   },
   buttonsContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     marginHorizontal: 8,
     marginVertical: 15,
   },
@@ -509,7 +499,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: 15,
     borderRadius: 8,
-    flex: 0.48, // Deja un pequeño espacio entre botones
+    width: '80%',
   },
   navButtonText: {
     fontSize: 16,
