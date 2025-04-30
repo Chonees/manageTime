@@ -43,6 +43,12 @@ export const translations = {
     secondsAgo: 'seconds ago',
     someTimeAgo: 'some time ago',
     
+    // Real-time locations
+    loggedUsers: 'Logged Users',
+    loadingLocations: 'Loading locations...',
+    noActiveUsers: 'No active users',
+    locationLegend: 'Location Legend',
+    
     // Activity translations
     userActivities: 'User Activities',
     showingActivities: 'Showing {{count}} of {{total}} activities',
@@ -555,6 +561,12 @@ export const translations = {
     minutesAgo: 'minutos atrás',
     secondsAgo: 'segundos atrás',
     someTimeAgo: 'hace algún tiempo',
+    
+    // Real-time locations
+    loggedUsers: 'Usuarios Logueados',
+    loadingLocations: 'Cargando ubicaciones...',
+    noActiveUsers: 'No hay usuarios activos',
+    locationLegend: 'Leyenda de Ubicaciones',
     
     // Activity translations
     userActivities: 'Actividades de Usuarios',

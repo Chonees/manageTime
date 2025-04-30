@@ -1984,3 +1984,77 @@ export const saveLocations = async (locations) => {
     throw error;
   }
 };
+
+// Obtener el estado de disponibilidad de todos los usuarios
+// @returns {Promise<Array>} Lista de usuarios con su estado de disponibilidad
+export const getUserAvailabilityStatus = async () => {
+  try {
+    // Obtener las actividades recientes como objeto con formato { activities: [...], pagination: {...} }
+    console.log('Obteniendo estado de disponibilidad a través de las actividades recientes...');
+    
+    const activitiesResponse = await getAdminActivities({ limit: 100, sort: '-createdAt' });
+    
+    // Extraer el array de actividades del objeto de respuesta
+    const activities = activitiesResponse?.activities || [];
+    
+    // Verificar que activities sea un array
+    if (!Array.isArray(activities)) {
+      console.error('Error: activitiesResponse no contiene un array de actividades:', typeof activities);
+      return [];
+    }
+    
+    console.log(`Se obtuvieron ${activities.length} actividades para analizar.`);
+    
+    // Usamos un Map para guardar el estado más reciente de cada usuario
+    const userStatusMap = new Map();
+    
+    // Procesamos todas las actividades para encontrar la más reciente de cada usuario
+    activities.forEach(activity => {
+      if (!activity) return;
+      
+      // Tipos de actividad que indican disponibilidad (tanto clock_in/out como started/stopped_working)
+      if (activity.type === 'clock_in' || activity.type === 'started_working' || 
+          activity.type === 'clock_out' || activity.type === 'stopped_working') {
+        
+        // Extraer userId asegurándonos de manejar tanto string como objeto
+        const userId = activity.userId?._id || activity.userId;
+        if (!userId) {
+          console.log('Actividad sin userId:', activity);
+          return;
+        }
+        
+        // Extraer nombre de usuario
+        const username = activity.userId?.username || 
+                        activity.username || 
+                        activity.metadata?.username || 
+                        'Usuario';
+        
+        // Determinar si está disponible según el tipo de actividad
+        const isAvailable = activity.type === 'clock_in' || activity.type === 'started_working';
+        
+        // Solo actualizamos si no tenemos un registro para este usuario o si esta actividad es más reciente
+        if (!userStatusMap.has(userId) || 
+            new Date(activity.createdAt || activity.timestamp) > 
+            new Date(userStatusMap.get(userId).timestamp)) {
+          
+          userStatusMap.set(userId, {
+            userId,
+            username,
+            isAvailable,
+            timestamp: activity.createdAt || activity.timestamp,
+            metadata: activity.metadata || {}
+          });
+        }
+      }
+    });
+    
+    console.log(`Se encontraron estados de disponibilidad para ${userStatusMap.size} usuarios.`);
+    
+    // Convertir el Map a un array de objetos
+    return Array.from(userStatusMap.values());
+  } catch (error) {
+    console.error('Error al cargar estado de disponibilidad:', error);
+    // Devolver array vacío en caso de error para evitar que la UI se rompa
+    return [];
+  }
+};
