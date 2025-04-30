@@ -40,7 +40,7 @@ const recordingOptions = {
   }
 };
 
-const VoiceListener = ({ isTaskActive = false, taskData = null }) => {
+const VoiceListener = ({ isTaskActive = false, taskData = null, onKeywordDetected }) => {
   // Referencias y estados
   const [isListening, setIsListening] = useState(false);
   const recordingRef = useRef(null);
@@ -48,6 +48,7 @@ const VoiceListener = ({ isTaskActive = false, taskData = null }) => {
   const keywordsRef = useRef([]); // Referencia para guardar las palabras clave
   const currentTaskIdRef = useRef(null); // Referencia para guardar el ID de la tarea actual
   const [audioUri, setAudioUri] = useState(null);
+  const savedNotesRef = useRef(new Set()); // Referencia para guardar las notas guardadas
 
   // Para mostrar mensajes de debug en la consola
   const logDebug = (message) => {
@@ -294,8 +295,18 @@ const VoiceListener = ({ isTaskActive = false, taskData = null }) => {
             logDebug(`[VoiceListener] ✅ Palabra clave detectada: "${keyword}"`);
             keywordDetected = true;
             
+            // Notificar que se detectó una palabra clave
+            if (typeof onKeywordDetected === 'function') {
+              logDebug(`[VoiceListener] Notificando detección de palabra clave: "${keyword}"`);
+              onKeywordDetected(keyword);
+            }
+            
             // Guardar como nota para la tarea actual
-            await saveNote(recognizedText, currentTaskIdRef.current);
+            const noteText = recognizedText;
+            if (!savedNotesRef.current.has(noteText)) {
+              await saveNote(noteText, currentTaskIdRef.current);
+              savedNotesRef.current.add(noteText);
+            }
             break;
           }
         }
