@@ -503,36 +503,67 @@ const TaskDetailsScreen = ({ route, navigation }) => {
 
   // Función para enviar una actividad relacionada con la tarea
   const submitActivity = async () => {
-    if (!activityInput.trim()) {
+    console.log('⭐ INICIO submitActivity - texto ingresado:', activityInput);
+    
+    // Solo validación básica: no vacío
+    const inputText = activityInput.trim();
+    if (!inputText) {
+      console.log('❌ Error: Input vacío');
       Alert.alert(t('error'), t('pleaseEnterActivity'));
       return;
     }
 
     if (!taskStarted) {
+      console.log('❌ Error: Tarea no iniciada');
       Alert.alert(t('error'), t('startTaskFirst'));
       return;
     }
 
+    console.log('✅ Validaciones pasadas, iniciando envío...');
     setIsSubmittingActivity(true);
 
     try {
-      // Crear objeto de actividad
+      // Verificar integridad de task y task._id
+      console.log('📋 Datos de tarea:', JSON.stringify({
+        taskExists: !!task,
+        taskId: task?._id,
+        taskTitle: task?.title
+      }, null, 2));
+      
+      // Crear un único objeto de actividad que sirva tanto para la tarea como para la bitácora
       const activityData = {
         taskId: task._id,
-        message: activityInput.trim(),
+        message: inputText,
         type: 'task_activity',
+        metadata: {
+          taskTitle: task.title,
+          manualEntry: true,
+          source: 'user_input'
+        },
         timestamp: new Date().toISOString()
       };
 
-      // Enviar al backend
+      console.log('📤 Enviando actividad al backend:', JSON.stringify(activityData, null, 2));
+
+      // Verificando URL y headers en api.saveActivity
+      console.log('🔍 Revisando api.js internamente...');
+      
+      // Enviar al backend una sola vez
+      console.log('🚀 Llamando a api.saveActivity()...');
       const result = await api.saveActivity(activityData);
       
-      if (result && result.success) {
+      console.log('📩 Respuesta del backend:', JSON.stringify(result, null, 2));
+      
+      // Nueva lógica para manejar respuestas: si tiene _id, se considera exitosa
+      const isSuccessfulResponse = result && (result.success || result._id);
+      
+      if (isSuccessfulResponse) {
+        console.log('✅ Actividad guardada exitosamente');
         // Añadir la actividad a la lista local
         const newActivity = {
           ...activityData,
-          _id: result.activity._id || new Date().getTime().toString(), // Usar ID del servidor o generar uno temporal
-          createdAt: result.activity.createdAt || new Date().toISOString()
+          _id: result._id || result.activity?._id || new Date().getTime().toString(),
+          createdAt: result.createdAt || result.activity?.createdAt || new Date().toISOString()
         };
         
         setTaskActivities(prevActivities => [newActivity, ...prevActivities]);
@@ -541,17 +572,29 @@ const TaskDetailsScreen = ({ route, navigation }) => {
         // Mostrar mensaje de éxito
         Alert.alert(t('success'), t('activityRecorded'));
       } else {
-        throw new Error(result?.message || 'Error al registrar la actividad');
+        console.log('❌ La respuesta del backend indica error:', result);
+        // Mostrar mensaje de error específico si está disponible
+        const errorMessage = typeof result === 'string' ? result : 
+                            result?.message || 'Error al registrar la actividad';
+        throw new Error(errorMessage);
       }
     } catch (error) {
+      console.log('❌❌❌ ERROR CAPTURADO:', error);
       console.error('Error al enviar actividad:', error);
-      Alert.alert(t('error'), t('errorSubmittingActivity'));
+      console.log('Tipo de error:', typeof error);
+      console.log('Propiedades del error:', Object.keys(error));
+      console.log('Error convertido a string:', String(error));
+      
+      // Mostrar el mensaje de error exacto del backend
+      const errorMessage = error.message || t('errorSubmittingActivity');
+      console.log('Mensaje final mostrado al usuario:', errorMessage);
+      Alert.alert(t('error'), errorMessage);
     } finally {
+      console.log('🏁 Finalizando submitActivity');
       setIsSubmittingActivity(false);
     }
   };
 
-  // Cargar las actividades existentes para esta tarea
   const loadTaskActivities = async () => {
     try {
       const activities = await api.getTaskActivities(taskId);

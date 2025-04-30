@@ -7,7 +7,7 @@ import { startLocationMonitoring, stopLocationMonitoring } from '../services/loc
 import LoginScreen from '../screens/auth/loginScreen1/LoginScreen';
 import RegisterScreen from '../screens/auth/RegisterScreen';
 
-import DiagnosticScreen from '../screens/DiagnosticScreen';
+
 import WelcomeScreen from '../screens/auth/WelcomeScreen';
 
 
