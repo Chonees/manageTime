@@ -535,7 +535,7 @@ const TaskDetailsScreen = ({ route, navigation }) => {
         taskId: task._id,
         message: inputText,
         text: inputText, // Añadir campo 'text' para mantener consistencia con notas de voz
-        type: 'task_activity',
+        type: 'bitacora', // Cambiado de 'task_activity' a 'bitacora' para que aparezca en el Excel correctamente
         metadata: {
           taskTitle: task.title,
           manualEntry: true,
