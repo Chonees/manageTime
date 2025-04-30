@@ -534,11 +534,14 @@ const TaskDetailsScreen = ({ route, navigation }) => {
       const activityData = {
         taskId: task._id,
         message: inputText,
+        text: inputText, // Añadir campo 'text' para mantener consistencia con notas de voz
         type: 'task_activity',
         metadata: {
           taskTitle: task.title,
           manualEntry: true,
-          source: 'user_input'
+          source: 'user_input',
+          isLogEntry: true, // Marcar explícitamente como entrada de bitácora
+          activityType: 'manual_log' // Especificar el tipo de actividad para el Excel
         },
         timestamp: new Date().toISOString()
       };
