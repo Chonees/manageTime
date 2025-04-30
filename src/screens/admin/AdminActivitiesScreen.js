@@ -37,12 +37,14 @@ const AdminActivitiesScreen = ({ navigation }) => {
         throw new Error('No hay token de autenticación disponible');
       }
       
-      // URL del endpoint del reporte
+      // URL del endpoint del reporte con parámetros adicionales para formatear correctamente
       const reportUrl = `${api.getApiUrl()}/api/reports/activities/excel`;
       
-      // Abrir URL con el token incluido como parámetro de consulta y encabezado de autorización
-      const fullUrl = `${reportUrl}?token=${encodeURIComponent(token)}`;
-      console.log('Abriendo URL:', fullUrl);
+      // Añadir parámetros para mejorar el formato del reporte
+      // formatVoiceNotes=true: cambia "voice_note" a "bitacora" e incluye el texto en la descripción
+      // groupByTask=true: agrupa las actividades por tarea además de por usuario
+      const fullUrl = `${reportUrl}?token=${encodeURIComponent(token)}&formatVoiceNotes=true&groupByTask=true`;
+      console.log('Abriendo URL de reporte con formato mejorado:', fullUrl);
       
       // Intentar abrir la URL
       const canOpen = await Linking.canOpenURL(fullUrl);
