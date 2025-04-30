@@ -7,6 +7,7 @@ import { startLocationMonitoring, stopLocationMonitoring } from '../services/loc
 import LoginScreen from '../screens/auth/loginScreen1/LoginScreen';
 import RegisterScreen from '../screens/auth/RegisterScreen';
 import DiagnosticScreen from '../screens/DiagnosticScreen';
+import WelcomeScreen from '../screens/auth/WelcomeScreen';
 
 // Pantallas principales
 import DashboardScreen from '../screens/DashboardScreen';
@@ -82,6 +83,11 @@ const AuthNavigator = () => (
       },
     }}
   >
+    <Stack.Screen 
+      name="Welcome" 
+      component={WelcomeScreen} 
+      options={{ headerShown: false }}
+    />
     <Stack.Screen 
       name="Login" 
       component={LoginScreen} 

@@ -7,7 +7,9 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
-  TextInput
+  TextInput,
+  StatusBar,
+  SafeAreaView
 } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
@@ -42,7 +44,8 @@ const TaskDetailsScreen = ({ route, navigation }) => {
 
     return () => {
       if (locationSubscription) {
-        Location.removeWatchAsync(locationSubscription);
+        // En versiones recientes de Expo Location, la suscripción tiene un método remove
+        locationSubscription.remove();
       }
     };
   }, [taskId]);
@@ -599,7 +602,9 @@ const TaskDetailsScreen = ({ route, navigation }) => {
                       task.location.coordinates.length === 2;
 
   return (
-    <ScrollView style={styles.container}>
+    <SafeAreaView style={styles.safeArea}>
+      <StatusBar barStyle="light-content" backgroundColor="#1c1c1c" />
+      <ScrollView style={styles.container}>
       <View style={styles.header}>
         <View style={styles.taskStatusContainer}>
           <TouchableOpacity
@@ -689,8 +694,8 @@ const TaskDetailsScreen = ({ route, navigation }) => {
                 }}
                 radius={task.radius * 1000} // Convert km to meters for map display
                 strokeWidth={1}
-                strokeColor={'#1a66ff'}
-                fillColor={'rgba(30, 144, 255, 0.2)'}
+                strokeColor={'rgba(255, 243, 229, 0.8)'}
+                fillColor={'rgba(255, 243, 229, 0.2)'}
               />
             )}
             {userLocation && (
@@ -717,32 +722,31 @@ const TaskDetailsScreen = ({ route, navigation }) => {
           ) : (
             <Text style={styles.outsideRadius}>{t('outsideTaskRadius')}</Text>
           )}
-        </View>
-      )}
-      
-      {hasLocation && (
-        <View style={styles.taskActionContainer}>
-          {!taskStarted ? (
-            <TouchableOpacity 
-              style={[
-                styles.startButton,
-                !isWithinRadius && styles.disabledButton
-              ]}
-              disabled={!isWithinRadius || task.completed}
-              onPress={handleStartTask}
-            >
-              <Ionicons name="play" size={20} color="#fff" style={styles.buttonIcon} />
-              <Text style={styles.startButtonText}>{t('startTask')}</Text>
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity 
-              style={styles.endButton}
-              onPress={handleEndTask}
-            >
-              <Ionicons name="stop" size={20} color="#fff" style={styles.buttonIcon} />
-              <Text style={styles.endButtonText}>{t('endTask')}</Text>
-            </TouchableOpacity>
-          )}
+          
+          {/* Botón de iniciar/finalizar tarea integrado en el contenedor de mapa */}
+          <View style={styles.mapActionButtonContainer}>
+            {!taskStarted ? (
+              <TouchableOpacity 
+                style={[
+                  styles.startButton,
+                  !isWithinRadius && styles.disabledButton
+                ]}
+                disabled={!isWithinRadius || task.completed}
+                onPress={handleStartTask}
+              >
+                <Ionicons name="play" size={20} color="#fff" style={styles.buttonIcon} />
+                <Text style={styles.startButtonText}>{t('startTask')}</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity 
+                style={styles.endButton}
+                onPress={handleEndTask}
+              >
+                <Ionicons name="stop" size={20} color="#fff" style={styles.buttonIcon} />
+                <Text style={styles.endButtonText}>{t('endTask')}</Text>
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
       )}
       
@@ -785,19 +789,25 @@ const TaskDetailsScreen = ({ route, navigation }) => {
       
       {taskStarted && <VoiceListener isTaskActive={taskStarted} taskData={task} />}
     </ScrollView>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#2e2e2e',
+  },
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#2e2e2e',
   },
   centerContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
+    backgroundColor: '#2e2e2e',
   },
   header: {
     flexDirection: 'row',
@@ -805,9 +815,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 15,
     paddingVertical: 10,
-    backgroundColor: '#fff',
+    backgroundColor: '#1c1c1c',
     borderBottomWidth: 1,
-    borderBottomColor: '#ddd',
+    borderBottomColor: 'rgba(255, 243, 229, 0.1)',
   },
   taskStatusContainer: {
     flexDirection: 'row',
@@ -818,80 +828,95 @@ const styles = StyleSheet.create({
     height: 30,
     borderRadius: 15,
     borderWidth: 2,
-    borderColor: '#4A90E2',
+    borderColor: '#fff3e5',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 10,
   },
   completedButton: {
-    backgroundColor: '#4A90E2',
+    backgroundColor: '#4CAF50',
+    borderColor: '#4CAF50',
   },
   completeButtonText: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#4A90E2',
+    color: '#fff3e5',
   },
   taskStatus: {
     fontSize: 16,
-    color: '#666',
+    color: '#fff3e5',
   },
   deleteButton: {
     padding: 8,
   },
   titleContainer: {
     padding: 15,
-    backgroundColor: '#fff',
+    backgroundColor: '#1c1c1c',
     marginBottom: 10,
+    borderRadius: 15,
+    marginHorizontal: 10,
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 243, 229, 0.1)',
   },
   title: {
     fontSize: 22,
     fontWeight: 'bold',
-    color: '#333',
+    color: '#fff3e5',
   },
   infoContainer: {
     padding: 15,
-    backgroundColor: '#fff',
+    backgroundColor: '#1c1c1c',
     marginBottom: 10,
+    borderRadius: 15,
+    marginHorizontal: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 243, 229, 0.1)',
   },
   label: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#666',
+    color: 'rgba(255, 243, 229, 0.7)',
     marginBottom: 5,
   },
   description: {
     fontSize: 16,
-    color: '#333',
+    color: '#fff3e5',
     lineHeight: 24,
   },
   value: {
     fontSize: 16,
-    color: '#333',
+    color: '#fff3e5',
   },
   mapContainer: {
     padding: 15,
-    backgroundColor: '#fff',
+    backgroundColor: '#1c1c1c',
     marginBottom: 10,
+    borderRadius: 15,
+    marginHorizontal: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 243, 229, 0.1)',
   },
   mapLabel: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#666',
+    color: 'rgba(255, 243, 229, 0.7)',
     marginBottom: 10,
   },
   map: {
     height: 200,
     marginBottom: 10,
-    borderRadius: 8,
+    borderRadius: 15,
+    overflow: 'hidden',
   },
   locationName: {
     fontSize: 16,
-    color: '#333',
+    color: '#fff3e5',
     marginBottom: 5,
   },
   radius: {
     fontSize: 14,
-    color: '#666',
+    color: 'rgba(255, 243, 229, 0.7)',
     marginBottom: 5,
   },
   withinRadius: {
@@ -902,33 +927,31 @@ const styles = StyleSheet.create({
   },
   outsideRadius: {
     fontSize: 14,
-    color: '#F44336',
+    color: '#ff5252',
     fontWeight: 'bold',
     marginBottom: 5,
   },
-  taskActionContainer: {
-    padding: 15,
-    backgroundColor: '#fff',
-    marginBottom: 10,
+  mapActionButtonContainer: {
+    marginTop: 15,
   },
   startButton: {
     backgroundColor: '#4CAF50',
     padding: 15,
-    borderRadius: 8,
+    borderRadius: 15,
     alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'center',
   },
   endButton: {
-    backgroundColor: '#F44336',
+    backgroundColor: '#ff5252',
     padding: 15,
-    borderRadius: 8,
+    borderRadius: 15,
     alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'center',
   },
   disabledButton: {
-    backgroundColor: '#cccccc',
+    backgroundColor: 'rgba(255, 243, 229, 0.2)',
   },
   startButtonText: {
     color: '#fff',
@@ -946,84 +969,101 @@ const styles = StyleSheet.create({
   actionsContainer: {
     padding: 15,
     marginBottom: 20,
+    marginHorizontal: 10,
   },
   backButton: {
-    backgroundColor: '#4A90E2',
+    backgroundColor: '#1c1c1c',
     padding: 15,
-    borderRadius: 8,
+    borderRadius: 15,
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 243, 229, 0.2)',
   },
   backButtonText: {
-    color: '#fff',
+    color: '#fff3e5',
     fontSize: 16,
     fontWeight: 'bold',
   },
   errorText: {
-    color: '#e74c3c',
+    color: '#ff5252',
     fontSize: 16,
     marginBottom: 15,
     textAlign: 'center',
   },
   retryButton: {
-    backgroundColor: '#4A90E2',
+    backgroundColor: '#1c1c1c',
     padding: 12,
-    borderRadius: 8,
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 243, 229, 0.2)',
   },
   retryButtonText: {
-    color: '#fff',
+    color: '#fff3e5',
     fontSize: 16,
     fontWeight: 'bold',
   },
   activityContainer: {
     padding: 15,
-    backgroundColor: '#fff',
+    backgroundColor: '#1c1c1c',
     marginBottom: 10,
+    borderRadius: 15,
+    marginHorizontal: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 243, 229, 0.1)',
   },
   activityInput: {
     height: 40,
-    borderColor: '#ccc',
+    borderColor: 'rgba(255, 243, 229, 0.2)',
     borderWidth: 1,
     paddingHorizontal: 10,
     paddingVertical: 5,
     fontSize: 16,
+    color: '#fff3e5',
+    backgroundColor: '#2e2e2e',
+    borderRadius: 10,
   },
   submitActivityButton: {
-    backgroundColor: '#4A90E2',
+    backgroundColor: '#fff3e5',
     padding: 10,
-    borderRadius: 8,
+    borderRadius: 15,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 10,
   },
   submitActivityButtonText: {
-    color: '#fff',
+    color: '#000',
     fontSize: 16,
     fontWeight: 'bold',
   },
   activitiesContainer: {
     padding: 15,
-    backgroundColor: '#fff',
+    backgroundColor: '#1c1c1c',
     marginBottom: 10,
+    marginTop: 15,
+    borderRadius: 15,
+    marginHorizontal: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 243, 229, 0.1)',
   },
   activitiesTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#333',
+    color: '#fff3e5',
     marginBottom: 10,
   },
   activityItem: {
     padding: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#ddd',
+    borderBottomColor: 'rgba(255, 243, 229, 0.1)',
   },
   activityItemText: {
     fontSize: 16,
-    color: '#333',
+    color: '#fff3e5',
   },
   activityItemTimestamp: {
     fontSize: 14,
-    color: '#666',
+    color: 'rgba(255, 243, 229, 0.7)',
   },
 });
 
-export default TaskDetailsScreen; 
+export default TaskDetailsScreen;
