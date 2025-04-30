@@ -1,4 +1,5 @@
 const moment = require('moment');
+require('moment-timezone'); // Agregar soporte para zonas horarias
 const User = require('../models/user.model');
 const Activity = require('../models/activity.model');
 const Task = require('../models/task.model');
@@ -261,7 +262,7 @@ exports.generateActivityExcelReport = async (req, res) => {
           unavailableCount,
           completedTasks: userCompletedTasks,
           createdTasks: createdTasksCount,
-          lastAccess: lastLogin ? moment(lastLogin.createdAt).format('DD/MM/YYYY HH:mm') : 'Nunca'
+          lastAccess: lastLogin ? moment(lastLogin.createdAt).tz('America/Chicago').format('DD/MM/YYYY HH:mm') : 'Nunca'
         });
         
         // Si hay actividades, crear una hoja detallada para el usuario
@@ -285,8 +286,38 @@ exports.generateActivityExcelReport = async (req, res) => {
             cell.style = headerStyle;
           });
           
-          // Añadir secciones por tipo de actividad
-          await createActivitySections(userSheet, activities);
+          // Agrupar actividades por tarea si se ha solicitado
+          if (req.query.groupByTask === 'true') {
+            // Primero obtener todas las tareas asociadas a las actividades
+            const taskIds = [...new Set(activities
+              .filter(a => a.taskId)
+              .map(a => a.taskId._id.toString()))];
+            
+            console.log(`Encontradas ${taskIds.length} tareas distintas para agrupar`);
+            
+            // Actividades sin tarea asociada
+            const activitiesWithoutTask = activities.filter(a => !a.taskId);
+            
+            // Para cada tarea, obtener sus actividades y crear una sección
+            for (const taskId of taskIds) {
+              const taskActivities = activities.filter(a => 
+                a.taskId && a.taskId._id.toString() === taskId
+              );
+              
+              if (taskActivities.length > 0) {
+                const taskName = taskActivities[0].taskId.title || 'Tarea sin título';
+                await addTaskSection(userSheet, `TAREA: ${taskName}`, taskActivities);
+              }
+            }
+            
+            // Añadir actividades sin tarea asociada al final
+            if (activitiesWithoutTask.length > 0) {
+              await createActivitySections(userSheet, activitiesWithoutTask);
+            }
+          } else {
+            // Si no se agrupan por tarea, usar el método original
+            await createActivitySections(userSheet, activities);
+          }
           
           // Añadir todas las actividades del usuario a la hoja general
           for (const activity of activities) {
@@ -341,13 +372,13 @@ exports.generateActivityExcelReport = async (req, res) => {
     statsSheet.addRow({ metric: 'Total de Tareas', value: totalTasks });
     statsSheet.addRow({ metric: 'Tareas Completadas', value: completedTasks });
     statsSheet.addRow({ metric: 'Tareas Pendientes', value: pendingTasks });
-    statsSheet.addRow({ metric: 'Fecha de Generación', value: moment().format('DD/MM/YYYY HH:mm:ss') });
+    statsSheet.addRow({ metric: 'Fecha de Generación', value: moment().tz('America/Chicago').format('DD/MM/YYYY HH:mm:ss') });
     
     // Añadir información sobre los filtros aplicados
     if (startDate || endDate || activityType || userId) {
       statsSheet.addRow({ metric: '--- Filtros Aplicados ---', value: '' });
-      if (startDate) statsSheet.addRow({ metric: 'Fecha Inicio', value: moment(startDate).format('DD/MM/YYYY') });
-      if (endDate) statsSheet.addRow({ metric: 'Fecha Fin', value: moment(endDate).format('DD/MM/YYYY') });
+      if (startDate) statsSheet.addRow({ metric: 'Fecha Inicio', value: moment(startDate).tz('America/Chicago').format('DD/MM/YYYY') });
+      if (endDate) statsSheet.addRow({ metric: 'Fecha Fin', value: moment(endDate).tz('America/Chicago').format('DD/MM/YYYY') });
       if (activityType) {
         let activityTypeText = '';
         switch (activityType) {
@@ -409,7 +440,7 @@ exports.generateActivityExcelReport = async (req, res) => {
     
     // Configurar cabeceras para descargar el archivo
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', `attachment; filename=actividades_${moment().format('YYYY-MM-DD')}.xlsx`);
+    res.setHeader('Content-Disposition', `attachment; filename=actividades_${moment().tz('America/Chicago').format('YYYY-MM-DD')}.xlsx`);
     
     try {
       // Enviar el Excel como respuesta
@@ -444,9 +475,12 @@ exports.generateActivityExcelReport = async (req, res) => {
  */
 const getActivityInfo = async (activity) => {
   try {
-    // Formatear fecha y hora
-    const date = moment(activity.createdAt).format('DD/MM/YYYY');
-    const time = moment(activity.createdAt).format('HH:mm:ss');
+    // Usar la zona horaria de Brownsville, TX (America/Chicago)
+    const TIMEZONE = 'America/Chicago';
+    
+    // Formatear fecha y hora con la zona horaria correcta
+    const date = moment(activity.createdAt).tz(TIMEZONE).format('DD/MM/YYYY');
+    const time = moment(activity.createdAt).tz(TIMEZONE).format('HH:mm:ss');
     
     // Determinar el tipo de actividad y descripción
     let activityType = '';
@@ -495,6 +529,36 @@ const getActivityInfo = async (activity) => {
         activityType = 'Cierre de sesión';
         description = 'Usuario cerró sesión';
         break;
+      case 'voice_note':
+        activityType = 'Bitácora';
+        
+        // Priorizar la palabra clave guardada en los metadatos (nuevo flujo)
+        if (activity.metadata && activity.metadata.keyword) {
+          description = activity.metadata.keyword;
+        } 
+        // Usar el mensaje directamente si contiene la palabra clave (nuevo flujo)
+        else if (activity.message && activity.message !== 'Sin descripción') {
+          description = activity.message;
+        }
+        // Mantener compatibilidad con registros antiguos
+        else if (activity.taskId && activity.taskId.keywords) {
+          // Las palabras clave pueden estar como string o array
+          const keywords = typeof activity.taskId.keywords === 'string'
+            ? activity.taskId.keywords.split(',').map(k => k.trim())
+            : activity.taskId.keywords;
+            
+          // Comprobar si alguna de las palabras clave está en el mensaje
+          const messageText = activity.metadata?.fullText || activity.message || '';
+          const foundKeyword = keywords.find(keyword => 
+            messageText.toLowerCase().includes(keyword.toLowerCase())
+          );
+          
+          // Si encontramos una coincidencia exacta, mostrar solo la palabra clave
+          if (foundKeyword) {
+            description = foundKeyword;
+          }
+        }
+        break;
       default:
         activityType = activity.type || 'Desconocido';
         break;
@@ -531,8 +595,8 @@ const getActivityInfo = async (activity) => {
   } catch (error) {
     console.error('Error al procesar información de actividad:', error);
     return {
-      date: moment(activity.createdAt).format('DD/MM/YYYY'),
-      time: moment(activity.createdAt).format('HH:mm:ss'),
+      date: moment(activity.createdAt).tz('America/Chicago').format('DD/MM/YYYY'),
+      time: moment(activity.createdAt).tz('America/Chicago').format('HH:mm:ss'),
       activityType: activity.type || 'Desconocido',
       description: 'Error al procesar descripción',
       coordinates: '',
@@ -549,6 +613,9 @@ const getActivityInfo = async (activity) => {
  */
 const createActivitySections = async (sheet, activities) => {
   try {
+    // Zona horaria de Brownsville, TX
+    const TIMEZONE = 'America/Chicago';
+    
     // Agrupar actividades por tipo
     const availabilityActivities = activities.filter(a => 
       a.type === 'clock_in' || a.type === 'clock_out' || 
@@ -561,13 +628,14 @@ const createActivitySections = async (sheet, activities) => {
     
     const taskActivities = activities.filter(a => 
       a.type === 'task_create' || a.type === 'task_update' || 
-      a.type === 'task_complete' || a.type === 'task_delete'
+      a.type === 'task_complete' || a.type === 'task_delete' ||
+      a.type === 'voice_note' // Incluir voice_note en actividades de tareas
     );
     
     const otherActivities = activities.filter(a => 
       !['clock_in', 'clock_out', 'started_working', 'stopped_working',
         'location_enter', 'location_exit',
-        'task_create', 'task_update', 'task_complete', 'task_delete'
+        'task_create', 'task_update', 'task_complete', 'task_delete', 'voice_note'
       ].includes(a.type)
     );
     
@@ -624,6 +692,55 @@ const createActivitySections = async (sheet, activities) => {
     
   } catch (error) {
     console.error('Error al crear secciones de actividad:', error);
+    // Continuar sin secciones
+  }
+};
+
+/**
+ * Función auxiliar para crear una sección de actividades por tarea
+ * @param {Object} sheet - Hoja de Excel
+ * @param {String} title - Título de la sección
+ * @param {Array} activities - Lista de actividades
+ */
+const addTaskSection = async (sheet, title, activities) => {
+  try {
+    // Usar la zona horaria de Brownsville, TX
+    const TIMEZONE = 'America/Chicago';
+    
+    // Añadir encabezado de sección
+    const headerRow = sheet.addRow({
+      date: title
+    });
+    
+    // Estilo para el encabezado de sección
+    headerRow.eachCell((cell) => {
+      cell.font = { bold: true };
+      cell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFF3E5FF' }
+      };
+    });
+    
+    // Añadir actividades de esta sección
+    for (const activity of activities) {
+      const activityInfo = await getActivityInfo(activity);
+      
+      sheet.addRow({
+        date: activityInfo.date,
+        time: activityInfo.time,
+        activityType: activityInfo.activityType,
+        description: activityInfo.description,
+        coordinates: activityInfo.coordinates,
+        task: activityInfo.task,
+        duration: activityInfo.duration
+      });
+    }
+    
+    // Añadir una fila en blanco después de cada sección
+    sheet.addRow({});
+  } catch (error) {
+    console.error('Error al crear sección de tarea:', error);
     // Continuar sin secciones
   }
 };

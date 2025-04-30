@@ -304,7 +304,7 @@ const VoiceListener = ({ isTaskActive = false, taskData = null, onKeywordDetecte
             // Guardar como nota para la tarea actual
             const noteText = recognizedText;
             if (!savedNotesRef.current.has(noteText)) {
-              await saveNote(noteText, currentTaskIdRef.current);
+              await saveNote(noteText, currentTaskIdRef.current, keyword);
               savedNotesRef.current.add(noteText);
             }
             break;
@@ -442,7 +442,7 @@ const VoiceListener = ({ isTaskActive = false, taskData = null, onKeywordDetecte
   };
 
   // Guardar nota en el backend
-  const saveNote = async (noteText, taskId = null) => {
+  const saveNote = async (noteText, taskId = null, detectedKeyword = null) => {
     try {
       // Usar el taskId que se pasa como parámetro o el almacenado en la referencia
       const targetTaskId = taskId || currentTaskIdRef.current;
@@ -453,6 +453,9 @@ const VoiceListener = ({ isTaskActive = false, taskData = null, onKeywordDetecte
       }
       
       logDebug(`Guardando nota para tarea ${targetTaskId}: "${noteText}"`);
+      if (detectedKeyword) {
+        logDebug(`Palabra clave detectada: "${detectedKeyword}"`);
+      }
       
       // Obtener token de autenticación
       const token = await AsyncStorage.getItem('token');
@@ -465,7 +468,9 @@ const VoiceListener = ({ isTaskActive = false, taskData = null, onKeywordDetecte
       const noteData = {
         text: noteText,
         type: 'voice_note',
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        // Incluir la palabra clave detectada en los datos de la nota
+        keyword: detectedKeyword || ''
       };
       
       // URL directa al endpoint
