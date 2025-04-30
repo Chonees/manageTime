@@ -317,9 +317,9 @@ const AdminDashboardScreen = ({ navigation }) => {
         }
       >
         <View style={styles.header}>
-          <View>
-            <Text style={styles.welcomeText}>{t('adminDashboard')}</Text>
-            <Text style={styles.subHeaderText}>{t('welcomeAdmin')}, {user?.username || 'Admin'}</Text>
+          <View style={{flex: 1}}>
+            <Text style={styles.headerTitle}>{t('adminDashboard')}</Text>
+            <Text style={styles.headerSubtitle}>{t('Welcome')}, {user?.username || 'Admin'}</Text>
           </View>
           <TouchableOpacity 
             style={styles.logoutButton}
@@ -392,7 +392,9 @@ const AdminDashboardScreen = ({ navigation }) => {
             </TouchableOpacity>
             
             <TouchableOpacity 
-              style={[styles.actionButton, { backgroundColor: '#9c27b0' }]}
+
+              style={[styles.actionButton, { backgroundColor: '#fff3e5', borderColor: 'rgba(0, 0, 0, 0.1)' }]}
+
               onPress={() => navigation.navigate('AdminActivities')}
             >
               <Text style={styles.actionButtonText}>{t('viewAllActivities')}</Text>
@@ -403,7 +405,7 @@ const AdminDashboardScreen = ({ navigation }) => {
         {/* Sección de Ubicaciones en Tiempo Real */}
         <View style={styles.realTimeLocationsContainer}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>{t('Real Time Location Of Users')}</Text>
+            <Text style={[styles.sectionTitle, { color: '#333333', marginBottom: 0, marginHorizontal: 0, marginTop: 0 }]}>{language === 'es' ? 'Ubicación en Tiempo Real de Usuarios' : 'Real Time Location Of Users'}</Text>
             <TouchableOpacity 
               style={styles.refreshButton}
               onPress={() => loadRealTimeLocations(false)}
@@ -505,18 +507,20 @@ const styles = StyleSheet.create({
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    justifyContent: 'flex-start',
+    alignItems: 'flex-start',
     backgroundColor: '#2e2e2e',
     padding: 15,
-    paddingTop: Platform.OS === 'ios' ? 10 : 15,
+    paddingTop: Platform.OS === 'ios' ? 15 : 20,
+    paddingBottom: 20,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(255, 243, 229, 0.1)',
+    position: 'relative',
   },
   headerTitle: {
     fontSize: Math.min(width * 0.06, 24),
     fontWeight: 'bold',
-    color: '#fff3e5',
+    color: '#ffffff',
     marginBottom: 5,
   },
   headerSubtitle: {
@@ -525,15 +529,15 @@ const styles = StyleSheet.create({
     opacity: 0.8,
   },
   logoutButton: {
-    position: 'absolute',
-    top: Platform.OS === 'ios' ? 10 : 15,
-    right: 15,
     backgroundColor: '#1c1c1c',
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 15,
     borderWidth: 1,
     borderColor: 'rgba(255, 243, 229, 0.2)',
+    marginTop: 35,
+    right: 15,
+    top: 15,
   },
   logoutButtonText: {
     color: '#fff3e5',
@@ -554,7 +558,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: Math.min(width * 0.05, 18),
     fontWeight: 'bold',
-    color: '#fff3e5',
+    color: '#ffffff',
     marginBottom: 15,
     marginHorizontal: 15,
     marginTop: 15,
@@ -574,7 +578,7 @@ const styles = StyleSheet.create({
   },
   statCard: {
     width: '48%',
-    backgroundColor: '#1c1c1c',
+    backgroundColor: '#fff3e5',
     borderRadius: 15,
     padding: 15,
     marginBottom: 15,
@@ -584,17 +588,17 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
     borderWidth: 1,
-    borderColor: 'rgba(255, 243, 229, 0.1)',
+    borderColor: '#c1c1c1',
   },
   statValue: {
     fontSize: Math.min(width * 0.07, 28),
     fontWeight: 'bold',
-    color: '#fff3e5',
+    color: '#000000',
     marginBottom: 5,
   },
   statLabel: {
     fontSize: Math.min(width * 0.035, 14),
-    color: '#ffffff',
+    color: '#000000',
     opacity: 0.7,
   },
   actionsContainer: {
@@ -669,33 +673,38 @@ const styles = StyleSheet.create({
   // Estilos para ubicaciones en tiempo real
   realTimeLocationsContainer: {
     marginTop: 15,
-    backgroundColor: '#1c1c1c',
+    marginHorizontal: 15,
+    backgroundColor: '#ffffff',
     borderRadius: 15,
-    padding: 15,
+    overflow: 'hidden',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
     borderWidth: 1,
-    borderColor: 'rgba(255, 243, 229, 0.1)',
+    borderColor: '#e0e0e0',
   },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
+    backgroundColor: '#fff3e5',
+    paddingHorizontal: 15,
+    paddingVertical: 8,
+    borderTopLeftRadius: 15,
+    borderTopRightRadius: 15,
   },
   refreshButton: {
     padding: 8,
-    backgroundColor: 'rgba(255, 243, 229, 0.1)',
+    backgroundColor: 'rgba(0, 0, 0, 0.05)',
     borderRadius: 20,
   },
   mapContainer: {
     height: 250,
     borderRadius: 8,
     overflow: 'hidden',
-    marginVertical: 10,
+    margin: 15,
   },
   map: {
     ...StyleSheet.absoluteFillObject,
@@ -704,22 +713,27 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 10,
     right: 10,
-    backgroundColor: 'rgba(28, 28, 28, 0.8)',
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
     paddingVertical: 5,
     paddingHorizontal: 10,
     borderRadius: 15,
     borderWidth: 1,
-    borderColor: 'rgba(255, 243, 229, 0.2)',
+    borderColor: '#e0e0e0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
   },
   mapLegendTitle: {
     fontSize: Math.min(width * 0.03, 12),
     fontWeight: 'bold',
-    color: '#fff3e5',
+    color: '#333333',
   },
   mapLegendText: {
     fontSize: Math.min(width * 0.03, 12),
     fontWeight: 'bold',
-    color: '#fff3e5',
+    color: '#333333',
   },
   markerContainer: {
     width: 40,
@@ -751,14 +765,14 @@ const styles = StyleSheet.create({
     height: 150,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#1c1c1c',
+    backgroundColor: '#ffffff',
     borderRadius: 15,
     borderWidth: 1,
-    borderColor: 'rgba(255, 243, 229, 0.1)',
+    borderColor: '#e0e0e0',
+    margin: 15,
   },
   noLocationsText: {
-    color: '#ffffff',
-    opacity: 0.7,
+    color: '#666666',
     fontSize: Math.min(width * 0.04, 16),
   },
   legendItem: {
@@ -778,12 +792,12 @@ const styles = StyleSheet.create({
   },
   legendName: {
     fontSize: Math.min(width * 0.035, 14),
-    color: '#fff3e5',
+    color: '#333333',
+    fontWeight: 'bold',
   },
   legendTimestamp: {
     fontSize: Math.min(width * 0.03, 12),
-    color: '#ffffff',
-    opacity: 0.6,
+    color: '#666666',
   },
   legendList: {
     maxHeight: 150,

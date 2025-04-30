@@ -18,7 +18,7 @@ export const translations = {
     
     // Admin panel translations
     adminDashboard: 'Admin Dashboard',
-    welcomeAdmin: 'Welcome, Admin',
+    welcomeAdmin: 'Welcome',
     totalUsers: 'Total Users',
     activeUsers: 'Active Users',
     totalTasks: 'Total Tasks',
@@ -458,6 +458,7 @@ export const translations = {
     // Voice assistant
     voiceAssistant: "Voice Assistant",
     typeSomething: "Type something...",
+    continue: "Continue",
     voiceAssistantHelp: "This simulator lets you test the voice assistant. Type 'bitacora' to start a voice note.",
     voiceCommandsHelp: "Voice commands available: 'bitacora' (starts recording), 'yes/no' (confirmation)",
     voiceAssistantActive: "Voice assistant active and listening for 'bitacora'",
@@ -530,7 +531,7 @@ export const translations = {
     
     // Admin panel translations
     adminDashboard: 'Panel de Administración',
-    welcomeAdmin: 'Bienvenido, Administrador',
+    welcomeAdmin: 'Bienvenido',
     totalUsers: 'Total de Usuarios',
     activeUsers: 'Usuarios Activos',
     totalTasks: 'Total de Tareas',
@@ -970,6 +971,7 @@ export const translations = {
     // Voice assistant
     voiceAssistant: "Asistente de Voz",
     typeSomething: "Escribe algo...",
+    continue: "Continuar",
     voiceAssistantHelp: "Este simulador te permite probar el asistente de voz. Escribe 'bitácora' para iniciar una nota de voz.",
     voiceCommandsHelp: "Comandos de voz disponibles: 'bitácora' (inicia grabación), 'sí/no' (confirmación)",
     voiceAssistantActive: "Asistente de voz activo y escuchando por 'bitácora'",

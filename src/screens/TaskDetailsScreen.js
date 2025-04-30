@@ -7,7 +7,9 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
-  TextInput
+  TextInput,
+  StatusBar,
+  SafeAreaView
 } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
@@ -43,13 +45,10 @@ const TaskDetailsScreen = ({ route, navigation }) => {
 
     return () => {
       if (locationSubscription) {
-        try {
-          // La forma correcta es llamar .remove() directamente en el objeto de suscripción
-          locationSubscription.remove();
-          console.log('Subscription removed correctly');
-        } catch (error) {
-          console.error('Error removing location subscription:', error);
-        }
+
+        // En versiones recientes de Expo Location, la suscripción tiene un método remove
+        locationSubscription.remove();
+
       }
     };
   }, [taskId]);
@@ -649,7 +648,9 @@ const TaskDetailsScreen = ({ route, navigation }) => {
                       task.location.coordinates.length === 2;
 
   return (
-    <ScrollView style={styles.container}>
+    <SafeAreaView style={styles.safeArea}>
+      <StatusBar barStyle="light-content" backgroundColor="#1c1c1c" />
+      <ScrollView style={styles.container}>
       <View style={styles.header}>
         <View style={styles.taskStatusContainer}>
           <TouchableOpacity
@@ -743,8 +744,8 @@ const TaskDetailsScreen = ({ route, navigation }) => {
                 }}
                 radius={task.radius * 1000} // Convert km to meters for map display
                 strokeWidth={1}
-                strokeColor={'#1a66ff'}
-                fillColor={'rgba(30, 144, 255, 0.2)'}
+                strokeColor={'rgba(255, 243, 229, 0.8)'}
+                fillColor={'rgba(255, 243, 229, 0.2)'}
               />
             )}
             {userLocation && (
@@ -771,32 +772,31 @@ const TaskDetailsScreen = ({ route, navigation }) => {
           ) : (
             <Text style={styles.outsideRadius}>{t('outsideTaskRadius')}</Text>
           )}
-        </View>
-      )}
-      
-      {hasLocation && (
-        <View style={styles.taskActionContainer}>
-          {!taskStarted ? (
-            <TouchableOpacity 
-              style={[
-                styles.startButton,
-                !isWithinRadius && styles.disabledButton
-              ]}
-              disabled={!isWithinRadius || task.completed}
-              onPress={handleStartTask}
-            >
-              <Ionicons name="play" size={20} color="#fff" style={styles.buttonIcon} />
-              <Text style={styles.startButtonText}>{t('startTask')}</Text>
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity 
-              style={styles.endButton}
-              onPress={handleEndTask}
-            >
-              <Ionicons name="stop" size={20} color="#fff" style={styles.buttonIcon} />
-              <Text style={styles.endButtonText}>{t('endTask')}</Text>
-            </TouchableOpacity>
-          )}
+          
+          {/* Botón de iniciar/finalizar tarea integrado en el contenedor de mapa */}
+          <View style={styles.mapActionButtonContainer}>
+            {!taskStarted ? (
+              <TouchableOpacity 
+                style={[
+                  styles.startButton,
+                  !isWithinRadius && styles.disabledButton
+                ]}
+                disabled={!isWithinRadius || task.completed}
+                onPress={handleStartTask}
+              >
+                <Ionicons name="play" size={20} color="#fff" style={styles.buttonIcon} />
+                <Text style={styles.startButtonText}>{t('startTask')}</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity 
+                style={styles.endButton}
+                onPress={handleEndTask}
+              >
+                <Ionicons name="stop" size={20} color="#fff" style={styles.buttonIcon} />
+                <Text style={styles.endButtonText}>{t('endTask')}</Text>
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
       )}
       
@@ -854,10 +854,15 @@ const TaskDetailsScreen = ({ route, navigation }) => {
         </View>
       </View>
     </ScrollView>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#2e2e2e',
+  },
   container: {
     flex: 1,
     backgroundColor: '#2e2e2e',
@@ -874,11 +879,12 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 15,
-    paddingVertical: 25,
-    paddingTop: 33,
-    backgroundColor: '#2e2e2e',
+
+    paddingVertical: 10,
+    backgroundColor: '#1c1c1c',
     borderBottomWidth: 1,
-    borderBottomColor: '#3e3e3e',
+    borderBottomColor: 'rgba(255, 243, 229, 0.1)',
+
   },
   taskStatusContainer: {
     flexDirection: 'row',
@@ -895,7 +901,10 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   completedButton: {
-    backgroundColor: '#fff3e5',
+
+    backgroundColor: '#4CAF50',
+    borderColor: '#4CAF50',
+
   },
   completeButtonText: {
     fontSize: 18,
@@ -904,15 +913,24 @@ const styles = StyleSheet.create({
   },
   taskStatus: {
     fontSize: 16,
-    color: '#fff',
+
+    color: '#fff3e5',
+
   },
   deleteButton: {
     padding: 8,
   },
   titleContainer: {
     padding: 15,
-    backgroundColor: '#2e2e2e',
+
+    backgroundColor: '#1c1c1c',
+
     marginBottom: 10,
+    borderRadius: 15,
+    marginHorizontal: 10,
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 243, 229, 0.1)',
   },
   title: {
     fontSize: 22,
@@ -920,15 +938,15 @@ const styles = StyleSheet.create({
     color: '#fff3e5',
   },
   infoContainer: {
-    padding: 12,
-    backgroundColor: '#2e2e2e',
+
+    padding: 15,
+    backgroundColor: '#1c1c1c',
     marginBottom: 10,
-    borderRadius: 10,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
+    borderRadius: 15,
+    marginHorizontal: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 243, 229, 0.1)',
+
   },
   infoSection: {
     marginBottom: 6,
@@ -936,57 +954,55 @@ const styles = StyleSheet.create({
   infoLabel: {
     fontSize: 14,
     fontWeight: 'bold',
-    color: '#fff3e5',
-    marginBottom: 2,
+
+    color: 'rgba(255, 243, 229, 0.7)',
+    marginBottom: 5,
   },
   description: {
-    fontSize: 14,
-    color: '#fff',
-    lineHeight: 20,
+    fontSize: 16,
+    color: '#fff3e5',
+    lineHeight: 24,
   },
-  datesContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 4,
-  },
-  dateSection: {
-    flex: 1,
-    marginRight: 8,
-  },
-  dateValue: {
-    fontSize: 13,
-    color: '#ccc',
+  value: {
+    fontSize: 16,
+    color: '#fff3e5',
   },
   mapContainer: {
     padding: 15,
-    backgroundColor: '#2e2e2e',
+    backgroundColor: '#1c1c1c',
     marginBottom: 10,
-    borderRadius: 10,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
+    borderRadius: 15,
+    marginHorizontal: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 243, 229, 0.1)',
+
   },
   mapLabel: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#fff3e5',
+
+    color: 'rgba(255, 243, 229, 0.7)',
+
     marginBottom: 10,
   },
   map: {
     height: 200,
     marginBottom: 10,
-    borderRadius: 8,
+    borderRadius: 15,
+    overflow: 'hidden',
   },
   locationName: {
     fontSize: 16,
-    color: '#fff',
+
+    color: '#fff3e5',
+
     marginBottom: 5,
   },
   radius: {
     fontSize: 14,
-    color: '#ccc',
+
+    color: 'rgba(255, 243, 229, 0.7)',
+
     marginBottom: 5,
   },
   withinRadius: {
@@ -997,39 +1013,36 @@ const styles = StyleSheet.create({
   },
   outsideRadius: {
     fontSize: 14,
-    color: '#F44336',
+    color: '#ff5252',
     fontWeight: 'bold',
     marginBottom: 5,
   },
-  taskActionContainer: {
-    padding: 15,
-    backgroundColor: '#2e2e2e',
-    marginBottom: 10,
-    borderRadius: 10,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
+
+  mapActionButtonContainer: {
+    marginTop: 15,
+
+
   },
   startButton: {
     backgroundColor: '#4CAF50',
     padding: 15,
-    borderRadius: 8,
+    borderRadius: 15,
     alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'center',
   },
   endButton: {
-    backgroundColor: '#F44336',
+    backgroundColor: '#ff5252',
     padding: 15,
-    borderRadius: 8,
+    borderRadius: 15,
     alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'center',
   },
   disabledButton: {
-    backgroundColor: '#444',
+
+    backgroundColor: 'rgba(255, 243, 229, 0.2)',
+
   },
   startButtonText: {
     color: '#fff',
@@ -1044,67 +1057,98 @@ const styles = StyleSheet.create({
   buttonIcon: {
     marginRight: 8,
   },
+
+  actionsContainer: {
+    padding: 15,
+    marginBottom: 20,
+    marginHorizontal: 10,
+  },
+  backButton: {
+    backgroundColor: '#1c1c1c',
+    padding: 15,
+    borderRadius: 15,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 243, 229, 0.2)',
+  },
+  backButtonText: {
+    color: '#fff3e5',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
   errorText: {
-    color: '#F44336',
+    color: '#ff5252',
+
     fontSize: 16,
     marginBottom: 15,
     textAlign: 'center',
   },
   retryButton: {
-    backgroundColor: '#fff3e5',
+
+    backgroundColor: '#1c1c1c',
+
     padding: 12,
-    borderRadius: 8,
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 243, 229, 0.2)',
   },
   retryButtonText: {
-    color: '#2e2e2e',
+
+    color: '#fff3e5',
+
     fontSize: 16,
     fontWeight: 'bold',
   },
   activityContainer: {
     padding: 15,
-    backgroundColor: '#2e2e2e',
+
+    backgroundColor: '#1c1c1c',
     marginBottom: 10,
-    borderRadius: 10,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
+    borderRadius: 15,
+    marginHorizontal: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 243, 229, 0.1)',
   },
   activityInput: {
     height: 40,
-    borderColor: '#fff3e5',
+    borderColor: 'rgba(255, 243, 229, 0.2)',
+
     borderWidth: 1,
     paddingHorizontal: 10,
     paddingVertical: 5,
     fontSize: 16,
-    borderRadius: 8,
+
     color: '#fff3e5',
-    backgroundColor: 'rgba(255, 243, 229, 0.1)',
+    backgroundColor: '#2e2e2e',
+    borderRadius: 10,
+
   },
   submitActivityButton: {
     backgroundColor: '#fff3e5',
     padding: 10,
-    borderRadius: 8,
+    borderRadius: 15,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 10,
   },
   submitActivityButtonText: {
-    color: '#2e2e2e',
+
+    color: '#000',
+
     fontSize: 16,
     fontWeight: 'bold',
   },
   keywordsContainer: {
     padding: 15,
-    backgroundColor: '#2e2e2e',
+
+    backgroundColor: '#1c1c1c',
     marginBottom: 10,
-    borderRadius: 10,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
+    marginTop: 15,
+    borderRadius: 15,
+    marginHorizontal: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 243, 229, 0.1)',
+
   },
   keywordsLabel: {
     fontSize: 16,
@@ -1112,38 +1156,20 @@ const styles = StyleSheet.create({
     color: '#fff3e5',
     marginBottom: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#3e3e3e',
-    paddingBottom: 8,
+
+    borderBottomColor: 'rgba(255, 243, 229, 0.1)',
   },
-  keywordsList: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginTop: 5,
-  },
-  keywordWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 243, 229, 0.15)',
-    borderRadius: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    marginRight: 8,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 243, 229, 0.3)',
+  activityItemText: {
+    fontSize: 16,
+    color: '#fff3e5',
+
   },
   keyword: {
     fontSize: 14,
-    color: '#fff',
-  },
-  spokenKeyword: {
-    color: '#4CAF50',
-    textDecorationLine: 'line-through',
-    fontWeight: 'bold',
-  },
-  keywordCheckmark: {
-    marginLeft: 5,
+
+    color: 'rgba(255, 243, 229, 0.7)',
+
   },
 });
 
-export default TaskDetailsScreen; 
+export default TaskDetailsScreen;

@@ -681,7 +681,11 @@ const TaskScreen = ({ navigation }) => {
     <SafeAreaView style={styles.container}>
       <StatusBar backgroundColor={theme.colors.darkGrey} barStyle="light-content" />
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>{t('tasks')}</Text>
+        <TouchableOpacity onPress={() => navigation.navigate('AdminDashboard')} style={styles.backButton}>
+          <Ionicons name="arrow-back" size={24} color="#fff3e5" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Tasks</Text>
+        <View style={styles.headerRightPlaceholder}></View>
       </View>
       <View style={styles.statsContainer}>
         <View style={styles.statItem}>
@@ -694,7 +698,7 @@ const TaskScreen = ({ navigation }) => {
           </Text>
           <Text style={styles.statLabel}>{t('completed')}</Text>
         </View>
-        <View style={[styles.statItem, { borderRightWidth: 0 }]}>
+        <View style={styles.statItem}>
           <Text style={styles.statValue}>
             {tasks.filter(task => !task.completed).length}
           </Text>
@@ -714,7 +718,7 @@ const TaskScreen = ({ navigation }) => {
               style={styles.addTaskButton}
               onPress={() => setShowAddForm(true)}
             >
-              <Ionicons name="add-circle-outline" size={20} color="#fff" />
+              <Ionicons name="add-circle-outline" size={20} color="#000000" />
               <Text style={styles.addTaskButtonText}>{t('addTask')}</Text>
             </TouchableOpacity>
           )}
@@ -756,44 +760,47 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 15,
-    paddingVertical: 10,
+    paddingVertical: 15,
     backgroundColor: '#1c1c1c',
   },
   headerTitle: {
     fontSize: Math.min(width * 0.05, 20),
     fontWeight: 'bold',
-    color: '#fff3e5',
+    color: '#ffffff',
+    flex: 1,
+    textAlign: 'center',
+  },
+  backButton: {
+    padding: 5,
+    width: 40,
+  },
+  headerRightPlaceholder: {
+    width: 40,
   },
   statsContainer: {
     flexDirection: 'row',
-    backgroundColor: '#1c1c1c',
-    borderRadius: 15,
-    marginHorizontal: 15,
+    backgroundColor: 'transparent',
     marginBottom: 15,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 243, 229, 0.1)',
+    marginHorizontal: 15,
   },
   statItem: {
     flex: 1,
     alignItems: 'center',
     padding: 15,
     borderRightWidth: 1,
-    borderRightColor: 'rgba(255, 243, 229, 0.1)',
+    borderRightColor: '#d0d0d0',
+    backgroundColor: '#e8e8e8',
+    borderRadius: 8,
+    margin: 2,
   },
   statValue: {
     fontSize: Math.min(width * 0.05, 20),
     fontWeight: 'bold',
-    color: '#fff3e5',
+    color: '#333333',
   },
   statLabel: {
     fontSize: Math.min(width * 0.03, 12),
-    color: '#fff3e5',
-    opacity: 0.7,
+    color: '#666666',
     marginTop: 5,
   },
   addTaskButton: {
@@ -806,7 +813,12 @@ const styles = StyleSheet.create({
     marginHorizontal: 15,
     marginBottom: 15,
     borderWidth: 1,
-    borderColor: 'rgba(0, 0, 0, 0.1)',
+    borderColor: '#cccccc',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   addTaskButtonText: {
     color: '#000',
@@ -932,8 +944,8 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   formContainer: {
-    backgroundColor: '#fff',
-    borderRadius: 8,
+    backgroundColor: '#1c1c1c',
+    borderRadius: 15,
     padding: 15,
     marginHorizontal: 15,
     marginBottom: 15,
@@ -942,6 +954,8 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 243, 229, 0.1)',
   },
   formHeaderRow: {
     flexDirection: 'row',
@@ -952,47 +966,49 @@ const styles = StyleSheet.create({
   formTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#333',
+    color: '#ffffff',
     flex: 1,
   },
   input: {
-    backgroundColor: '#f9f9f9',
-    borderRadius: 5,
+    backgroundColor: '#2e2e2e',
+    borderRadius: 15,
     padding: 12,
     marginBottom: 10,
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: 'rgba(255, 243, 229, 0.2)',
+    color: '#fff3e5',
   },
   textArea: {
     height: 80,
     textAlignVertical: 'top',
+    color: '#fff3e5',
   },
   userSelectButton: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#f9f9f9',
-    borderRadius: 5,
+    backgroundColor: '#2e2e2e',
+    borderRadius: 15,
     padding: 12,
     marginBottom: 10,
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: 'rgba(255, 243, 229, 0.2)',
   },
   userSelectButtonText: {
-    color: '#4A90E2',
+    color: '#fff3e5',
   },
   locationButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f9f9f9',
-    borderRadius: 5,
+    backgroundColor: '#2e2e2e',
+    borderRadius: 15,
     padding: 12,
     marginBottom: 10,
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: 'rgba(255, 243, 229, 0.2)',
   },
   locationButtonText: {
-    color: '#4A90E2',
+    color: '#fff3e5',
     marginLeft: 10,
   },
   formButtons: {
@@ -1003,23 +1019,30 @@ const styles = StyleSheet.create({
   formButton: {
     flex: 0.48,
     padding: 12,
-    borderRadius: 5,
+    borderRadius: 15,
     alignItems: 'center',
   },
   saveButton: {
-    backgroundColor: '#4A90E2',
+    backgroundColor: '#fff3e5',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.1)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   saveButtonText: {
-    color: '#fff',
+    color: '#000000',
     fontWeight: 'bold',
   },
   cancelButton: {
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#2e2e2e',
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: 'rgba(255, 243, 229, 0.2)',
   },
   cancelButtonText: {
-    color: '#666',
+    color: '#fff3e5',
   },
   modalContainer: {
     flex: 1,
@@ -1029,11 +1052,13 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   modalContent: {
-    backgroundColor: '#fff',
-    borderRadius: 10,
+    backgroundColor: '#1c1c1c',
+    borderRadius: 15,
     padding: 20,
     width: '100%',
     maxHeight: '80%',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 243, 229, 0.1)',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -1044,7 +1069,7 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#333',
+    color: '#ffffff',
     flex: 1,
   },
   userList: {
@@ -1053,25 +1078,27 @@ const styles = StyleSheet.create({
   userItem: {
     padding: 15,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: 'rgba(255, 243, 229, 0.1)',
   },
   userItemText: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#333',
+    color: '#fff3e5',
   },
   selectedUserItem: {
-    backgroundColor: '#4A90E2',
+    backgroundColor: '#fff3e5',
   },
   closeButton: {
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#2e2e2e',
     padding: 12,
-    borderRadius: 5,
+    borderRadius: 15,
     alignItems: 'center',
     marginTop: 15,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 243, 229, 0.2)',
   },
   closeButtonText: {
-    color: '#666',
+    color: '#fff3e5',
   },
   handsFreeContainer: {
     flexDirection: 'row',
