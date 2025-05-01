@@ -47,24 +47,29 @@ const sendPushNotifications = async (tokens, title, body, data = {}) => {
       title: title,
       body: body,
       data: { ...data, timestamp: new Date().toISOString() },
+      priority: 'high', // Alta prioridad para notificaciones importantes
+      channelId: 'default', // Canal para Android
+      badge: 1, // Incrementa el contador de notificaciones en iOS
+      _displayInForeground: true, // Mostrar incluso si la app está en primer plano
     }));
 
-    // Dividir en fragmentos si hay muchos mensajes
+    // Dividir los mensajes en bloques según recomendaciones de Expo
     const chunks = expo.chunkPushNotifications(messages);
     
-    // Enviar cada fragmento
+    // Enviar cada bloque de mensajes
     const tickets = [];
     for (const chunk of chunks) {
       try {
         const ticketChunk = await expo.sendPushNotificationsAsync(chunk);
         tickets.push(...ticketChunk);
-        logger.info(`Enviado fragmento con ${chunk.length} notificaciones`);
-      } catch (error) {
-        logger.error('Error enviando fragmento de notificaciones', error);
+        logger.debug(`Enviado bloque de ${chunk.length} notificaciones`);
+      } catch (chunkError) {
+        logger.error('Error enviando bloque de notificaciones', chunkError);
       }
     }
-
-    logger.info(`Enviadas ${tickets.length} notificaciones push`);
+    
+    logger.info(`Enviadas ${tickets.length} notificaciones push de ${messages.length} solicitadas`);
+    
     return { success: true, tickets };
   } catch (error) {
     logger.error('Error enviando notificaciones push', error);
@@ -82,27 +87,28 @@ const sendPushNotifications = async (tokens, title, body, data = {}) => {
  */
 const notifyByRole = async (title, body, data = {}, role = null) => {
   try {
-    // Construir filtro según el rol
-    const filter = role ? { role } : {};
-    
-    // Buscar usuarios con tokens de push
-    const users = await User.find({
-      ...filter,
-      pushToken: { $exists: true, $ne: "" }
-    });
-
-    if (users.length === 0) {
-      logger.warn(`No hay usuarios ${role || 'registrados'} con tokens de push`);
-      return { success: false, error: 'No hay destinatarios' };
+    // Construir query para buscar usuarios con token
+    const query = { pushToken: { $exists: true, $ne: null } };
+    if (role) {
+      query.isAdmin = role === 'admin';
     }
-
+    
+    // Buscar usuarios que coincidan con el rol
+    const users = await User.find(query);
+    
+    if (users.length === 0) {
+      logger.warn(`No hay usuarios con rol ${role || 'cualquiera'} con tokens registrados`);
+      return { success: false, error: 'No hay usuarios con tokens' };
+    }
+    
     // Extraer tokens
     const tokens = users.map(user => user.pushToken).filter(Boolean);
+    logger.info(`Enviando notificación a ${tokens.length} usuarios con rol ${role || 'cualquiera'}`);
     
     // Enviar notificaciones
     return await sendPushNotifications(tokens, title, body, data);
   } catch (error) {
-    logger.error('Error notificando por rol', error);
+    logger.error(`Error notificando a usuarios con rol ${role}`, error);
     return { success: false, error: error.message };
   }
 };
@@ -120,8 +126,8 @@ const notifyUser = async (userId, title, body, data = {}) => {
     const user = await User.findById(userId);
     
     if (!user || !user.pushToken) {
-      logger.warn(`Usuario ${userId} no encontrado o sin token de push`);
-      return { success: false, error: 'Usuario sin token de push' };
+      logger.warn(`Usuario ${userId} no tiene token de push registrado`);
+      return { success: false, error: 'Usuario sin token' };
     }
     
     return await sendPushNotifications([user.pushToken], title, body, data);
@@ -160,8 +166,19 @@ const notifyAdminActivity = async (activity) => {
         body = activity.message || body;
     }
     
+    // Añadir información extra para mejorar la notificación
+    const notificationData = { 
+      activityId: activity._id, 
+      type: activity.type,
+      timestamp: new Date().toISOString(),
+      userId: activity.userId,
+      critical: ['clock_in', 'clock_out', 'task_complete'].includes(activity.type)
+    };
+    
+    logger.info(`Enviando notificación de actividad "${activity.type}" a administradores`);
+    
     // Enviar notificación a todos los administradores
-    return await notifyByRole(title, body, { activityId: activity._id, type: activity.type }, 'admin');
+    return await notifyByRole(title, body, notificationData, 'admin');
   } catch (error) {
     logger.error('Error notificando actividad a administradores', error);
     return { success: false, error: error.message };

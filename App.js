@@ -9,6 +9,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
+import { registerForPushNotifications, sendLocalNotification } from './src/services/notification-service';
 
 // Create a wrapper component to handle language updates
 const LanguageWrapper = ({ children }) => {
@@ -42,6 +43,10 @@ const App = () => {
           },
         });
 
+        // Registrar para notificaciones push - Este paso envía el token al servidor
+        const pushToken = await registerForPushNotifications();
+        console.log('Push notification registration complete with token:', pushToken);
+
         // Request permission
         const { status: existingStatus } = await Notifications.getPermissionsAsync();
         let finalStatus = existingStatus;
@@ -63,19 +68,16 @@ const App = () => {
         setTimeout(async () => {
           try {
             console.log('Sending guaranteed test notification...');
-            const notificationId = await Notifications.scheduleNotificationAsync({
-              content: {
-                title: 'Notification Test',
-                body: 'This is a test notification. If you see this, notifications are working!',
-                data: { test: true },
-              },
-              trigger: null, // Show immediately
-            });
-            console.log('Test notification sent with ID:', notificationId);
+            await sendLocalNotification(
+              'Notificaciones configuradas', 
+              'Las notificaciones están funcionando correctamente!',
+              { configTest: true }
+            );
+            console.log('Test notification sent');
           } catch (error) {
             console.error('Error sending test notification:', error);
           }
-        }, 5000); // 5 second delay
+        }, 3000); // 3 second delay
         
         // Check if user is admin
         try {
@@ -99,27 +101,8 @@ const App = () => {
                 const data = response.notification.request.content.data;
                 if (data && data.activityId) {
                   // You could navigate to specific activity screen here
-                  console.log('Should navigate to activity:', data.activityId);
                 }
               });
-              
-              // Test notification to verify everything is working
-              if (Platform.OS !== 'web') {
-                try {
-                  await Notifications.scheduleNotificationAsync({
-                    content: {
-                      title: 'Admin Notifications Active',
-                      body: 'You will now receive notifications for user activities',
-                    },
-                    trigger: null, // Show immediately
-                  });
-                  console.log('Test notification sent successfully');
-                } catch (testError) {
-                  console.error('Error sending test notification:', testError);
-                }
-              }
-              
-              setNotificationsConfigured(true);
               
               return () => {
                 foregroundSubscription.remove();
@@ -128,10 +111,9 @@ const App = () => {
             }
           }
         } catch (error) {
-          console.error('Error checking admin status:', error);
+          console.error('Error checking admin status for notifications:', error);
         }
         
-        console.log('Notifications configured successfully');
         setNotificationsConfigured(true);
       } catch (error) {
         console.error('Error configuring notifications:', error);
