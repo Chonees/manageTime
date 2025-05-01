@@ -261,15 +261,20 @@ const DashboardScreen = ({ navigation }) => {
       <StatusBar barStyle="light-content" backgroundColor={theme.colors.background} />
       
       {/* Header with welcome text and logout */}
-      <View style={styles.header}>
+      <View style={[styles.header, {
+        borderBottomWidth: 1,
+        borderBottomColor: 'rgba(255, 243, 229, 0.1)',
+        paddingBottom: 15,
+        marginBottom: 10
+      }]}>
         <Text style={[styles.welcomeText, { color: theme.colors.text.primary }]}>
-          {t('welcome')}, {user?.username || t('user')}
+          {t('Welcome')}, {user?.username || t('user')}
         </Text>
         <TouchableOpacity 
           style={styles.logoutButton}
           onPress={handleLogout}
         >
-          <Text style={[styles.logoutButtonText, { color: theme.colors.primary }]}>
+          <Text style={styles.logoutButtonText}>
             {t('logOut')}
           </Text>
         </TouchableOpacity>
@@ -279,7 +284,12 @@ const DashboardScreen = ({ navigation }) => {
 
       {/* Location Card */}
       <View style={[styles.card, { 
-        backgroundColor: theme.colors.input.background,
+        backgroundColor: '#2e2e2e',
+        borderRadius: 15,
+        borderWidth: 1,
+        borderColor: 'rgba(255, 243, 229, 0.1)',
+        overflow: 'hidden',
+        marginHorizontal: 15
       }]}>
         <View style={[styles.cardHeader, { 
           backgroundColor: theme.colors.primary,
@@ -293,17 +303,15 @@ const DashboardScreen = ({ navigation }) => {
           </Text>
         </View>
         
-        {/* Map component with better proportions */}
-        <View style={styles.mapContainer}>
-          <LocationComponent 
-            onLocationChange={handleLocationChange} 
-            showWorkControls={false}
-            mapOnly={true}
-            customHeight={240}
-            transparentContainer={true}
-            isWorking={isWorking}
-          />
-        </View>
+        {/* Map component */}
+        <LocationComponent 
+          onLocationChange={handleLocationChange} 
+          showWorkControls={false}
+          mapOnly={true}
+          customHeight={240}
+          transparentContainer={true}
+          isWorking={isWorking}
+        />
 
         {/* Disponible/No disponible Button */}
         {isWorking ? (
@@ -339,44 +347,56 @@ const DashboardScreen = ({ navigation }) => {
       </View>
 
       {/* Pending tasks Card */}
-      <View style={[styles.card, { 
-        backgroundColor: theme.colors.input.background,
-      }]}>
-        <View style={[styles.cardHeader, { 
+      <View style={{
+        backgroundColor: '#2e2e2e',
+        borderRadius: 15,
+        borderWidth: 1,
+        borderColor: 'rgba(255, 243, 229, 0.1)',
+        overflow: 'hidden',
+        marginHorizontal: 15,
+        marginVertical: 10
+      }}>
+        <View style={{
           backgroundColor: theme.colors.primary,
           height: 30,
           justifyContent: 'center',
           alignItems: 'center',
           paddingVertical: 0
-        }]}>
-          <Text style={[styles.cardHeaderText, { color: theme.colors.text.dark }]}>
+        }}>
+          <Text style={{
+            fontSize: 16,
+            fontWeight: 'bold',
+            color: theme.colors.text.dark
+          }}>
             {t('pendingTasks')}
           </Text>
         </View>
 
-        <View style={styles.cardBody}>
-          {loading ? (
-            <ActivityIndicator size="small" color={theme.colors.primary} />
-          ) : tasks.length > 0 ? (
-            tasks.map((task, index) => (
+        {loading ? (
+          <ActivityIndicator style={{padding: 15}} size="small" color={theme.colors.primary} />
+        ) : tasks.length > 0 ? (
+          <View style={{paddingTop: 5, paddingBottom: 5}}>
+            {tasks.map((task, index) => (
               <TouchableOpacity 
                 key={task._id || index} 
-                style={styles.taskItem}
+                style={{
+                  paddingVertical: 12,
+                  paddingHorizontal: 20,
+                  marginBottom: index === tasks.length - 1 ? 0 : 0
+                }}
                 onPress={() => navigation.navigate('TaskDetails', { taskId: task._id })}
               >
-                <View style={styles.taskContent}>
-                  <Text style={[styles.taskTitle, { color: theme.colors.text.primary }]}>
-                    {task.title}
-                  </Text>
-                </View>
+                <Text style={{fontSize: 16, fontWeight: '500', color: '#fff3e5'}}>
+                  {task.title}
+                </Text>
               </TouchableOpacity>
-            ))
-          ) : (
-            <Text style={[styles.emptyText, { color: theme.colors.text.primary }]}>
-              {t('noPendingTasks')}
-            </Text>
-          )}
-        </View>
+            ))}
+          </View>
+        ) : (
+          <Text style={{textAlign: 'center', fontSize: 16, paddingVertical: 20, color: '#fff3e5'}}>
+            {t('noPendingTasks')}
+          </Text>
+        )}
       </View>
 
       {/* Bottom Navigation Buttons */}
@@ -413,22 +433,29 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   logoutButton: {
-    padding: 8,
+    backgroundColor: '#1c1c1c',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 243, 229, 0.2)',
   },
   logoutButtonText: {
+    color: '#fff3e5',
     fontWeight: 'bold',
-    fontSize: 16,
+    fontSize: Math.min(width * 0.035, 14),
   },
   errorText: {
     padding: 10,
     textAlign: 'center',
   },
   card: {
-    borderRadius: 12,
-    marginHorizontal: 5,
+    borderRadius: 15,
     marginVertical: 10,
     overflow: 'hidden',
     elevation: 2,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 243, 229, 0.1)',
   },
   cardHeader: {
     padding: 15,
@@ -438,17 +465,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
   },
-  mapContainer: {
-    height: 280,
-    width: '100%',
-    borderRadius: 8,
-    overflow: 'hidden',
-    marginVertical: 3,
-    paddingHorizontal: 0,
-  },
-  cardBody: {
-    padding: 15,
-  },
+  // Los estilos mapContainer y cardBody han sido eliminados para simplificar la estructura
   workButton: {
     padding: 15,
     alignItems: 'center',
@@ -463,17 +480,20 @@ const styles = StyleSheet.create({
   workStatusContainer: {
     padding: 10,
     alignItems: 'center',
+    backgroundColor: '#1c1c1c',
+    borderBottomLeftRadius: 15,
+    borderBottomRightRadius: 15,
   },
   workStatusText: {
     fontSize: 16,
     marginBottom: 10,
     fontWeight: '500',
+    color: '#fff3e5',
   },
   taskItem: {
     paddingVertical: 12,
     paddingHorizontal: 5,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.1)',
+    // Se eliminó el borde inferior
   },
   taskContent: {
     flex: 1,

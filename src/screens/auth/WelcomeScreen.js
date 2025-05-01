@@ -7,7 +7,9 @@ import {
   Animated, 
   Dimensions,
   StatusBar,
-  SafeAreaView
+  SafeAreaView,
+  TouchableOpacity,
+  ImageBackground
 } from 'react-native';
 import { useTheme } from '../../context/ThemeContext';
 import { useLanguage } from '../../context/LanguageContext';
@@ -21,68 +23,27 @@ const WelcomeScreen = ({ navigation }) => {
   // Referencias para las animaciones
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.9)).current;
-  const dot1Anim = useRef(new Animated.Value(0.3)).current;
-  const dot2Anim = useRef(new Animated.Value(0.3)).current;
-  const dot3Anim = useRef(new Animated.Value(0.3)).current;
-  
-  // Función para animar los puntos de carga
-  const animateLoadingDots = () => {
-    // Crear una secuencia de animaciones para los puntos
-    const animateDots = () => {
-      // Secuencia para el primer punto
-      Animated.sequence([
-        Animated.timing(dot1Anim, { toValue: 1, duration: 400, useNativeDriver: true }),
-        Animated.timing(dot1Anim, { toValue: 0.3, duration: 400, useNativeDriver: true }),
-      ]).start();
-      
-      // Secuencia para el segundo punto con un pequeño retraso
-      setTimeout(() => {
-        Animated.sequence([
-          Animated.timing(dot2Anim, { toValue: 1, duration: 400, useNativeDriver: true }),
-          Animated.timing(dot2Anim, { toValue: 0.3, duration: 400, useNativeDriver: true }),
-        ]).start();
-      }, 200);
-      
-      // Secuencia para el tercer punto con un retraso mayor
-      setTimeout(() => {
-        Animated.sequence([
-          Animated.timing(dot3Anim, { toValue: 1, duration: 400, useNativeDriver: true }),
-          Animated.timing(dot3Anim, { toValue: 0.3, duration: 400, useNativeDriver: true }),
-        ]).start(() => {
-          // Repetir la animación
-          setTimeout(animateDots, 100);
-        });
-      }, 400);
-    };
-    
-    // Iniciar la animación
-    animateDots();
-  };
   
   useEffect(() => {
     // Secuencia de animaciones para el logo
-    Animated.sequence([
-      // Primero, hacer aparecer el logo con un efecto de fade in y escala
-      Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 1000,
-          useNativeDriver: true,
-        }),
-        Animated.timing(scaleAnim, {
-          toValue: 1,
-          duration: 1000,
-          useNativeDriver: true,
-        })
-      ]),
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 1200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(scaleAnim, {
+        toValue: 1,
+        duration: 1200,
+        useNativeDriver: true,
+      })
     ]).start(() => {
-      // Iniciar la animación de los puntos de carga
-      animateLoadingDots();
+      // Navegar automáticamente a la pantalla de login después de mostrar el logo
+      const timer = setTimeout(() => {
+        navigation.navigate('Login');
+      }, 2500); // Mostrar la pantalla de bienvenida durante 2.5 segundos
       
-      // Establecer un temporizador para navegar a la pantalla de login
-      setTimeout(() => {
-        navigation.replace('Login');
-      }, 3000); // Mostrar la pantalla de splash durante 3 segundos
+      return () => clearTimeout(timer);
     });
   }, []);
 
@@ -94,7 +55,8 @@ const WelcomeScreen = ({ navigation }) => {
           style={{
             opacity: fadeAnim,
             transform: [{ scale: scaleAnim }],
-            alignItems: 'center'
+            alignItems: 'center',
+            width: '100%'
           }}
         >
           <Image 
@@ -103,14 +65,16 @@ const WelcomeScreen = ({ navigation }) => {
             resizeMode="contain"
           />
           
-          <Text style={styles.brandName}>WORK PROOF</Text>
-          <Text style={styles.tagline}>Forwarding the way you work</Text>
-          
-          <View style={styles.loadingContainer}>
-            <Animated.View style={[styles.loadingDot, { opacity: dot1Anim }]} />
-            <Animated.View style={[styles.loadingDot, { marginLeft: 8, opacity: dot2Anim }]} />
-            <Animated.View style={[styles.loadingDot, { marginLeft: 8, opacity: dot3Anim }]} />
+          <View style={styles.titleContainer}>
+            <Text style={styles.brandName}>W</Text>
+            <Image 
+              source={require('../../../assets/Selection.png')} 
+              style={styles.iconImage} 
+              resizeMode="contain"
+            />
+            <Text style={styles.brandName}>RK PROOF</Text>
           </View>
+          <Text style={styles.tagline}>Forwarding the way you work</Text>
         </Animated.View>
       </View>
     </SafeAreaView>
@@ -129,20 +93,33 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingVertical: 40,
+    width: '100%',
+    paddingHorizontal: 20,
   },
   logo: {
     width: Math.min(width * 1.9, 1000),
     height: Math.min(width * 1.3, 700),
-    marginBottom: 0,
+    marginBottom: -10,
     alignSelf: 'center',
+  },
+  titleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: -30,
+    marginBottom: 0,
   },
   brandName: {
     fontSize: Math.min(width * 0.08, 32),
     color: '#fff3e5',
     fontWeight: 'bold',
-    marginBottom: 5,
     textAlign: 'center',
-    marginTop: -20,
+  },
+  iconImage: {
+    width: Math.min(width * 0.10, 40),
+    height: Math.min(width * 0.10, 40),
+    marginHorizontal: 0,
+    marginTop: 2,
   },
   tagline: {
     fontSize: Math.min(width * 0.05, 20),
@@ -150,21 +127,8 @@ const styles = StyleSheet.create({
     opacity: 0.8,
     textAlign: 'center',
     paddingHorizontal: 20,
-    marginBottom: 15,
-    marginTop: -5,
-  },
-  loadingContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 20,
-  },
-  loadingDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#fff3e5',
-    opacity: 0.7,
+    marginBottom: 30,
+    marginTop: -2,
   },
 });
 
