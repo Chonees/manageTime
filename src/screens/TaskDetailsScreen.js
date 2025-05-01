@@ -935,18 +935,16 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 22,
     fontWeight: 'bold',
-    color: '#fff3e5',
+    color: '#fff',
   },
   infoContainer: {
-
     padding: 15,
-    backgroundColor: '#1c1c1c',
+    backgroundColor: '#fff3e5', // Fondo color crema
     marginBottom: 10,
     borderRadius: 15,
     marginHorizontal: 10,
     borderWidth: 1,
-    borderColor: 'rgba(255, 243, 229, 0.1)',
-
+    borderColor: 'rgba(28, 28, 28, 0.1)', // Borde sutil oscuro
   },
   infoSection: {
     marginBottom: 6,
@@ -954,18 +952,17 @@ const styles = StyleSheet.create({
   infoLabel: {
     fontSize: 14,
     fontWeight: 'bold',
-
-    color: 'rgba(255, 243, 229, 0.7)',
+    color: '#777777', // Subtítulos en gris
     marginBottom: 5,
   },
   description: {
     fontSize: 16,
-    color: '#fff3e5',
+    color: '#000000', // Texto en negro
     lineHeight: 24,
   },
   value: {
     fontSize: 16,
-    color: '#fff3e5',
+    color: '#000000', // Texto en negro
   },
   mapContainer: {
     padding: 15,

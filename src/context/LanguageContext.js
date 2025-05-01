@@ -15,6 +15,7 @@ export const translations = {
     loginError: 'Login error',
     tryAgain: 'Try again',
     unexpectedError: 'An unexpected error occurred during login. Please try again.',
+    Welcome: 'Welcome',
     
     // Admin panel translations
     adminDashboard: 'Admin Dashboard',
@@ -528,6 +529,7 @@ export const translations = {
     loginError: 'Error de inicio de sesión',
     tryAgain: 'Intentar de nuevo',
     unexpectedError: 'Ocurrió un error inesperado durante el inicio de sesión. Por favor intenta de nuevo.',
+    Welcome: 'Bienvenido',
     
     // Admin panel translations
     adminDashboard: 'Panel de Administración',
@@ -930,8 +932,8 @@ export const translations = {
     taskRadius: "Radio de la tarea: ${radius} metros",
     userPosition: "Posición del usuario: ${position}",
     distanceToTask: "Distancia a la tarea: ${km} km / ${meters} metros",
-    withinTaskRadius: "✅ DENTRO DEL RADIO: ${distance}m a la tarea '${taskTitle}'",
-    outsideTaskRadius: "❌ FUERA DEL RADIO: ${distance}m a la tarea '${taskTitle}' (radio: ${radius}m)",
+    withinTaskRadius: "✅ DENTRO DEL RADIO",
+    outsideTaskRadius: "❌ FUERA DEL RADIO",
     updatingRadiusState: "Actualizando estado dentro del radio de ${from} a ${to}",
     
     // Dashboard screen
@@ -971,6 +973,10 @@ export const translations = {
     // Voice assistant
     voiceAssistant: "Asistente de Voz",
     typeSomething: "Escribe algo...",
+    
+    // Task details
+    created: "Creado",
+    updated: "Actualizado",
     continue: "Continuar",
     voiceAssistantHelp: "Este simulador te permite probar el asistente de voz. Escribe 'bitácora' para iniciar una nota de voz.",
     voiceCommandsHelp: "Comandos de voz disponibles: 'bitácora' (inicia grabación), 'sí/no' (confirmación)",

@@ -681,10 +681,10 @@ const TaskScreen = ({ navigation }) => {
     <SafeAreaView style={styles.container}>
       <StatusBar backgroundColor={theme.colors.darkGrey} barStyle="light-content" />
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.navigate('AdminDashboard')} style={styles.backButton}>
+        <TouchableOpacity onPress={() => navigation.navigate(user?.isAdmin ? 'AdminDashboard' : 'Dashboard')} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color="#fff3e5" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Tasks</Text>
+        <Text style={styles.headerTitle}>{t('tasks')}</Text>
         <View style={styles.headerRightPlaceholder}></View>
       </View>
       <View style={styles.statsContainer}>
