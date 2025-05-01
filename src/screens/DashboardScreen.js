@@ -135,14 +135,15 @@ const DashboardScreen = ({ navigation }) => {
       // Start work and location tracking
       const result = await api.startWork(coords);
       
-      // Registrar explícitamente la actividad con un ID ficticio para evitar el error de taskId
+      // Registrar explícitamente la actividad de disponibilidad
       try {
         console.log('Intentando registrar actividad de disponibilidad...');
         const activityData = {
-          type: 'location_enter', // Usar 'location_enter' que definitivamente está permitido
+          type: 'task_activity',
           message: 'Usuario marcado como disponible',
           metadata: {
             availability: 'available',
+            activitySubtype: 'clock_in',
             latitude: String(coords.latitude),
             longitude: String(coords.longitude),
             timestamp: new Date().toISOString()
@@ -188,15 +189,16 @@ const DashboardScreen = ({ navigation }) => {
       // End work and stop location tracking
       const result = await api.endWork(coords);
       
-      // Registrar explícitamente la actividad con un ID ficticio para evitar el error de taskId
+      // Registrar explícitamente la actividad de no disponibilidad
       try {
         console.log('Intentando registrar actividad de no disponibilidad...');
         const duration = workStartTime ? Math.floor((new Date() - workStartTime) / 1000) : 0;
         const activityData = {
-          type: 'location_exit', // Usar 'location_exit' que definitivamente está permitido
+          type: 'task_activity',
           message: `Usuario marcado como no disponible (duración: ${Math.floor(duration/60)} minutos)`,
           metadata: {
             availability: 'unavailable',
+            activitySubtype: 'clock_out',
             duration: duration,
             latitude: String(coords.latitude),
             longitude: String(coords.longitude),

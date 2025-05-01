@@ -4,19 +4,20 @@ import {
   Text, 
   StyleSheet, 
   TouchableOpacity, 
-  ScrollView, 
-  ActivityIndicator,
-  Alert,
   FlatList,
   RefreshControl,
   Platform,
-  StatusBar,
   SafeAreaView,
-  Dimensions
+  StatusBar,
+  Dimensions,
+  ActivityIndicator,
+  Alert
 } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { useTheme } from '../../context/ThemeContext';
+import AdminActivityList from '../../components/AdminActivityList';
+import AdminNotificationBadge from '../../components/AdminNotificationBadge';
 import * as api from '../../services/api';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import { Ionicons } from '@expo/vector-icons';
@@ -213,16 +214,16 @@ const AdminDashboardScreen = ({ navigation }) => {
     const formattedDate = new Date(item.timestamp).toLocaleDateString();
     
     return (
-      <View style={styles.availabilityItem}>
-        <View style={[styles.statusIndicator, { backgroundColor: statusColor }]}>
-          <Ionicons name={statusIcon} size={16} color="#fff" />
-        </View>
-        <View style={styles.userInfoContainer}>
-          <Text style={styles.usernameText}>{item.username}</Text>
-          <View style={styles.statusDetailsContainer}>
-            <Text style={styles.statusText}>{statusText}</Text>
-            <Text style={styles.timestampText}>{formattedDate} {formattedTime}</Text>
-          </View>
+
+      <View style={styles.activityItem}>
+        <View style={styles.activityContent}>
+          <Text style={styles.activityText}>
+            {item.username} {activityText}
+          </Text>
+          <Text style={styles.activityTime}>
+            {formatRelativeTime(item.timestamp)}
+          </Text>
+
         </View>
       </View>
     );
@@ -289,8 +290,211 @@ const AdminDashboardScreen = ({ navigation }) => {
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar backgroundColor={theme.colors.darkGrey} barStyle="light-content" />
-      <ScrollView 
-        style={styles.scrollContainer}
+
+      
+      <View style={styles.header}>
+        <View style={styles.headerTitleContainer}>
+          <Text style={styles.headerTitle}>{t('adminDashboard')}</Text>
+          <Text style={styles.headerSubtitle}>{t('welcomeAdmin', { name: user?.name || t('admin') })}</Text>
+        </View>
+        
+        <View style={styles.headerActions}>
+
+          <TouchableOpacity 
+            style={styles.logoutButton}
+            onPress={handleLogout}
+          >
+            <Text style={styles.logoutButtonText}>{t('logOut')}</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {error && <Text style={styles.errorText}>{error}</Text>}
+      
+      <FlatList
+        data={[1]} // Just need one item to render our content
+        keyExtractor={() => 'dashboard-content'}
+        renderItem={() => (
+          <View>
+            {/* Stats Cards */}
+            <View style={styles.statsContainer}>
+              <Text style={styles.sectionTitle}>{t('statistics')}</Text>
+              
+              {loading ? (
+                <View style={styles.loadingContainer}>
+                  <ActivityIndicator size="large" color="#4A90E2" />
+                  <Text style={styles.loadingText}>{t('loading')}</Text>
+                </View>
+              ) : (
+                <View style={styles.statsGrid}>
+                  <View style={styles.statCard}>
+                    <Text style={styles.statValue}>{stats.users.total}</Text>
+                    <Text style={styles.statLabel}>{t('totalUsers')}</Text>
+                  </View>
+                  
+                  <View style={styles.statCard}>
+                    <Text style={styles.statValue}>{stats.users.active}</Text>
+                    <Text style={styles.statLabel}>{t('activeUsers')}</Text>
+                  </View>
+                  
+                  <View style={styles.statCard}>
+                    <Text style={styles.statValue}>{stats.tasks.total}</Text>
+                    <Text style={styles.statLabel}>{t('totalTasks')}</Text>
+                  </View>
+                  
+                  <View style={styles.statCard}>
+                    <Text style={styles.statValue}>{stats.tasks.completed}</Text>
+                    <Text style={styles.statLabel}>{t('completedTasks')}</Text>
+                  </View>
+                  
+                  <View style={styles.statCard}>
+                    <Text style={styles.statValue}>{stats.tasks.pending}</Text>
+                    <Text style={styles.statLabel}>{t('pendingTasks')}</Text>
+                  </View>
+                  
+                  <View style={styles.statCard}>
+                    <Text style={styles.statValue}>{stats.tasks.completionRate}%</Text>
+                    <Text style={styles.statLabel}>{t('completionRate')}</Text>
+                  </View>
+                </View>
+              )}
+            </View>
+            
+
+            {/* Quick Actions Menu */}
+            <View style={styles.actionsContainer}>
+              <Text style={styles.sectionTitle}>{t('quickActions')}</Text>
+              <View style={styles.actionButtonsContainer}>
+                <TouchableOpacity 
+                  style={styles.actionButton}
+                  onPress={() => navigation.navigate('UserManagement')}
+                >
+                  <Text style={styles.actionButtonText}>{t('userManagement')}</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  style={styles.actionButton}
+                  onPress={() => navigation.navigate('TaskScreen')}
+                >
+                  <Text style={styles.actionButtonText}>{t('taskManagement')}</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  style={styles.actionButton}
+                  onPress={() => navigation.navigate('LocationHistory')}
+                >
+                  <Text style={styles.actionButtonText}>{t('locationHistory')}</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity 
+                  style={[styles.actionButton, { backgroundColor: '#fff3e5' }]}
+                  onPress={() => navigation.navigate('AdminActivities')}
+                >
+                  <View style={styles.actionButtonContent}>
+                    <Text style={[styles.actionButtonText, { color: '#000' }]}>{t('viewAllActivities')}</Text>
+                    <AdminNotificationBadge />
+                  </View>
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  style={[styles.actionButton, { backgroundColor: '#FF3B30', marginTop: 10 }]}
+                  onPress={() => navigation.navigate('NotificationTest')}
+                >
+                  <Text style={[styles.actionButtonText, { color: '#fff' }]}>Test Notifications</Text>
+                </TouchableOpacity>
+
+              </View>
+            </View>
+            
+            {/* Real-time locations map */}
+            <View style={styles.realTimeLocationsContainer}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>{t('Real Time Location Of Users')}</Text>
+                <TouchableOpacity 
+                  style={styles.refreshButton}
+                  onPress={() => loadRealTimeLocations(false)}
+                >
+                  <Ionicons name="refresh" size={20} color="#4A90E2" />
+                </TouchableOpacity>
+              </View>
+              
+              {loadingLocations ? (
+                <View style={styles.loadingContainer}>
+                  <ActivityIndicator size="large" color="#4A90E2" />
+                  <Text style={styles.loadingText}>{t('loadingLocations')}</Text>
+                </View>
+              ) : realTimeLocations.length > 0 ? (
+                <View style={styles.mapContainer}>
+                  <MapView
+                    ref={mapRef}
+                    style={styles.map}
+                    provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
+                    initialRegion={{
+                      latitude: realTimeLocations[0]?.latitude || -34.603722,
+                      longitude: realTimeLocations[0]?.longitude || -58.381592,
+                      latitudeDelta: 0.0922,
+                      longitudeDelta: 0.0421,
+                    }}
+                    onMapReady={() => setMapReady(true)}
+                  >
+                    {realTimeLocations.map((location, index) => 
+                      renderSafeMarker(location, index)
+                    )}
+                  </MapView>
+                  
+                  <View style={styles.mapLegend}>
+                    <Text style={styles.mapLegendTitle}>{t('locationLegend')}</Text>
+                    <FlatList
+                      data={realTimeLocations}
+                      keyExtractor={(item, index) => `legend-${item.userId}-${index}`}
+                      renderItem={({ item }) => {
+                        // Verificar que las coordenadas sean válidas
+                        const safeLocation = parseSafeLocation(item);
+                        if (!safeLocation) return null;
+                        
+                        return (
+                          <View style={styles.legendItem}>
+                            <View style={styles.legendInfo}>
+                              <Text style={styles.legendName}>{item.username}</Text>
+                              <Text style={styles.legendTimestamp}>
+                                {new Date(item.timestamp).toLocaleString()}
+                              </Text>
+                            </View>
+                          </View>
+                        );
+                      }}
+                      style={styles.legendList}
+                    />
+                  </View>
+                </View>
+              ) : (
+                <View style={styles.noLocationsContainer}>
+                  <Text style={styles.noLocationsText}>{t('noActiveUsers')}</Text>
+                </View>
+              )}
+            </View>
+
+
+            <View style={styles.recentActivityContainer}>
+              <Text style={styles.sectionTitle}>{t('recentActivity')}</Text>
+              {loading ? (
+                <View style={styles.loadingContainer}>
+                  <ActivityIndicator size="large" color="#4A90E2" />
+                  <Text style={styles.loadingText}>{t('loading')}</Text>
+                </View>
+              ) : (
+                <View style={styles.activityList}>
+                  <FlatList
+                    data={recentActivity}
+                    renderItem={renderActivityItem}
+                    keyExtractor={(item) => item.id}
+                    scrollEnabled={false}
+                  />
+                </View>
+              )}
+            </View>
+          </View>
+        )}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -299,192 +503,8 @@ const AdminDashboardScreen = ({ navigation }) => {
             tintColor={theme.colors.lightCream}
           />
         }
-      >
-        <View style={styles.header}>
-          <View style={{flex: 1}}>
-            <Text style={styles.headerTitle}>{t('adminDashboard')}</Text>
-            <Text style={styles.headerSubtitle}>{t('Welcome')}, {user?.username || 'Admin'}</Text>
-          </View>
-          <TouchableOpacity 
-            style={styles.logoutButton}
-            onPress={handleLogout}
-          >
-            <Text style={styles.logoutButtonText}>{t('logOut')}</Text>
-          </TouchableOpacity>
-        </View>
+      />
 
-        {error && <Text style={styles.errorText}>{error}</Text>}
-
-        <View style={styles.statsContainer}>
-          <Text style={styles.sectionTitle}>{t('statistics')}</Text>
-          
-          {loading ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color="#4A90E2" />
-              <Text style={styles.loadingText}>{t('loading')}</Text>
-            </View>
-          ) : (
-            <View style={styles.statsGrid}>
-              <View style={styles.statCard}>
-                <Text style={styles.statValue}>{stats.users.total}</Text>
-                <Text style={styles.statLabel}>{t('totalUsers')}</Text>
-              </View>
-              
-              <View style={styles.statCard}>
-                <Text style={styles.statValue}>{stats.users.active}</Text>
-                <Text style={styles.statLabel}>{t('activeUsers')}</Text>
-              </View>
-              
-              <View style={styles.statCard}>
-                <Text style={styles.statValue}>{stats.tasks.total}</Text>
-                <Text style={styles.statLabel}>{t('totalTasks')}</Text>
-              </View>
-              
-              <View style={styles.statCard}>
-                <Text style={styles.statValue}>{stats.tasks.completed}</Text>
-                <Text style={styles.statLabel}>{t('completedTasks')}</Text>
-              </View>
-              
-              <View style={styles.statCard}>
-                <Text style={styles.statValue}>{stats.tasks.pending}</Text>
-                <Text style={styles.statLabel}>{t('pendingTasks')}</Text>
-              </View>
-              
-              <View style={styles.statCard}>
-                <Text style={styles.statValue}>{stats.tasks.completionRate}%</Text>
-                <Text style={styles.statLabel}>{t('completionRate')}</Text>
-              </View>
-            </View>
-          )}
-        </View>
-
-        <View style={styles.actionsContainer}>
-          <Text style={styles.sectionTitle}>{t('quickActions')}</Text>
-          <View style={styles.actionButtonsContainer}>
-            <TouchableOpacity 
-              style={styles.actionButton}
-              onPress={() => navigation.navigate('UserManagement')}
-            >
-              <Text style={styles.actionButtonText}>{t('userManagement')}</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={styles.actionButton}
-              onPress={() => navigation.navigate('TaskScreen')}
-            >
-              <Text style={styles.actionButtonText}>{t('taskManagement')}</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={[styles.actionButton, { backgroundColor: '#fff3e5', borderColor: 'rgba(0, 0, 0, 0.1)' }]}
-              onPress={() => navigation.navigate('AdminActivities')}
-            >
-              <Text style={[styles.actionButtonText, { color: '#000' }]}>{t('viewAllActivities')}</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        <View style={styles.realTimeLocationsContainer}>
-          <View style={styles.sectionHeader}>
-            <Text style={[styles.sectionTitle, { color: '#333333', marginBottom: 0, marginHorizontal: 0, marginTop: 0 }]}>{t('loggedUsers')}</Text>
-            <TouchableOpacity 
-              style={styles.refreshButton}
-              onPress={() => loadRealTimeLocations(false)}
-            >
-              <Ionicons name="refresh" size={20} color="#4A90E2" />
-            </TouchableOpacity>
-          </View>
-          
-          {loadingLocations ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color="#4A90E2" />
-              <Text style={styles.loadingText}>{t('loadingLocations')}</Text>
-            </View>
-          ) : realTimeLocations.length > 0 ? (
-            <View style={styles.mapContainer}>
-              <MapView
-                ref={mapRef}
-                style={styles.map}
-                provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
-                initialRegion={{
-                  latitude: realTimeLocations[0]?.latitude || -34.603722,
-                  longitude: realTimeLocations[0]?.longitude || -58.381592,
-                  latitudeDelta: 0.0922,
-                  longitudeDelta: 0.0421,
-                }}
-                onMapReady={() => setMapReady(true)}
-              >
-                {realTimeLocations.map((location, index) => 
-                  renderSafeMarker(location, index)
-                )}
-              </MapView>
-              
-              <View style={styles.mapLegend}>
-                <FlatList
-                  data={realTimeLocations}
-                  keyExtractor={(item, index) => `legend-${item.userId}-${index}`}
-                  renderItem={({ item }) => {
-                    const safeLocation = parseSafeLocation(item);
-                    if (!safeLocation) return null;
-                    
-                    return (
-                      <TouchableOpacity 
-                        style={styles.legendItem}
-                        onPress={() => centerMapOnUser(item)}
-                      >
-                        <View style={styles.legendIcon} />
-                        <View style={styles.legendInfo}>
-                          <Text style={styles.legendName}>{item.username}</Text>
-                          <Text style={styles.legendTimestamp}>
-                            {new Date(item.timestamp).toLocaleString()}
-                          </Text>
-                        </View>
-                      </TouchableOpacity>
-                    );
-                  }}
-                  style={styles.legendList}
-                />
-              </View>
-            </View>
-          ) : (
-            <View style={styles.noLocationsContainer}>
-              <Text style={styles.noLocationsText}>{t('noActiveUsers')}</Text>
-            </View>
-          )}
-        </View>
-
-        <View style={styles.availabilityContainer}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>{language === 'es' ? 'Estado de Disponibilidad' : 'Availability Status'}</Text>
-            <TouchableOpacity 
-              style={styles.refreshButton}
-              onPress={() => loadUserAvailability(false)}
-            >
-              <Ionicons name="refresh" size={20} color="#4A90E2" />
-            </TouchableOpacity>
-          </View>
-          
-          {loadingAvailability ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color="#4A90E2" />
-              <Text style={styles.loadingText}>{language === 'es' ? 'Cargando estados...' : 'Loading statuses...'}</Text>
-            </View>
-          ) : userAvailability.length > 0 ? (
-            <View style={styles.availabilityList}>
-              <FlatList
-                data={userAvailability}
-                renderItem={renderUserAvailabilityItem}
-                keyExtractor={(item) => `availability-${item.userId}`}
-                scrollEnabled={false}
-              />
-            </View>
-          ) : (
-            <View style={styles.noDataContainer}>
-              <Text style={styles.noDataText}>{language === 'es' ? 'No hay información de disponibilidad' : 'No availability information'}</Text>
-            </View>
-          )}
-        </View>
-      </ScrollView>
     </SafeAreaView>
   );
 };
@@ -494,56 +514,51 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#2e2e2e',
   },
-  scrollContainer: {
-    flex: 1,
-    backgroundColor: '#2e2e2e', 
-  },
+
+
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+
+    paddingHorizontal: 15,
+    paddingTop: Platform.OS === 'ios' ? 10 : 15,
+    paddingBottom: 15,
     backgroundColor: '#2e2e2e',
-    padding: 20,
-    paddingTop: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 243, 229, 0.1)',
+  },
+  headerTitleContainer: {
+    flex: 1,
   },
   headerTitle: {
-    fontSize: 24,
+    fontSize: 22,
+
     fontWeight: 'bold',
     color: '#fff3e5',
   },
   headerSubtitle: {
-    fontSize: 16,
-    color: '#fff3e5',
-    opacity: 0.8,
+
+    fontSize: 14,
+    color: 'rgba(255, 243, 229, 0.7)',
     marginTop: 5,
   },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   logoutButton: {
-    backgroundColor: 'rgba(255, 243, 229, 0.2)',
+    backgroundColor: 'rgba(255, 59, 48, 0.1)',
     paddingVertical: 8,
     paddingHorizontal: 15,
-    borderRadius: 15,
+    borderRadius: 20,
+
     borderWidth: 1,
-    borderColor: 'rgba(255, 243, 229, 0.2)',
+    borderColor: 'rgba(255, 59, 48, 0.3)',
   },
   logoutButtonText: {
-    color: '#fff3e5',
-    fontSize: 14,
+
+    color: '#FF3B30',
     fontWeight: 'bold',
-  },
-  statsContainer: {
-    backgroundColor: '#1c1c1c',
-    borderRadius: 15,
-    margin: 10,
-    padding: 15,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 243, 229, 0.1)',
+    fontSize: 14,
+
   },
   errorText: {
     color: '#ff5252',
@@ -585,13 +600,17 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255, 243, 229, 0.1)',
   },
   statValue: {
-    fontSize: 24,
+
+    fontSize: 28,
+
     fontWeight: 'bold',
     color: '#fff3e5',
   },
   statLabel: {
     fontSize: 14,
-    color: '#fff3e5',
+
+    color: '#ffffff',
+
     opacity: 0.7,
     marginTop: 5,
     textAlign: 'center',
@@ -621,11 +640,58 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255, 243, 229, 0.2)',
   },
+  actionButtonContent: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: '100%',
+  },
   actionButtonText: {
     color: '#fff3e5',
     fontWeight: 'bold',
-    fontSize: 16,
+
+    fontSize: 14,
   },
+  recentActivityContainer: {
+    margin: 15,
+    flex: 1,
+  },
+  activityList: {
+    backgroundColor: '#1c1c1c',
+    borderRadius: 15,
+    padding: 15,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+    maxHeight: 300,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 243, 229, 0.1)',
+  },
+  activityItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 243, 229, 0.1)',
+  },
+  activityContent: {
+    flex: 1,
+  },
+  activityText: {
+    fontSize: 14,
+    color: '#ffffff',
+    opacity: 0.9,
+  },
+  activityTime: {
+    fontSize: 12,
+    color: '#ffffff',
+    opacity: 0.6,
+    marginTop: 2,
+  },
+  // Estilos para ubicaciones en tiempo real
+
   realTimeLocationsContainer: {
     backgroundColor: '#1c1c1c',
     borderRadius: 15,
@@ -672,24 +738,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255, 243, 229, 0.1)',
   },
-  legendList: {
-    maxHeight: 100,
+
+  mapLegendTitle: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#fff3e5',
   },
-  legendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 5,
-    backgroundColor: 'rgba(28, 28, 28, 0.9)',
-    padding: 8,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 243, 229, 0.1)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 1,
-    elevation: 2,
-    marginHorizontal: 2,
+  mapLegendText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#fff3e5',
+
   },
   legendIcon: {
     width: 12,
@@ -738,9 +797,12 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255, 243, 229, 0.1)',
     marginBottom: 20,
   },
-  availabilityList: {
-    borderRadius: 8,
-    overflow: 'hidden',
+
+  noLocationsText: {
+    color: '#ffffff',
+    opacity: 0.7,
+    fontSize: 16,
+
   },
   availabilityItem: {
     flexDirection: 'row',
@@ -751,27 +813,19 @@ const styles = StyleSheet.create({
     borderBottomColor: 'rgba(255, 243, 229, 0.1)',
     backgroundColor: '#2e2e2e',
   },
-  statusIndicator: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  userInfoContainer: {
+
+  legendInfo: {
     flex: 1,
   },
-  usernameText: {
-    fontSize: 16,
-    fontWeight: 'bold',
+  legendName: {
+    fontSize: 14,
     color: '#fff3e5',
   },
-  statusDetailsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 4,
-    alignItems: 'center',
+  legendTimestamp: {
+    fontSize: 12,
+    color: '#ffffff',
+    opacity: 0.6,
+
   },
   statusText: {
     fontSize: 14,

@@ -10,7 +10,9 @@ import {
   ActivityIndicator,
   SafeAreaView,
   Platform,
-  StatusBar
+
+  Alert
+
 } from 'react-native';
 import Slider from '@react-native-community/slider';
 import MapView, { Marker, Circle, PROVIDER_GOOGLE } from 'react-native-maps';
@@ -18,11 +20,16 @@ import { Ionicons } from '@expo/vector-icons';
 import { mapConfig } from '../services/platform-config';
 import * as Location from 'expo-location';
 import { useLanguage } from '../context/LanguageContext';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width, height } = Dimensions.get('window');
 const ASPECT_RATIO = width / height;
 const LATITUDE_DELTA = 0.0922;
 const LONGITUDE_DELTA = LATITUDE_DELTA * ASPECT_RATIO;
+
+const STORAGE_KEYS = {
+  SAVED_LOCATIONS: `${Platform.OS}_saved_locations`
+};
 
 const LocationRadiusSelector = ({ 
   visible, 
@@ -171,6 +178,128 @@ const LocationRadiusSelector = ({
       locationName
     });
     onClose();
+  };
+
+  // Save the current location to local storage
+  const saveLocation = async () => {
+    try {
+      // Prompt user for location name if not already set
+      if (!locationName) {
+        if (Platform.OS === 'ios') {
+          // iOS supports prompt in Alert
+          Alert.prompt(
+            t('saveLocation') || 'Save Location',
+            t('enterLocationName') || 'Enter a name for this location',
+            [
+              {
+                text: t('cancel') || 'Cancel',
+                style: 'cancel'
+              },
+              {
+                text: t('save') || 'Save',
+                onPress: (name) => {
+                  if (name && name.trim()) {
+                    saveLocationWithName(name.trim());
+                  } else {
+                    Alert.alert(
+                      t('error') || 'Error',
+                      t('locationNameRequired') || 'Location name is required',
+                      [{ text: t('ok') || 'OK' }]
+                    );
+                  }
+                }
+              }
+            ],
+            'plain-text'
+          );
+        } else {
+          // Android doesn't support prompt, use a default name
+          const defaultName = `${t('location') || 'Location'} ${new Date().toLocaleString()}`;
+          Alert.alert(
+            t('saveLocation') || 'Save Location',
+            `${t('locationWillBeSavedAs') || 'Location will be saved as'}: ${defaultName}`,
+            [
+              {
+                text: t('cancel') || 'Cancel',
+                style: 'cancel'
+              },
+              {
+                text: t('save') || 'Save',
+                onPress: () => saveLocationWithName(defaultName)
+              }
+            ]
+          );
+        }
+      } else {
+        // Use existing location name
+        saveLocationWithName(locationName);
+      }
+    } catch (error) {
+      console.error('Error saving location:', error);
+      Alert.alert(
+        t('error') || 'Error',
+        t('errorSavingLocation') || 'Error saving location',
+        [{ text: t('ok') || 'OK' }]
+      );
+    }
+  };
+
+  // Save location with the provided name
+  const saveLocationWithName = async (name) => {
+    try {
+      console.log('Saving location with name:', name);
+      
+      // Create location object
+      const locationData = {
+        _id: `local_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+        name: name,
+        location: {
+          type: 'Point',
+          coordinates: [location.longitude, location.latitude]
+        },
+        radius: radius,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      
+      // Get existing saved locations
+      const locationsJson = await AsyncStorage.getItem(STORAGE_KEYS.SAVED_LOCATIONS);
+      let locations = [];
+      
+      if (locationsJson) {
+        try {
+          locations = JSON.parse(locationsJson);
+        } catch (error) {
+          console.error('Error parsing saved locations:', error);
+          locations = [];
+        }
+      }
+      
+      // Add new location to the beginning of the array
+      locations.unshift(locationData);
+      
+      // Save updated locations to AsyncStorage
+      await AsyncStorage.setItem(STORAGE_KEYS.SAVED_LOCATIONS, JSON.stringify(locations));
+      
+      // Show success message
+      Alert.alert(
+        t('success') || 'Success',
+        t('locationSaved') || 'Location saved successfully',
+        [{ text: t('ok') || 'OK' }]
+      );
+      
+      // Update location name in the UI
+      setLocationName(name);
+      
+      console.log('Location saved successfully');
+    } catch (error) {
+      console.error('Error saving location with name:', error);
+      Alert.alert(
+        t('error') || 'Error',
+        t('errorSavingLocation') || 'Error saving location',
+        [{ text: t('ok') || 'OK' }]
+      );
+    }
   };
 
   return (
@@ -343,6 +472,15 @@ const LocationRadiusSelector = ({
             <Text style={styles.mapActionButtonText}>{t('myLocation')}</Text>
           </TouchableOpacity>
         </View>
+        
+        {/* Save Location Button */}
+        <TouchableOpacity 
+          style={styles.saveLocationButton}
+          onPress={saveLocation}
+        >
+          <Ionicons name="bookmark-outline" size={24} color="#fff" />
+          <Text style={styles.saveLocationButtonText}>{t('saveLocation') || 'Save Location'}</Text>
+        </TouchableOpacity>
 
       </SafeAreaView>
     </Modal>
@@ -487,6 +625,22 @@ const styles = StyleSheet.create({
     marginLeft: 10,
     fontSize: 16,
     color: '#fff3e5',
+  },
+  saveLocationButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#4A90E2',
+    borderRadius: 8,
+    paddingVertical: 12,
+    marginHorizontal: 15,
+    marginBottom: 15,
+  },
+  saveLocationButtonText: {
+    marginLeft: 10,
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#fff',
   },
 });
 

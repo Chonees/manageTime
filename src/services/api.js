@@ -1179,64 +1179,85 @@ export const saveActivity = async (activityData) => {
   try {
     console.log('Saving activity data:', JSON.stringify(activityData));
     
-    // Ensure required fields are present - taskId no es requerido para task_delete
+    // Validate required fields
     if (!activityData.type) {
       throw new Error('Activity data missing required fields: type');
     }
     
-    // Para actividades que no son de eliminación, se requiere taskId
-    if (activityData.type !== 'task_delete' && !activityData.taskId) {
+    // Check if this is an availability status activity
+    const isAvailabilityActivity = activityData.metadata && 
+                                  activityData.metadata.availability && 
+                                  (activityData.metadata.availability === 'available' || 
+                                   activityData.metadata.availability === 'unavailable');
+    
+    // For most activity types, taskId is required
+    // Exception for task_delete and availability status activities
+    if (activityData.type !== 'task_delete' && 
+        !isAvailabilityActivity && 
+        !activityData.taskId) {
       throw new Error('Activity data missing required field: taskId');
+    }
+    
+    // Create a copy of the data to send
+    const dataToSend = { ...activityData };
+    
+    // For availability status activities, remove taskId completely to avoid ObjectId casting
+    if (isAvailabilityActivity) {
+      delete dataToSend.taskId;
+      
+      // Set a special type for availability activities
+      dataToSend.type = 'task_activity';
+      
+      // Store the availability status in metadata
+      if (!dataToSend.metadata) {
+        dataToSend.metadata = {};
+      }
+      dataToSend.metadata.activitySubtype = activityData.metadata.availability === 'available' ? 
+                                           'clock_in' : 'clock_out';
     }
     
     // Valid activity types according to the backend
     const validTypes = [
-      'location_enter', 'location_exit', 
-      'task_complete', 'task_create', 'task_update', 'task_delete',
+      'task_create', 'task_update', 'task_complete', 'task_delete',
+      'task_assign', 'location_enter', 'location_exit',
       'started_working', 'stopped_working', 'task_activity'
     ];
     
-    // Check if type is valid
-    if (!validTypes.includes(activityData.type)) {
-      throw new Error(`Invalid activity type: ${activityData.type}. Valid types: ${validTypes.join(', ')}`);
+    if (!validTypes.includes(dataToSend.type)) {
+      throw new Error(`Invalid activity type: ${dataToSend.type}. Valid types: ${validTypes.join(', ')}`);
     }
     
-    // If userId is not provided, get it from current user
-    if (!activityData.userId) {
+    // If userId is not provided, try to get it from AsyncStorage
+    if (!dataToSend.userId) {
       try {
-        const userInfo = await AsyncStorage.getItem('userInfo');
-        if (userInfo) {
-          const parsedUserInfo = JSON.parse(userInfo);
-          activityData.userId = parsedUserInfo._id;
+        const userInfoString = await AsyncStorage.getItem('userInfo');
+        if (userInfoString) {
+          const parsedUserInfo = JSON.parse(userInfoString);
+          dataToSend.userId = parsedUserInfo._id;
+          dataToSend.username = parsedUserInfo.name || parsedUserInfo.username || 'User';
         }
-      } catch (userError) {
-        console.warn('Could not get userId from stored user info');
+      } catch (storageError) {
+        console.error('Error getting user info from AsyncStorage:', storageError);
       }
     }
     
-    // Prepare data for backend - remove action field if it exists
-    const dataToSend = { ...activityData };
-    if (dataToSend.action) {
-      delete dataToSend.action;
+    // Ensure metadata exists
+    if (!dataToSend.metadata) {
+      dataToSend.metadata = {};
     }
     
-    // Para actividades de eliminación de tareas, si no hay un campo dedicado para el taskDeleted,
-    // guardar el ID en metadata antes de eliminarlo del campo principal
+    // Special handling for task_delete
     if (activityData.type === 'task_delete' && activityData.taskId) {
       if (!dataToSend.metadata) {
         dataToSend.metadata = {};
       }
-      // Guardar el ID de la tarea eliminada en los metadatos
       dataToSend.metadata.deletedTaskId = activityData.taskId;
-      
-      // Para el endpoint de actividades, no enviar taskId para evitar el error 404
-      delete dataToSend.taskId;
     }
     
-    // Obtener el token directly, no the header object
+    // Get API URL and token
+    const url = `${getApiUrl()}/api/activities`;
     const token = await AsyncStorage.getItem('token');
     
-    const url = `${getApiUrl()}/api/activities`;
     console.log(`Sending activity data to: ${url}`);
     
     const response = await fetchWithRetry(url, {
@@ -1247,29 +1268,79 @@ export const saveActivity = async (activityData) => {
       },
       body: JSON.stringify(dataToSend)
     });
-
+    
     if (!response.ok) {
       const errorText = await response.text();
       console.error(`Activity save failed with status ${response.status}:`, errorText);
       
-      // Si es un error 404 para una actividad de eliminación de tarea, registrarlo pero no lanzar excepción
+      // Special case for task_delete with 404
       if (activityData.type === 'task_delete' && response.status === 404) {
-        console.warn('No se pudo guardar la actividad de eliminación, pero la tarea fue eliminada correctamente');
+        console.log('Task was already deleted, continuing...');
         return { success: true, activitySaved: false, message: 'Tarea eliminada pero no se pudo registrar la actividad' };
       }
       
-      throw new Error(`Error al guardar actividad: ${response.status} - ${errorText}`);
+      throw new Error(`Error ${response.status}: ${errorText}`);
     }
-
+    
     const responseData = await response.json();
     console.log('Activity saved successfully:', responseData);
+    
+    // Send notification to admin users
+    try {
+      // Get all admin users and send them notifications
+      // This is a more reliable approach than checking if current user is admin
+      console.log('Attempting to send admin notifications for activity');
+      
+      // Import Notifications directly to avoid circular dependencies
+      const Notifications = require('expo-notifications');
+      
+      // First check if the current user is an admin
+      const userInfoString = await AsyncStorage.getItem('userInfo');
+      if (userInfoString) {
+        const userInfo = JSON.parse(userInfoString);
+        const isCurrentUserAdmin = userInfo.isAdmin === true;
+        
+        if (isCurrentUserAdmin) {
+          console.log('Current user is admin, sending local notification');
+          
+          // Prepare notification content
+          const title = getActivityTitle(activityData.type);
+          const username = activityData.username || userInfo.name || 'User';
+          const message = activityData.message || getActivityMessage(activityData);
+          
+          // Send immediate notification
+          try {
+            await Notifications.scheduleNotificationAsync({
+              content: {
+                title: title,
+                body: `${username}: ${message}`,
+                data: { 
+                  activityId: responseData._id || responseData.id,
+                  type: activityData.type
+                }
+              },
+              trigger: null // Show immediately
+            });
+            
+            console.log('Admin notification sent successfully');
+          } catch (notifError) {
+            console.error('Error sending admin notification:', notifError);
+          }
+        } else {
+          console.log('Current user is not admin, no local notification sent');
+        }
+      }
+    } catch (error) {
+      console.error('Error checking admin status:', error);
+    }
+    
     return responseData;
   } catch (error) {
     console.error('Error en saveActivity:', error);
     
-    // Para errores con task_delete, manejar sin propagar el error
+    // Special case for task_delete
     if (activityData && activityData.type === 'task_delete') {
-      console.warn('Error al guardar actividad de eliminación, pero la tarea fue eliminada correctamente');
+      console.log('Continuing despite error for task_delete...');
       return { success: true, activitySaved: false, message: 'Tarea eliminada pero no se pudo registrar la actividad' };
     }
     
@@ -1277,46 +1348,44 @@ export const saveActivity = async (activityData) => {
   }
 };
 
-/**
- * Obtener todas las actividades de todos los usuarios (solo para administradores)
- * @param {Object} options - Opciones de paginación: { limit, page, sort }
- * @returns {Promise<Object>} Respuesta de la API con actividades y datos de paginación
- */
-export const getAdminActivities = async (options = {}) => {
-  try {
-    // Obtener token directamente para asegurar la autenticación
-    const token = await AsyncStorage.getItem('token');
-    
-    if (!token) {
-      throw new Error('No hay token de autenticación disponible');
-    }
-    
-    // Construir la URL con parámetros de paginación
-    const queryParams = new URLSearchParams();
-    if (options && options.limit) queryParams.append('limit', options.limit);
-    if (options && options.page) queryParams.append('page', options.page);
-    if (options && options.sort) queryParams.append('sort', options.sort);
+// Helper function to get activity title based on type
+const getActivityTitle = (type) => {
+  const titles = {
+    'task_create': 'Task Created',
+    'task_update': 'Task Updated',
+    'task_complete': 'Task Completed',
+    'task_delete': 'Task Deleted',
+    'task_assign': 'Task Assigned',
+    'location_enter': 'Location Entered',
+    'location_exit': 'Location Exited',
+    'started_working': 'Started Working',
+    'stopped_working': 'Stopped Working',
+    'task_activity': 'Task Activity'
+  };
+  
+  return titles[type] || 'Activity';
+};
 
-    const url = `${getApiUrl()}/api/activities/admin/all${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
-    console.log(`Obteniendo actividades de administrador: ${url}`);
-    
-    // Crear opciones manualmente para asegurar que el token esté presente
-    const fetchOptions = {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      }
-    };
-    
-    const response = await fetchWithRetry(url, fetchOptions);
-    const data = await handleResponse(response);
-    console.log(`Actividades obtenidas: ${data.activities?.length || 0}`);
-    return data;
-  } catch (error) {
-    console.error('Error al obtener actividades de administrador:', error);
-    throw error;
+// Helper function to get activity message
+const getActivityMessage = (activityData) => {
+  if (activityData.message) {
+    return activityData.message;
   }
+  
+  const messages = {
+    'task_create': 'created a new task',
+    'task_update': 'updated a task',
+    'task_complete': 'completed a task',
+    'task_delete': 'deleted a task',
+    'task_assign': 'assigned a task',
+    'location_enter': 'entered task location',
+    'location_exit': 'exited task location',
+    'started_working': 'started working on a task',
+    'stopped_working': 'stopped working on a task',
+    'task_activity': 'performed an activity on a task'
+  };
+  
+  return messages[activityData.type] || 'performed an action';
 };
 
 // Obtener ubicaciones en tiempo real de todos los usuarios (solo administradores)
@@ -1498,6 +1567,25 @@ export const getTaskById = async (taskId) => {
       const foundTask = userTasks.find(task => task._id === taskId);
       if (foundTask) {
         console.log('Found task in user tasks list:', foundTask);
+        
+        // Cache this task for future use
+        try {
+          const cachedTasksString = await AsyncStorage.getItem('cachedTasks');
+          const cachedTasks = cachedTasksString ? JSON.parse(cachedTasksString) : [];
+          
+          // Remove old version of this task if it exists
+          const filteredTasks = cachedTasks.filter(task => task._id !== taskId);
+          
+          // Add the found task data
+          filteredTasks.push(foundTask);
+          
+          // Store back in AsyncStorage
+          await AsyncStorage.setItem('cachedTasks', JSON.stringify(filteredTasks.slice(-50)));
+          console.log('Task cached for future use');
+        } catch (cacheError) {
+          console.warn('Error caching fallback task data:', cacheError);
+        }
+        
         return foundTask;
       }
     } catch (userTasksError) {
@@ -1985,6 +2073,7 @@ export const saveLocations = async (locations) => {
   }
 };
 
+
 // Obtener el estado de disponibilidad de todos los usuarios
 // @returns {Promise<Array>} Lista de usuarios con su estado de disponibilidad
 export const getUserAvailabilityStatus = async () => {
@@ -2056,5 +2145,6 @@ export const getUserAvailabilityStatus = async () => {
     console.error('Error al cargar estado de disponibilidad:', error);
     // Devolver array vacío en caso de error para evitar que la UI se rompa
     return [];
+
   }
 };

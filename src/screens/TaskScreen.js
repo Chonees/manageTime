@@ -22,6 +22,7 @@ import { useTheme } from '../context/ThemeContext';
 import LanguageToggle from '../components/LanguageToggle';
 import * as api from '../services/api';
 import LocationRadiusSelector from '../components/LocationRadiusSelector';
+import SavedLocationsSelector from '../components/SavedLocationsSelector';
 
 const { width, height } = Dimensions.get('window');
 
@@ -40,6 +41,7 @@ const TaskScreen = ({ navigation }) => {
   const [showAddForm, setShowAddForm] = useState(false);
   const [showUserSelector, setShowUserSelector] = useState(false);
   const [showLocationSelector, setShowLocationSelector] = useState(false);
+  const [showSavedLocationsSelector, setShowSavedLocationsSelector] = useState(false);
   const [taskLocation, setTaskLocation] = useState(null);
   const [taskRadius, setTaskRadius] = useState(1.0);
   const [taskLocationName, setTaskLocationName] = useState('');
@@ -501,6 +503,44 @@ const TaskScreen = ({ navigation }) => {
     </Modal>
   );
 
+  // Function to handle selecting a saved location
+  const handleSelectSavedLocation = (location) => {
+    console.log('Selected saved location:', JSON.stringify(location, null, 2));
+    
+    try {
+      // Validate the location data
+      if (!location || !location.location || !location.location.coordinates) {
+        throw new Error('Invalid location data');
+      }
+      
+      // Extract coordinates
+      const [longitude, latitude] = location.location.coordinates;
+      
+      // Update the task location
+      setTaskLocation({
+        coordinates: [longitude, latitude]
+      });
+      
+      // Update the task radius
+      setTaskRadius(location.radius || 0.5);
+      
+      // Update the location name
+      setTaskLocationName(location.name || 'Saved Location');
+      
+      // Close the saved locations selector
+      setShowSavedLocationsSelector(false);
+      
+      console.log('Successfully set location from saved location');
+    } catch (error) {
+      console.error('Error selecting saved location:', error);
+      Alert.alert(
+        t('error') || 'Error',
+        (t('errorSelectingLocation') || 'Error selecting location') + ': ' + error.message,
+        [{ text: t('ok') || 'OK' }]
+      );
+    }
+  };
+
   // Función para manejar la selección de ubicación y radio
   const handleLocationSelected = (locationData) => {
     setTaskLocation(locationData.location);
@@ -538,17 +578,30 @@ const TaskScreen = ({ navigation }) => {
         />
         
         {/* Botón para abrir selector de ubicación y radio */}
-        <TouchableOpacity 
-          style={styles.locationButton}
-          onPress={() => setShowLocationSelector(true)}
-        >
-          <Ionicons name="location" size={20} color="#4A90E2" />
-          <Text style={styles.locationButtonText}>
-            {taskLocation 
-              ? `${taskLocationName || t('selectedLocation')} (${taskRadius} km)` 
-              : t('addLocationAndRadius')}
-          </Text>
-        </TouchableOpacity>
+        <View style={styles.locationButtonsContainer}>
+          <TouchableOpacity 
+            style={styles.locationButton}
+            onPress={() => setShowLocationSelector(true)}
+          >
+            <Ionicons name="location" size={20} color="#4A90E2" />
+            <Text style={styles.locationButtonText}>
+              {taskLocation 
+                ? `${taskLocationName || t('selectedLocation')} (${taskRadius} km)` 
+                : t('addLocationAndRadius')}
+            </Text>
+          </TouchableOpacity>
+          
+          {/* Botón para seleccionar ubicaciones guardadas */}
+          <TouchableOpacity 
+            style={styles.savedLocationsButton}
+            onPress={() => setShowSavedLocationsSelector(true)}
+          >
+            <Ionicons name="bookmark" size={20} color="#4A90E2" />
+            <Text style={styles.locationButtonText}>
+              {t('savedLocations') || 'Saved Locations'}
+            </Text>
+          </TouchableOpacity>
+        </View>
         
         {/* Opción de Modo Manos Libres */}
         <View style={styles.handsFreeContainer}>
@@ -661,7 +714,7 @@ const TaskScreen = ({ navigation }) => {
           </TouchableOpacity>
         </View>
 
-        {/* Location and Radius Selector ayush */}
+        {/* Location and Radius Selector */}
         <LocationRadiusSelector
           visible={showLocationSelector}
           onClose={() => setShowLocationSelector(false)}
@@ -672,6 +725,13 @@ const TaskScreen = ({ navigation }) => {
           } : null}
           initialRadius={taskRadius}
           initialLocationName={taskLocationName}
+        />
+        
+        {/* Saved Locations Selector */}
+        <SavedLocationsSelector
+          visible={showSavedLocationsSelector}
+          onClose={() => setShowSavedLocationsSelector(false)}
+          onSelect={handleSelectSavedLocation}
         />
       </View>
     );
@@ -997,13 +1057,31 @@ const styles = StyleSheet.create({
   userSelectButtonText: {
     color: '#fff3e5',
   },
+  locationButtonsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
   locationButton: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#2e2e2e',
     borderRadius: 15,
     padding: 12,
-    marginBottom: 10,
+    marginRight: 5,
+    borderWidth: 1,
+    borderColor: '#ddd',
+  },
+  savedLocationsButton: {
+    flex: 0.5,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#f9f9f9',
+    borderRadius: 5,
+    padding: 12,
+    marginLeft: 5,
     borderWidth: 1,
     borderColor: 'rgba(255, 243, 229, 0.2)',
   },
