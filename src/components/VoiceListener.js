@@ -140,7 +140,13 @@ const VoiceListener = ({ isTaskActive = false, taskData = null, onKeywordDetecte
       };
     } else {
       logDebug('No hay tarea activa - sistema inactivo');
-      stopListening();
+      // Asegurarnos de que cualquier grabación en curso se detenga cuando la tarea finalice
+      stopRecording().then(() => {
+        stopListening();
+        logDebug('Grabación detenida por finalización de tarea');
+      }).catch(error => {
+        logDebug(`Error al detener grabación por fin de tarea: ${error.message}`);
+      });
     }
   }, [isTaskActive, taskData]);
 
@@ -175,6 +181,12 @@ const VoiceListener = ({ isTaskActive = false, taskData = null, onKeywordDetecte
   // Iniciar grabación con Audio - versión simplificada
   const startRecording = async () => {
     try {
+      // Verificar si la tarea sigue activa antes de iniciar grabación
+      if (!isTaskActive || !taskData) {
+        logDebug('No hay tarea activa - no se iniciará grabación');
+        return;
+      }
+      
       // Resetear el objeto de grabación
       if (recordingRef.current) {
         recordingRef.current = null;

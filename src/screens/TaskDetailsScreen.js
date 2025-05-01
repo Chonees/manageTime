@@ -503,55 +503,90 @@ const TaskDetailsScreen = ({ route, navigation }) => {
 
   // Función para enviar una actividad relacionada con la tarea
   const submitActivity = async () => {
-    if (!activityInput.trim()) {
+    console.log('⭐ INICIO submitActivity - texto ingresado:', activityInput);
+    
+    // Solo validación básica: no vacío
+    const inputText = activityInput.trim();
+    if (!inputText) {
+      console.log('❌ Error: Input vacío');
       Alert.alert(t('error'), t('pleaseEnterActivity'));
       return;
     }
 
     if (!taskStarted) {
+      console.log('❌ Error: Tarea no iniciada');
       Alert.alert(t('error'), t('startTaskFirst'));
       return;
     }
 
+    console.log('✅ Validaciones pasadas, iniciando envío...');
     setIsSubmittingActivity(true);
 
     try {
-      // Crear objeto de actividad
-      const activityData = {
-        taskId: task._id,
-        message: activityInput.trim(),
-        type: 'task_activity',
-        timestamp: new Date().toISOString()
+      // Verificar integridad de task y task._id
+      console.log('📋 Datos de tarea:', JSON.stringify({
+        taskExists: !!task,
+        taskId: task?._id,
+        taskTitle: task?.title
+      }, null, 2));
+      
+      // Crear un objeto de nota exactamente igual al formato usado por VoiceListener
+      const noteData = {
+        text: inputText,
+        type: 'voice_note', // Usar el mismo tipo que las notas de voz
+        timestamp: new Date().toISOString(),
+        keyword: '', // Campo vacío pero incluido para mantener consistencia
+        source: 'manual_input' // Identificar que es entrada manual
       };
 
-      // Enviar al backend
-      const result = await api.saveActivity(activityData);
+      console.log('📤 Enviando nota manual al backend:', JSON.stringify(noteData, null, 2));
       
-      if (result && result.success) {
-        // Añadir la actividad a la lista local
-        const newActivity = {
-          ...activityData,
-          _id: result.activity._id || new Date().getTime().toString(), // Usar ID del servidor o generar uno temporal
-          createdAt: result.activity.createdAt || new Date().toISOString()
-        };
-        
-        setTaskActivities(prevActivities => [newActivity, ...prevActivities]);
-        setActivityInput(''); // Limpiar el input
-        
-        // Mostrar mensaje de éxito
-        Alert.alert(t('success'), t('activityRecorded'));
-      } else {
-        throw new Error(result?.message || 'Error al registrar la actividad');
+      // Obtener token de autenticación
+      const token = await AsyncStorage.getItem('token');
+      if (!token) {
+        throw new Error('No hay token de autenticación para guardar la nota');
       }
+      
+      // Usar el mismo endpoint que usa VoiceListener
+      const url = `https://managetime-backend-48f256c2dfe5.herokuapp.com/api/tasks/${task._id}/note`;
+      
+      // Enviar la nota al backend usando el mismo formato que VoiceListener
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(noteData)
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`Nota manual no guardada, error ${response.status}:`, errorText);
+        throw new Error(`Error al guardar nota manual: ${response.status} - ${errorText}`);
+      }
+
+      const responseData = await response.json();
+      console.log('✅ Nota manual guardada exitosamente:', responseData);
+      
+      // Limpiar input y mostrar mensaje de éxito
+      setActivityInput('');
+      Alert.alert(t('success'), t('activityRecorded'));
+      
     } catch (error) {
-      console.error('Error al enviar actividad:', error);
-      Alert.alert(t('error'), t('errorSubmittingActivity'));
+      console.log('❌❌❌ ERROR CAPTURADO:', error);
+      console.error('Error al enviar nota manual:', error);
+      
+      // Mostrar el mensaje de error
+      const errorMessage = error.message || t('errorSubmittingActivity');
+      console.log('Mensaje final mostrado al usuario:', errorMessage);
+      Alert.alert(t('error'), errorMessage);
     } finally {
+      console.log('🏁 Finalizando submitActivity');
       setIsSubmittingActivity(false);
     }
   };
 
-  // Cargar las actividades existentes para esta tarea
   const loadTaskActivities = async () => {
     try {
       const activities = await api.getTaskActivities(taskId);
