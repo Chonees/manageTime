@@ -12,6 +12,7 @@ const taskRoutes = require('./src/routes/task.routes');
 const statsRoutes = require('./src/routes/stats.routes');
 const activityRoutes = require('./src/routes/activity.routes');
 const reportRoutes = require('./src/routes/report.routes');
+const savedLocationRoutes = require('./src/routes/savedLocation.routes');
 
 // Inicializar app
 const app = express();
@@ -62,6 +63,7 @@ app.use('/api/tasks', taskRoutes);
 app.use('/api/stats', statsRoutes);
 app.use('/api/activities', activityRoutes);
 app.use('/api/reports', reportRoutes);
+app.use('/api/saved-locations', savedLocationRoutes);
 
 // Ruta de prueba para verificar que el servidor está funcionando
 app.get('/', (req, res) => {
