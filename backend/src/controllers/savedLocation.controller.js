@@ -50,28 +50,51 @@ const getSavedLocationById = async (req, res) => {
  */
 const createSavedLocation = async (req, res) => {
   try {
+    console.log('[createSavedLocation] Request received:', JSON.stringify(req.body));
+    console.log('[createSavedLocation] User ID:', req.user._id);
+    
     const { name, location, radius } = req.body;
+    
+    // Log received data
+    console.log('[createSavedLocation] Name:', name);
+    console.log('[createSavedLocation] Location:', JSON.stringify(location));
+    console.log('[createSavedLocation] Radius:', radius);
     
     // Validate required fields
     if (!name || !location || !radius) {
+      console.error('[createSavedLocation] Validation error: Missing required fields');
       return res.status(400).json({ message: 'Name, location, and radius are required' });
     }
     
     // Validate location format
     if (!location.type || location.type !== 'Point' || !location.coordinates || !Array.isArray(location.coordinates) || location.coordinates.length !== 2) {
+      console.error('[createSavedLocation] Validation error: Invalid location format:', JSON.stringify(location));
       return res.status(400).json({ message: 'Location must be a GeoJSON Point with coordinates [longitude, latitude]' });
     }
     
     // Validate radius
     if (typeof radius !== 'number' || radius < 0.1 || radius > 50) {
+      console.error('[createSavedLocation] Validation error: Invalid radius:', radius);
       return res.status(400).json({ message: 'Radius must be a number between 0.1 and 50 kilometers' });
     }
     
     // Check if a location with the same name already exists for this user
     const existingLocation = await SavedLocation.findOne({ user: req.user._id, name });
     if (existingLocation) {
+      console.error('[createSavedLocation] Conflict error: Location with name already exists:', name);
       return res.status(409).json({ message: 'A location with this name already exists' });
     }
+    
+    // Create new location
+    console.log('[createSavedLocation] Creating new location with data:', {
+      user: req.user._id,
+      name,
+      location: {
+        type: 'Point',
+        coordinates: location.coordinates
+      },
+      radius
+    });
     
     const newLocation = new SavedLocation({
       user: req.user._id,
@@ -82,10 +105,27 @@ const createSavedLocation = async (req, res) => {
       },
       radius
     });
-    const savedLocation = await newLocation.save();
-    res.status(201).json(savedLocation);
+    
+    try {
+      const savedLocation = await newLocation.save();
+      console.log('[createSavedLocation] Location saved successfully with ID:', savedLocation._id);
+      
+      // Verify the saved location was actually stored
+      const verifiedLocation = await SavedLocation.findById(savedLocation._id);
+      if (verifiedLocation) {
+        console.log('[createSavedLocation] Verification success: Location found in database');
+      } else {
+        console.error('[createSavedLocation] Verification failed: Location not found in database after save');
+      }
+      
+      // Return success response
+      res.status(201).json(savedLocation);
+    } catch (saveError) {
+      console.error('[createSavedLocation] Database save error:', saveError);
+      throw saveError;
+    }
   } catch (error) {
-    console.error('Error creating saved location:', error);
+    console.error('[createSavedLocation] Unexpected error:', error);
     res.status(500).json({ message: 'Error creating saved location', error: error.message });
   }
 };
