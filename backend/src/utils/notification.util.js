@@ -1,4 +1,19 @@
-const { Expo } = require('expo-server-sdk');
+// Intentar importar expo-server-sdk de manera segura
+let Expo;
+try {
+  Expo = require('expo-server-sdk').Expo;
+} catch (error) {
+  console.warn('No se pudo cargar expo-server-sdk, las notificaciones push estarán deshabilitadas');
+  // Crear una implementación simulada
+  Expo = class MockExpo {
+    constructor() {}
+    
+    isExpoPushToken() { return false; }
+    chunkPushNotifications() { return []; }
+    sendPushNotificationsAsync() { return []; }
+  };
+}
+
 const User = require('../models/user.model');
 const logger = require('./logger');
 
@@ -17,7 +32,7 @@ const sendPushNotifications = async (tokens, title, body, data = {}) => {
   try {
     // Filtrar tokens válidos
     const validTokens = tokens.filter(token => 
-      Expo.isExpoPushToken(token) || token.startsWith('ExponentPushToken[')
+      expo.isExpoPushToken(token) || token.startsWith('ExponentPushToken[')
     );
 
     if (validTokens.length === 0) {

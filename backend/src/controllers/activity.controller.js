@@ -1,7 +1,18 @@
 const Activity = require('../models/activity.model');
 const User = require('../models/user.model');
 const Task = require('../models/task.model');
-const notificationUtil = require('../utils/notification.util');
+
+// Importar utilidad de notificación de manera segura
+let notificationUtil;
+try {
+  notificationUtil = require('../utils/notification.util');
+} catch (error) {
+  console.warn('No se pudo cargar el módulo de notificaciones, las alertas push estarán deshabilitadas');
+  // Crear una implementación simulada
+  notificationUtil = {
+    notifyAdminActivity: () => Promise.resolve({ success: false, error: 'Módulo no disponible' })
+  };
+}
 
 /**
  * Crear una nueva actividad
