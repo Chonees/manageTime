@@ -2073,44 +2073,78 @@ export const saveLocations = async (locations) => {
   }
 };
 
-/**
- * Get all activities for all users (admin only)
- * @param {Object} options - Pagination options: { limit, page, sort }
- * @returns {Promise<Object>} API response with activities and pagination data
- */
-export const getAdminActivities = async (options = {}) => {
+
+// Obtener el estado de disponibilidad de todos los usuarios
+// @returns {Promise<Array>} Lista de usuarios con su estado de disponibilidad
+export const getUserAvailabilityStatus = async () => {
   try {
-    // Get token directly to ensure authentication
-    const token = await AsyncStorage.getItem('token');
+    // Obtener las actividades recientes como objeto con formato { activities: [...], pagination: {...} }
+    console.log('Obteniendo estado de disponibilidad a través de las actividades recientes...');
     
-    if (!token) {
-      throw new Error('No authentication token available');
+    const activitiesResponse = await getAdminActivities({ limit: 100, sort: '-createdAt' });
+    
+    // Extraer el array de actividades del objeto de respuesta
+    const activities = activitiesResponse?.activities || [];
+    
+    // Verificar que activities sea un array
+    if (!Array.isArray(activities)) {
+      console.error('Error: activitiesResponse no contiene un array de actividades:', typeof activities);
+      return [];
     }
     
-    // Build URL with pagination parameters
-    const queryParams = new URLSearchParams();
-    if (options && options.limit) queryParams.append('limit', options.limit);
-    if (options && options.page) queryParams.append('page', options.page);
-    if (options && options.sort) queryParams.append('sort', options.sort);
-
-    const url = `${getApiUrl()}/api/activities/admin/all${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
-    console.log(`Getting admin activities: ${url}`);
+    console.log(`Se obtuvieron ${activities.length} actividades para analizar.`);
     
-    // Create options manually to ensure token is present
-    const fetchOptions = {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
+    // Usamos un Map para guardar el estado más reciente de cada usuario
+    const userStatusMap = new Map();
+    
+    // Procesamos todas las actividades para encontrar la más reciente de cada usuario
+    activities.forEach(activity => {
+      if (!activity) return;
+      
+      // Tipos de actividad que indican disponibilidad (tanto clock_in/out como started/stopped_working)
+      if (activity.type === 'clock_in' || activity.type === 'started_working' || 
+          activity.type === 'clock_out' || activity.type === 'stopped_working') {
+        
+        // Extraer userId asegurándonos de manejar tanto string como objeto
+        const userId = activity.userId?._id || activity.userId;
+        if (!userId) {
+          console.log('Actividad sin userId:', activity);
+          return;
+        }
+        
+        // Extraer nombre de usuario
+        const username = activity.userId?.username || 
+                        activity.username || 
+                        activity.metadata?.username || 
+                        'Usuario';
+        
+        // Determinar si está disponible según el tipo de actividad
+        const isAvailable = activity.type === 'clock_in' || activity.type === 'started_working';
+        
+        // Solo actualizamos si no tenemos un registro para este usuario o si esta actividad es más reciente
+        if (!userStatusMap.has(userId) || 
+            new Date(activity.createdAt || activity.timestamp) > 
+            new Date(userStatusMap.get(userId).timestamp)) {
+          
+          userStatusMap.set(userId, {
+            userId,
+            username,
+            isAvailable,
+            timestamp: activity.createdAt || activity.timestamp,
+            metadata: activity.metadata || {}
+          });
+        }
       }
-    };
+    });
     
-    const response = await fetchWithRetry(url, fetchOptions);
-    const data = await handleResponse(response);
-    console.log(`Activities retrieved: ${data.activities?.length || 0}`);
-    return data;
+    console.log(`Se encontraron estados de disponibilidad para ${userStatusMap.size} usuarios.`);
+    
+    // Convertir el Map a un array de objetos
+    return Array.from(userStatusMap.values());
   } catch (error) {
-    console.error('Error getting admin activities:', error);
-    throw error;
+    console.error('Error al cargar estado de disponibilidad:', error);
+    // Devolver array vacío en caso de error para evitar que la UI se rompa
+    return [];
+
   }
 };

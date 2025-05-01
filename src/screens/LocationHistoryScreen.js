@@ -160,6 +160,27 @@ const LocationHistoryView = ({
             distance: 0
           };
         } 
+        else if (location.type === 'tracking') {
+          // Handle tracking points
+          // If we don't have a session already, create one with this point as the start
+          if (!currentSession.startLocation) {
+            currentSession = {
+              points: [normalizedLocation],
+              startLocation: normalizedLocation,
+              endLocation: null,
+              startTime: normalizedLocation.timestamp,
+              endTime: null,
+              distance: 0
+            };
+          } else {
+            // Add tracking point to current session
+            currentSession.points.push(normalizedLocation);
+            
+            // Always update the end to the most recent tracking point
+            currentSession.endLocation = normalizedLocation;
+            currentSession.endTime = normalizedLocation.timestamp;
+          }
+        }
         else if (currentSession.startLocation) {
           // Add point to current session
           currentSession.points.push(normalizedLocation);
@@ -406,17 +427,17 @@ const PlatformMapView = ({ sessions, currentLocation }) => {
         >
           {/* Render iOS markers */}
           {sessions.map((session, sessionIndex) => {
-            if (!session.points || session.points.length === 0) return null;
+            if (!session || !session.points || session.points.length === 0) return null;
             
             // For iOS, we'll use individual markers for better compatibility
             return (
               <React.Fragment key={`session-${sessionIndex}`}>
                 {/* Start marker */}
-                {session.startLocation && (
+                {session.startLocation && session.startLocation.latitude && session.startLocation.longitude && (
                   <Marker
                     coordinate={{
-                      latitude: session.startLocation.latitude,
-                      longitude: session.startLocation.longitude,
+                      latitude: Number(session.startLocation.latitude),
+                      longitude: Number(session.startLocation.longitude),
                     }}
                     title={t('sessionStart')}
                     description={formatDate(session.startLocation.timestamp)}
@@ -426,11 +447,11 @@ const PlatformMapView = ({ sessions, currentLocation }) => {
                 )}
                 
                 {/* End marker */}
-                {session.endLocation && (
+                {session.endLocation && session.endLocation.latitude && session.endLocation.longitude && (
                   <Marker
                     coordinate={{
-                      latitude: session.endLocation.latitude,
-                      longitude: session.endLocation.longitude,
+                      latitude: Number(session.endLocation.latitude),
+                      longitude: Number(session.endLocation.longitude),
                     }}
                     title={t('sessionEnd')}
                     description={formatDate(session.endLocation.timestamp)}
@@ -441,6 +462,9 @@ const PlatformMapView = ({ sessions, currentLocation }) => {
                 
                 {/* Path markers - show a subset of points to avoid clutter */}
                 {session.points.map((point, pointIndex) => {
+                  // Skip points with invalid coordinates
+                  if (!point || !point.latitude || !point.longitude) return null;
+                  
                   // Skip start and end points (already shown)
                   if (pointIndex === 0 || pointIndex === session.points.length - 1) return null;
                   
@@ -453,8 +477,8 @@ const PlatformMapView = ({ sessions, currentLocation }) => {
                     <Marker
                       key={`point-${sessionIndex}-${pointIndex}`}
                       coordinate={{
-                        latitude: point.latitude,
-                        longitude: point.longitude,
+                        latitude: Number(point.latitude),
+                        longitude: Number(point.longitude),
                       }}
                       anchor={{ x: 0.5, y: 0.5 }}
                       opacity={0.7}
@@ -502,7 +526,7 @@ const PlatformMapView = ({ sessions, currentLocation }) => {
       >
         {/* Render Android polylines and markers */}
         {sessions.map((session, index) => {
-          if (!session.points || session.points.length < 2) return null;
+          if (!session || !session.points || session.points.length < 2) return null;
           
           return (
             <React.Fragment key={`session-${index}`}>

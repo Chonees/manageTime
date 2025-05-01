@@ -10,7 +10,9 @@ import {
   ActivityIndicator,
   SafeAreaView,
   Platform,
+
   Alert
+
 } from 'react-native';
 import Slider from '@react-native-community/slider';
 import MapView, { Marker, Circle, PROVIDER_GOOGLE } from 'react-native-maps';
@@ -307,9 +309,10 @@ const LocationRadiusSelector = ({
       transparent={false}
     >
       <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor="#1c1c1c" />
         <View style={styles.header}>
           <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-            <Ionicons name="arrow-back" size={24} color="#333" />
+            <Ionicons name="arrow-back" size={24} color="#fff3e5" />
           </TouchableOpacity>
           <Text style={styles.title}>{t('addLocation')}</Text>
           <TouchableOpacity onPress={handleSave} style={styles.saveButton}>
@@ -318,7 +321,7 @@ const LocationRadiusSelector = ({
         </View>
 
         <View style={styles.searchBar}>
-          <Ionicons name="search" size={20} color="#999" style={styles.searchIcon} />
+          <Ionicons name="search" size={20} color="#fff3e5" style={styles.searchIcon} />
           <TextInput
             style={styles.searchInput}
             placeholder={t('search')}
@@ -330,7 +333,7 @@ const LocationRadiusSelector = ({
         <View style={styles.mapContainer}>
           {loading ? (
             <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color="#4A90E2" />
+              <ActivityIndicator size="large" color="#fff3e5" />
               <Text style={styles.loadingText}>{t('loadingMap')}</Text>
             </View>
           ) : (
@@ -378,8 +381,8 @@ const LocationRadiusSelector = ({
                           longitude: Number(location.longitude)
                         }}
                         radius={getRadiusInMeters()}
-                        fillColor="rgba(74, 144, 226, 0.2)"
-                        strokeColor="rgba(74, 144, 226, 0.8)"
+                        fillColor="rgba(255, 243, 229, 0.2)"
+                        strokeColor="rgba(255, 243, 229, 0.8)"
                         strokeWidth={2}
                       />
                     )}
@@ -419,8 +422,8 @@ const LocationRadiusSelector = ({
                         longitude: location.longitude
                       }}
                       radius={getRadiusInMeters()}
-                      fillColor="rgba(74, 144, 226, 0.2)"
-                      strokeColor="rgba(74, 144, 226, 0.8)"
+                      fillColor="rgba(255, 243, 229, 0.2)"
+                      strokeColor="rgba(255, 243, 229, 0.8)"
                       strokeWidth={2}
                     />
                   </>
@@ -444,9 +447,9 @@ const LocationRadiusSelector = ({
               step={0.1}
               value={radius}
               onValueChange={setRadius}
-              minimumTrackTintColor="#4A90E2"
-              maximumTrackTintColor="#D9D9D9"
-              thumbTintColor="#4A90E2"
+              minimumTrackTintColor="#fff3e5"
+              maximumTrackTintColor="rgba(255, 243, 229, 0.2)"
+              thumbTintColor="#fff3e5"
             />
             <Text style={styles.radiusValue}>{formatDistance(radius)}</Text>
           </View>
@@ -457,7 +460,7 @@ const LocationRadiusSelector = ({
             style={styles.mapActionButton}
             onPress={placeMarkerAtCenter}
           >
-            <Ionicons name="locate-outline" size={24} color="#4A90E2" />
+            <Ionicons name="locate-outline" size={24} color="#fff3e5" />
             <Text style={styles.mapActionButtonText}>{t('placeHere')}</Text>
           </TouchableOpacity>
 
@@ -465,7 +468,7 @@ const LocationRadiusSelector = ({
             style={styles.mapActionButton}
             onPress={getCurrentLocation}
           >
-            <Ionicons name="locate" size={24} color="#4A90E2" />
+            <Ionicons name="locate" size={24} color="#fff3e5" />
             <Text style={styles.mapActionButtonText}>{t('myLocation')}</Text>
           </TouchableOpacity>
         </View>
@@ -487,7 +490,7 @@ const LocationRadiusSelector = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: '#2e2e2e',
   },
   header: {
     flexDirection: 'row',
@@ -496,7 +499,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 15,
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#eeeeee',
+    borderBottomColor: 'rgba(255, 243, 229, 0.1)',
+    backgroundColor: '#1c1c1c',
   },
   closeButton: {
     padding: 5,
@@ -504,16 +508,23 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#333',
+    color: '#fff3e5',
   },
   saveButton: {
     paddingVertical: 8,
     paddingHorizontal: 15,
-    backgroundColor: '#4A90E2',
-    borderRadius: 5,
+    backgroundColor: '#fff3e5',
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.1)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   saveButtonText: {
-    color: '#fff',
+    color: '#000000',
     fontWeight: 'bold',
   },
   searchBar: {
@@ -521,9 +532,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     margin: 10,
     paddingHorizontal: 10,
-    backgroundColor: '#f5f5f5',
-    borderRadius: 10,
+    backgroundColor: '#1c1c1c',
+    borderRadius: 15,
     height: 40,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 243, 229, 0.1)',
   },
   searchIcon: {
     marginRight: 10,
@@ -532,11 +545,14 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 16,
     height: 40,
+    color: '#fff3e5',
   },
   mapContainer: {
     height: height * 0.4,
-    width: '100%',
+    width: 'auto',
     overflow: 'hidden',
+    borderRadius: 15,
+    margin: 15,
   },
   map: {
     ...StyleSheet.absoluteFillObject,
@@ -545,24 +561,30 @@ const styles = StyleSheet.create({
     height: '100%',
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#1c1c1c',
+    borderRadius: 15,
   },
   loadingText: {
     marginTop: 10,
-    color: '#666',
+    color: '#fff3e5',
   },
   radiusContainer: {
     padding: 15,
+    backgroundColor: '#1c1c1c',
+    margin: 10,
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 243, 229, 0.1)',
   },
   radiusTitle: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#333',
+    color: '#fff3e5',
     marginBottom: 5,
   },
   radiusSubtitle: {
     fontSize: 14,
-    color: '#666',
+    color: 'rgba(255, 243, 229, 0.7)',
     marginBottom: 15,
   },
   sliderContainer: {
@@ -577,7 +599,7 @@ const styles = StyleSheet.create({
   radiusValue: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#4A90E2',
+    color: '#fff3e5',
     width: 60,
     textAlign: 'right',
   },
@@ -593,14 +615,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 12,
     paddingHorizontal: 15,
-    backgroundColor: '#f5f5f5',
-    borderRadius: 8,
+    backgroundColor: '#1c1c1c',
+    borderRadius: 15,
     flex: 0.48,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 243, 229, 0.2)',
   },
   mapActionButtonText: {
     marginLeft: 10,
     fontSize: 16,
-    color: '#4A90E2',
+    color: '#fff3e5',
   },
   saveLocationButton: {
     flexDirection: 'row',

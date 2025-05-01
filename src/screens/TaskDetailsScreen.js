@@ -7,7 +7,9 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
-  TextInput
+  TextInput,
+  StatusBar,
+  SafeAreaView
 } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
@@ -36,13 +38,17 @@ const TaskDetailsScreen = ({ route, navigation }) => {
   const [activityInput, setActivityInput] = useState('');
   const [isSubmittingActivity, setIsSubmittingActivity] = useState(false);
   const [taskActivities, setTaskActivities] = useState([]);
+  const [spokenKeywords, setSpokenKeywords] = useState([]); // Nuevo estado para palabras clave ya pronunciadas
 
   useEffect(() => {
     loadTaskDetails();
 
     return () => {
       if (locationSubscription) {
-        Location.removeWatchAsync(locationSubscription);
+
+        // En versiones recientes de Expo Location, la suscripción tiene un método remove
+        locationSubscription.remove();
+
       }
     };
   }, [taskId]);
@@ -432,13 +438,20 @@ const TaskDetailsScreen = ({ route, navigation }) => {
 
   const handleEndTask = async () => {
     try {
-      // Update task status to completed
+      // Primero asegurarse de detener el modo manos libres
+      setTaskStarted(false);
+      
+      // Luego actualizar la tarea en el backend
       const updatedTask = await api.updateTask(taskId, { 
         status: 'completed',
         completed: true 
       });
       setTask(updatedTask);
-      setTaskStarted(false);
+
+      // Si la tarea tenía handsFreeMode, registrar que se ha desactivado
+      if (task.handsFreeMode) {
+        console.log('Desactivando modo manos libres para la tarea completada');
+      }
 
       Alert.alert(t('success'), t('taskCompleted'));
     } catch (error) {
@@ -490,55 +503,90 @@ const TaskDetailsScreen = ({ route, navigation }) => {
 
   // Función para enviar una actividad relacionada con la tarea
   const submitActivity = async () => {
-    if (!activityInput.trim()) {
+    console.log('⭐ INICIO submitActivity - texto ingresado:', activityInput);
+    
+    // Solo validación básica: no vacío
+    const inputText = activityInput.trim();
+    if (!inputText) {
+      console.log('❌ Error: Input vacío');
       Alert.alert(t('error'), t('pleaseEnterActivity'));
       return;
     }
 
     if (!taskStarted) {
+      console.log('❌ Error: Tarea no iniciada');
       Alert.alert(t('error'), t('startTaskFirst'));
       return;
     }
 
+    console.log('✅ Validaciones pasadas, iniciando envío...');
     setIsSubmittingActivity(true);
 
     try {
-      // Crear objeto de actividad
-      const activityData = {
-        taskId: task._id,
-        message: activityInput.trim(),
-        type: 'task_activity',
-        timestamp: new Date().toISOString()
+      // Verificar integridad de task y task._id
+      console.log('📋 Datos de tarea:', JSON.stringify({
+        taskExists: !!task,
+        taskId: task?._id,
+        taskTitle: task?.title
+      }, null, 2));
+      
+      // Crear un objeto de nota exactamente igual al formato usado por VoiceListener
+      const noteData = {
+        text: inputText,
+        type: 'voice_note', // Usar el mismo tipo que las notas de voz
+        timestamp: new Date().toISOString(),
+        keyword: '', // Campo vacío pero incluido para mantener consistencia
+        source: 'manual_input' // Identificar que es entrada manual
       };
 
-      // Enviar al backend
-      const result = await api.saveActivity(activityData);
+      console.log('📤 Enviando nota manual al backend:', JSON.stringify(noteData, null, 2));
       
-      if (result && result.success) {
-        // Añadir la actividad a la lista local
-        const newActivity = {
-          ...activityData,
-          _id: result.activity._id || new Date().getTime().toString(), // Usar ID del servidor o generar uno temporal
-          createdAt: result.activity.createdAt || new Date().toISOString()
-        };
-        
-        setTaskActivities(prevActivities => [newActivity, ...prevActivities]);
-        setActivityInput(''); // Limpiar el input
-        
-        // Mostrar mensaje de éxito
-        Alert.alert(t('success'), t('activityRecorded'));
-      } else {
-        throw new Error(result?.message || 'Error al registrar la actividad');
+      // Obtener token de autenticación
+      const token = await AsyncStorage.getItem('token');
+      if (!token) {
+        throw new Error('No hay token de autenticación para guardar la nota');
       }
+      
+      // Usar el mismo endpoint que usa VoiceListener
+      const url = `https://managetime-backend-48f256c2dfe5.herokuapp.com/api/tasks/${task._id}/note`;
+      
+      // Enviar la nota al backend usando el mismo formato que VoiceListener
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(noteData)
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`Nota manual no guardada, error ${response.status}:`, errorText);
+        throw new Error(`Error al guardar nota manual: ${response.status} - ${errorText}`);
+      }
+
+      const responseData = await response.json();
+      console.log('✅ Nota manual guardada exitosamente:', responseData);
+      
+      // Limpiar input y mostrar mensaje de éxito
+      setActivityInput('');
+      Alert.alert(t('success'), t('activityRecorded'));
+      
     } catch (error) {
-      console.error('Error al enviar actividad:', error);
-      Alert.alert(t('error'), t('errorSubmittingActivity'));
+      console.log('❌❌❌ ERROR CAPTURADO:', error);
+      console.error('Error al enviar nota manual:', error);
+      
+      // Mostrar el mensaje de error
+      const errorMessage = error.message || t('errorSubmittingActivity');
+      console.log('Mensaje final mostrado al usuario:', errorMessage);
+      Alert.alert(t('error'), errorMessage);
     } finally {
+      console.log('🏁 Finalizando submitActivity');
       setIsSubmittingActivity(false);
     }
   };
 
-  // Cargar las actividades existentes para esta tarea
   const loadTaskActivities = async () => {
     try {
       const activities = await api.getTaskActivities(taskId);
@@ -556,6 +604,42 @@ const TaskDetailsScreen = ({ route, navigation }) => {
       loadTaskActivities();
     }
   }, [task]);
+
+  // Función para manejar cuando se detecta una palabra clave
+  const handleKeywordDetected = (keyword) => {
+    console.log(`Palabra clave detectada: "${keyword}"`);
+    
+    // Normalizar la palabra clave detectada para comparación
+    const normalizedKeyword = keyword.trim().toLowerCase();
+    
+    setSpokenKeywords(prev => {
+      // Verificar si ya existe considerando mayúsculas/minúsculas
+      const alreadyExists = prev.some(k => k.toLowerCase().trim() === normalizedKeyword);
+      
+      if (!alreadyExists) {
+        console.log(`Añadiendo palabra clave nueva: "${keyword}"`);
+        return [...prev, keyword];
+      }
+      
+      console.log(`La palabra clave "${keyword}" ya estaba registrada`);
+      return prev;
+    });
+  };
+
+  // Función para extraer palabras clave de la tarea
+  const getTaskKeywords = () => {
+    if (!task || !task.keywords) return [];
+    
+    if (typeof task.keywords === 'string') {
+      return task.keywords.split(',').map(k => k.trim()).filter(k => k.length > 0);
+    }
+    
+    if (Array.isArray(task.keywords)) {
+      return task.keywords;
+    }
+    
+    return [];
+  };
 
   if (loading) {
     return (
@@ -599,7 +683,9 @@ const TaskDetailsScreen = ({ route, navigation }) => {
                       task.location.coordinates.length === 2;
 
   return (
-    <ScrollView style={styles.container}>
+    <SafeAreaView style={styles.safeArea}>
+      <StatusBar barStyle="light-content" backgroundColor="#1c1c1c" />
+      <ScrollView style={styles.container}>
       <View style={styles.header}>
         <View style={styles.taskStatusContainer}>
           <TouchableOpacity
@@ -631,36 +717,40 @@ const TaskDetailsScreen = ({ route, navigation }) => {
       </View>
       
       <View style={styles.infoContainer}>
-        <Text style={styles.label}>{t('description')}:</Text>
-        <Text style={styles.description}>{task.description || t('noDescription')}</Text>
-      </View>
-      
-      {(user?.isAdmin || task.userId === user?._id) && (
-        <View style={styles.infoContainer}>
-          <Text style={styles.label}>{t('assignedTo')}:</Text>
-          <Text style={styles.value}>
-            {assignedUser ? assignedUser.username : 
-             (typeof task.userId === 'object' && task.userId.username) ? task.userId.username : 
-             t('noUserAssigned')}
-          </Text>
+        {/* Descripción */}
+        <View style={styles.infoSection}>
+          <Text style={styles.infoLabel}>{t('description')}:</Text>
+          <Text style={styles.description}>{task.description || t('noDescription')}</Text>
         </View>
-      )}
-      
-      <View style={styles.infoContainer}>
-        <Text style={styles.label}>{t('createdAt')}:</Text>
-        <Text style={styles.value}>
-          {new Date(task.createdAt).toLocaleString()}
-        </Text>
-      </View>
-      
-      {task.updatedAt && task.updatedAt !== task.createdAt && (
-        <View style={styles.infoContainer}>
-          <Text style={styles.label}>{t('updatedAt')}:</Text>
-          <Text style={styles.value}>
-            {new Date(task.updatedAt).toLocaleString()}
-          </Text>
+        
+        {/* Fechas en una sola fila */}
+        <View style={styles.datesContainer}>
+          <View style={styles.dateSection}>
+            <Text style={styles.infoLabel}>{t('created')}:</Text>
+            <Text style={styles.dateValue}>
+              {task.createdAt ? new Date(task.createdAt).toLocaleString() : t('unknown')}
+            </Text>
+          </View>
+          
+          <View style={styles.dateSection}>
+            <Text style={styles.infoLabel}>{t('updated')}:</Text>
+            <Text style={styles.dateValue}>
+              {task.updatedAt ? new Date(task.updatedAt).toLocaleString() : t('unknown')}
+            </Text>
+          </View>
         </View>
-      )}
+        
+        {(user?.isAdmin || task.userId === user?._id) && (
+          <View style={styles.infoSection}>
+            <Text style={styles.infoLabel}>{t('assignedTo')}:</Text>
+            <Text style={styles.value}>
+              {assignedUser ? assignedUser.username : 
+               (typeof task.userId === 'object' && task.userId.username) ? task.userId.username : 
+               t('noUserAssigned')}
+            </Text>
+          </View>
+        )}
+      </View>
       
       {hasLocation && (
         <View style={styles.mapContainer}>
@@ -689,8 +779,8 @@ const TaskDetailsScreen = ({ route, navigation }) => {
                 }}
                 radius={task.radius * 1000} // Convert km to meters for map display
                 strokeWidth={1}
-                strokeColor={'#1a66ff'}
-                fillColor={'rgba(30, 144, 255, 0.2)'}
+                strokeColor={'rgba(255, 243, 229, 0.8)'}
+                fillColor={'rgba(255, 243, 229, 0.2)'}
               />
             )}
             {userLocation && (
@@ -717,43 +807,33 @@ const TaskDetailsScreen = ({ route, navigation }) => {
           ) : (
             <Text style={styles.outsideRadius}>{t('outsideTaskRadius')}</Text>
           )}
+          
+          {/* Botón de iniciar/finalizar tarea integrado en el contenedor de mapa */}
+          <View style={styles.mapActionButtonContainer}>
+            {!taskStarted ? (
+              <TouchableOpacity 
+                style={[
+                  styles.startButton,
+                  !isWithinRadius && styles.disabledButton
+                ]}
+                disabled={!isWithinRadius || task.completed}
+                onPress={handleStartTask}
+              >
+                <Ionicons name="play" size={20} color="#fff" style={styles.buttonIcon} />
+                <Text style={styles.startButtonText}>{t('startTask')}</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity 
+                style={styles.endButton}
+                onPress={handleEndTask}
+              >
+                <Ionicons name="stop" size={20} color="#fff" style={styles.buttonIcon} />
+                <Text style={styles.endButtonText}>{t('endTask')}</Text>
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
       )}
-      
-      {hasLocation && (
-        <View style={styles.taskActionContainer}>
-          {!taskStarted ? (
-            <TouchableOpacity 
-              style={[
-                styles.startButton,
-                !isWithinRadius && styles.disabledButton
-              ]}
-              disabled={!isWithinRadius || task.completed}
-              onPress={handleStartTask}
-            >
-              <Ionicons name="play" size={20} color="#fff" style={styles.buttonIcon} />
-              <Text style={styles.startButtonText}>{t('startTask')}</Text>
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity 
-              style={styles.endButton}
-              onPress={handleEndTask}
-            >
-              <Ionicons name="stop" size={20} color="#fff" style={styles.buttonIcon} />
-              <Text style={styles.endButtonText}>{t('endTask')}</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      )}
-      
-      <View style={styles.actionsContainer}>
-        <TouchableOpacity 
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-        >
-          <Text style={styles.backButtonText}>{t('backToTasks')}</Text>
-        </TouchableOpacity>
-      </View>
       
       <View style={styles.activityContainer}>
         <TextInput
@@ -761,6 +841,8 @@ const TaskDetailsScreen = ({ route, navigation }) => {
           value={activityInput}
           onChangeText={setActivityInput}
           placeholder={t('enterActivity')}
+          placeholderTextColor="rgba(255, 243, 229, 0.5)"
+          color="#fff3e5"
         />
         <TouchableOpacity 
           style={styles.submitActivityButton}
@@ -771,43 +853,73 @@ const TaskDetailsScreen = ({ route, navigation }) => {
         </TouchableOpacity>
       </View>
       
-      {taskActivities.length > 0 && (
-        <View style={styles.activitiesContainer}>
-          <Text style={styles.activitiesTitle}>{t('taskActivities')}</Text>
-          {taskActivities.map(activity => (
-            <View key={activity._id} style={styles.activityItem}>
-              <Text style={styles.activityItemText}>{activity.description}</Text>
-              <Text style={styles.activityItemTimestamp}>{new Date(activity.createdAt).toLocaleString()}</Text>
-            </View>
-          ))}
-        </View>
-      )}
+      {taskStarted && <VoiceListener isTaskActive={taskStarted} taskData={task} onKeywordDetected={handleKeywordDetected} />}
       
-      {taskStarted && <VoiceListener isTaskActive={taskStarted} taskData={task} />}
+      {/* Nuevo componente para mostrar palabras clave */}
+      <View style={styles.keywordsContainer}>
+        <Text style={styles.keywordsLabel}>{t('keywordsToSay')}</Text>
+        <View style={styles.keywordsList}>
+          {getTaskKeywords().map((keyword, index) => {
+            // Verificar si la palabra clave ya ha sido pronunciada (normalizando para comparación)
+            const isSpoken = spokenKeywords.some(
+              spoken => spoken.toLowerCase().trim() === keyword.toLowerCase().trim()
+            );
+            
+            return (
+              <View key={index} style={styles.keywordWrapper}>
+                <Text 
+                  style={[
+                    styles.keyword, 
+                    isSpoken && styles.spokenKeyword
+                  ]}
+                >
+                  {keyword}
+                </Text>
+                {isSpoken && (
+                  <Ionicons 
+                    name="checkmark-circle" 
+                    size={16} 
+                    color="#4CAF50" 
+                    style={styles.keywordCheckmark} 
+                  />
+                )}
+              </View>
+            );
+          })}
+        </View>
+      </View>
     </ScrollView>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#2e2e2e',
+  },
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#2e2e2e',
   },
   centerContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
+    backgroundColor: '#2e2e2e',
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 15,
+
     paddingVertical: 10,
-    backgroundColor: '#fff',
+    backgroundColor: '#1c1c1c',
     borderBottomWidth: 1,
-    borderBottomColor: '#ddd',
+    borderBottomColor: 'rgba(255, 243, 229, 0.1)',
+
   },
   taskStatusContainer: {
     flexDirection: 'row',
@@ -818,80 +930,111 @@ const styles = StyleSheet.create({
     height: 30,
     borderRadius: 15,
     borderWidth: 2,
-    borderColor: '#4A90E2',
+    borderColor: '#fff3e5',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 10,
   },
   completedButton: {
-    backgroundColor: '#4A90E2',
+
+    backgroundColor: '#4CAF50',
+    borderColor: '#4CAF50',
+
   },
   completeButtonText: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#4A90E2',
+    color: '#fff3e5',
   },
   taskStatus: {
     fontSize: 16,
-    color: '#666',
+
+    color: '#fff3e5',
+
   },
   deleteButton: {
     padding: 8,
   },
   titleContainer: {
     padding: 15,
-    backgroundColor: '#fff',
+
+    backgroundColor: '#1c1c1c',
+
     marginBottom: 10,
+    borderRadius: 15,
+    marginHorizontal: 10,
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 243, 229, 0.1)',
   },
   title: {
     fontSize: 22,
     fontWeight: 'bold',
-    color: '#333',
+    color: '#fff',
   },
   infoContainer: {
     padding: 15,
-    backgroundColor: '#fff',
+    backgroundColor: '#fff3e5', // Fondo color crema
     marginBottom: 10,
+    borderRadius: 15,
+    marginHorizontal: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(28, 28, 28, 0.1)', // Borde sutil oscuro
   },
-  label: {
-    fontSize: 16,
+  infoSection: {
+    marginBottom: 6,
+  },
+  infoLabel: {
+    fontSize: 14,
     fontWeight: 'bold',
-    color: '#666',
+    color: '#777777', // Subtítulos en gris
     marginBottom: 5,
   },
   description: {
     fontSize: 16,
-    color: '#333',
+    color: '#000000', // Texto en negro
     lineHeight: 24,
   },
   value: {
     fontSize: 16,
-    color: '#333',
+    color: '#000000', // Texto en negro
   },
   mapContainer: {
     padding: 15,
-    backgroundColor: '#fff',
+    backgroundColor: '#1c1c1c',
     marginBottom: 10,
+    borderRadius: 15,
+    marginHorizontal: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 243, 229, 0.1)',
+
   },
   mapLabel: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#666',
+
+    color: 'rgba(255, 243, 229, 0.7)',
+
     marginBottom: 10,
   },
   map: {
     height: 200,
     marginBottom: 10,
-    borderRadius: 8,
+    borderRadius: 15,
+    overflow: 'hidden',
   },
   locationName: {
     fontSize: 16,
-    color: '#333',
+
+    color: '#fff3e5',
+
     marginBottom: 5,
   },
   radius: {
     fontSize: 14,
-    color: '#666',
+
+    color: 'rgba(255, 243, 229, 0.7)',
+
     marginBottom: 5,
   },
   withinRadius: {
@@ -902,33 +1045,36 @@ const styles = StyleSheet.create({
   },
   outsideRadius: {
     fontSize: 14,
-    color: '#F44336',
+    color: '#ff5252',
     fontWeight: 'bold',
     marginBottom: 5,
   },
-  taskActionContainer: {
-    padding: 15,
-    backgroundColor: '#fff',
-    marginBottom: 10,
+
+  mapActionButtonContainer: {
+    marginTop: 15,
+
+
   },
   startButton: {
     backgroundColor: '#4CAF50',
     padding: 15,
-    borderRadius: 8,
+    borderRadius: 15,
     alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'center',
   },
   endButton: {
-    backgroundColor: '#F44336',
+    backgroundColor: '#ff5252',
     padding: 15,
-    borderRadius: 8,
+    borderRadius: 15,
     alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'center',
   },
   disabledButton: {
-    backgroundColor: '#cccccc',
+
+    backgroundColor: 'rgba(255, 243, 229, 0.2)',
+
   },
   startButtonText: {
     color: '#fff',
@@ -943,87 +1089,119 @@ const styles = StyleSheet.create({
   buttonIcon: {
     marginRight: 8,
   },
+
   actionsContainer: {
     padding: 15,
     marginBottom: 20,
+    marginHorizontal: 10,
   },
   backButton: {
-    backgroundColor: '#4A90E2',
+    backgroundColor: '#1c1c1c',
     padding: 15,
-    borderRadius: 8,
+    borderRadius: 15,
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 243, 229, 0.2)',
   },
   backButtonText: {
-    color: '#fff',
+    color: '#fff3e5',
     fontSize: 16,
     fontWeight: 'bold',
   },
   errorText: {
-    color: '#e74c3c',
+    color: '#ff5252',
+
     fontSize: 16,
     marginBottom: 15,
     textAlign: 'center',
   },
   retryButton: {
-    backgroundColor: '#4A90E2',
+
+    backgroundColor: '#1c1c1c',
+
     padding: 12,
-    borderRadius: 8,
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 243, 229, 0.2)',
   },
   retryButtonText: {
-    color: '#fff',
+
+    color: '#fff3e5',
+
     fontSize: 16,
     fontWeight: 'bold',
   },
   activityContainer: {
     padding: 15,
-    backgroundColor: '#fff',
+
+    backgroundColor: '#1c1c1c',
     marginBottom: 10,
+    borderRadius: 15,
+    marginHorizontal: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 243, 229, 0.1)',
   },
   activityInput: {
     height: 40,
-    borderColor: '#ccc',
+    borderColor: 'rgba(255, 243, 229, 0.2)',
+
     borderWidth: 1,
     paddingHorizontal: 10,
     paddingVertical: 5,
     fontSize: 16,
+
+    color: '#fff3e5',
+    backgroundColor: '#2e2e2e',
+    borderRadius: 10,
+
   },
   submitActivityButton: {
-    backgroundColor: '#4A90E2',
+    backgroundColor: '#fff3e5',
     padding: 10,
-    borderRadius: 8,
+    borderRadius: 15,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 10,
   },
   submitActivityButtonText: {
-    color: '#fff',
+
+    color: '#000',
+
     fontSize: 16,
     fontWeight: 'bold',
   },
-  activitiesContainer: {
+  keywordsContainer: {
     padding: 15,
-    backgroundColor: '#fff',
+
+    backgroundColor: '#1c1c1c',
     marginBottom: 10,
+    marginTop: 15,
+    borderRadius: 15,
+    marginHorizontal: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 243, 229, 0.1)',
+
   },
-  activitiesTitle: {
-    fontSize: 18,
+  keywordsLabel: {
+    fontSize: 16,
     fontWeight: 'bold',
-    color: '#333',
+    color: '#fff3e5',
     marginBottom: 10,
-  },
-  activityItem: {
-    padding: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#ddd',
+
+    borderBottomColor: 'rgba(255, 243, 229, 0.1)',
   },
   activityItemText: {
     fontSize: 16,
-    color: '#333',
+    color: '#fff3e5',
+
   },
-  activityItemTimestamp: {
+  keyword: {
     fontSize: 14,
-    color: '#666',
+
+    color: 'rgba(255, 243, 229, 0.7)',
+
   },
 });
 
-export default TaskDetailsScreen; 
+export default TaskDetailsScreen;

@@ -15,10 +15,11 @@ export const translations = {
     loginError: 'Login error',
     tryAgain: 'Try again',
     unexpectedError: 'An unexpected error occurred during login. Please try again.',
+    Welcome: 'Welcome',
     
     // Admin panel translations
     adminDashboard: 'Admin Dashboard',
-    welcomeAdmin: 'Welcome, Admin',
+    welcomeAdmin: 'Welcome',
     totalUsers: 'Total Users',
     activeUsers: 'Active Users',
     totalTasks: 'Total Tasks',
@@ -42,6 +43,12 @@ export const translations = {
     minutesAgo: 'minutes ago',
     secondsAgo: 'seconds ago',
     someTimeAgo: 'some time ago',
+    
+    // Real-time locations
+    loggedUsers: 'Logged Users',
+    loadingLocations: 'Loading locations...',
+    noActiveUsers: 'No active users',
+    locationLegend: 'Location Legend',
     
     // Activity translations
     userActivities: 'User Activities',
@@ -458,6 +465,7 @@ export const translations = {
     // Voice assistant
     voiceAssistant: "Voice Assistant",
     typeSomething: "Type something...",
+    continue: "Continue",
     voiceAssistantHelp: "This simulator lets you test the voice assistant. Type 'bitacora' to start a voice note.",
     voiceCommandsHelp: "Voice commands available: 'bitacora' (starts recording), 'yes/no' (confirmation)",
     voiceAssistantActive: "Voice assistant active and listening for 'bitacora'",
@@ -469,6 +477,50 @@ export const translations = {
     startTracking: 'Start Tracking',
     stopTracking: 'Stop Tracking',
     locationsRecorded: 'locations recorded',
+    
+    // Verification prompt translations
+    listening: 'Listening...',
+    processing: 'Processing...',
+    voiceNotRecognized: 'Voice not recognized. Please enter the code manually.',
+    codeNotRecognized: 'Code not recognized. Please enter manually.',
+    noNumbersRecognized: 'No numbers recognized. Please enter manually.',
+    voiceProcessingError: 'Error processing voice. Please enter manually.',
+    enterCode: 'Enter code',
+    pleaseEnterCode: 'Please enter the code',
+    incorrectCode: 'Incorrect code',
+    verify: 'Verify',
+    cancel: 'Cancel',
+    speakCode: 'Speak the code',
+    timeRemaining: 'Time remaining: {{time}}s',
+    
+    // Location tracking messages
+    startingLocationTracking: "Starting location tracking...",
+    locationPermissionDenied: "Location permission was denied",
+    gettingInitialLocation: "Getting initial location reading with highest accuracy...",
+    initialLocationReading: "Initial location reading obtained",
+    settingUpLocationTracking: "Setting up continuous location tracking...",
+    locationUpdateReceived: "Location update received",
+    locationCoordinates: "Location: ${lat}, ${lng} (±${accuracy}m)",
+    locationTrackingStarted: "Location tracking successfully started",
+    locationTrackingError: "Error starting location tracking: ${error}",
+    
+    // Radius check messages
+    radiusCheckDivider: "---------- RADIUS CHECK ----------",
+    checkingTaskRadius: "Checking if within task radius - Task ID: ${taskId}",
+    taskMissingCoordinates: "Task missing valid coordinates: ${location}",
+    taskPosition: "Task position: ${position}",
+    taskRadius: "Task radius: ${radius} meters",
+    userPosition: "User position: ${position}",
+    distanceToTask: "Distance to task: ${km} km / ${meters} meters",
+    withinTaskRadius: "WITHIN RADIUS",
+    outsideTaskRadius: "OUTSIDE RADIUS",
+    updatingRadiusState: "Updating within radius state from ${from} to ${to}",
+    
+    // Keywords
+    keywordsToSay: "Keywords to say",
+    spokenKeywords: "Spoken keywords",
+    keywordDetected: "Keyword detected",
+    keywordsConfigured: "Keywords configured in task",
   },
   es: {
     login: 'Iniciar Sesión',
@@ -483,10 +535,11 @@ export const translations = {
     loginError: 'Error de inicio de sesión',
     tryAgain: 'Intentar de nuevo',
     unexpectedError: 'Ocurrió un error inesperado durante el inicio de sesión. Por favor intenta de nuevo.',
+    Welcome: 'Bienvenido',
     
     // Admin panel translations
     adminDashboard: 'Panel de Administración',
-    welcomeAdmin: 'Bienvenido, Administrador',
+    welcomeAdmin: 'Bienvenido',
     totalUsers: 'Total de Usuarios',
     activeUsers: 'Usuarios Activos',
     totalTasks: 'Total de Tareas',
@@ -510,6 +563,12 @@ export const translations = {
     minutesAgo: 'minutos atrás',
     secondsAgo: 'segundos atrás',
     someTimeAgo: 'hace algún tiempo',
+    
+    // Real-time locations
+    loggedUsers: 'Usuarios Logueados',
+    loadingLocations: 'Cargando ubicaciones...',
+    noActiveUsers: 'No hay usuarios activos',
+    locationLegend: 'Leyenda de Ubicaciones',
     
     // Activity translations
     userActivities: 'Actividades de Usuarios',
@@ -885,8 +944,8 @@ export const translations = {
     taskRadius: "Radio de la tarea: ${radius} metros",
     userPosition: "Posición del usuario: ${position}",
     distanceToTask: "Distancia a la tarea: ${km} km / ${meters} metros",
-    withinTaskRadius: "✅ DENTRO DEL RADIO: ${distance}m a la tarea '${taskTitle}'",
-    outsideTaskRadius: "❌ FUERA DEL RADIO: ${distance}m a la tarea '${taskTitle}' (radio: ${radius}m)",
+    withinTaskRadius: "✅ DENTRO DEL RADIO",
+    outsideTaskRadius: "❌ FUERA DEL RADIO",
     updatingRadiusState: "Actualizando estado dentro del radio de ${from} a ${to}",
     
     // Dashboard screen
@@ -926,6 +985,11 @@ export const translations = {
     // Voice assistant
     voiceAssistant: "Asistente de Voz",
     typeSomething: "Escribe algo...",
+    
+    // Task details
+    created: "Creado",
+    updated: "Actualizado",
+    continue: "Continuar",
     voiceAssistantHelp: "Este simulador te permite probar el asistente de voz. Escribe 'bitácora' para iniciar una nota de voz.",
     voiceCommandsHelp: "Comandos de voz disponibles: 'bitácora' (inicia grabación), 'sí/no' (confirmación)",
     voiceAssistantActive: "Asistente de voz activo y escuchando por 'bitácora'",
@@ -937,6 +1001,27 @@ export const translations = {
     startTracking: 'Iniciar Seguimiento',
     stopTracking: 'Detener Seguimiento',
     locationsRecorded: 'ubicaciones registradas',
+    
+    // Verification prompt translations
+    listening: 'Escuchando...',
+    processing: 'Procesando...',
+    voiceNotRecognized: 'No se pudo reconocer la voz. Intente ingresar el código manualmente.',
+    codeNotRecognized: 'Código no reconocido. Intente ingresar manualmente.',
+    noNumbersRecognized: 'No se reconocieron números. Intente ingresar manualmente.',
+    voiceProcessingError: 'Error al procesar voz. Intente ingresar manualmente.',
+    enterCode: 'Ingrese código',
+    pleaseEnterCode: 'Por favor ingrese el código',
+    incorrectCode: 'Código incorrecto',
+    verify: 'Verificar',
+    cancel: 'Cancelar',
+    speakCode: 'Diga el código',
+    timeRemaining: 'Tiempo restante: {{time}}s',
+    
+    // Keywords
+    keywordsToSay: "Palabras clave para decir",
+    spokenKeywords: "Palabras clave dichas",
+    keywordDetected: "Palabra clave detectada",
+    keywordsConfigured: "Palabras clave configuradas en la tarea",
   }
 };
 

@@ -22,7 +22,7 @@ import { useTheme } from '../../context/ThemeContext';
 
 const { width, height } = Dimensions.get('window');
 
-const UserManagementScreen = () => {
+const UserManagementScreen = ({ navigation }) => {
   const { user } = useAuth();
   const { t, toggleLanguage, language } = useLanguage();
   const theme = useTheme();
@@ -289,13 +289,18 @@ const UserManagementScreen = () => {
     <SafeAreaView style={styles.container}>
       <StatusBar backgroundColor={theme.colors.darkGrey} barStyle="light-content" />
       <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.navigate('AdminDashboard')} style={styles.backButton}>
+          <Ionicons name="arrow-back" size={24} color="#ffffff" />
+        </TouchableOpacity>
         <Text style={styles.headerTitle}>{t('userManagement')}</Text>
+        <View style={styles.headerRightPlaceholder}></View>
       </View>
       
       <View style={styles.searchContainer}>
         <TextInput
           style={styles.searchInput}
           placeholder={t('searchUsers')}
+          placeholderTextColor="rgba(0, 0, 0, 0.5)"
           value={searchQuery}
           onChangeText={setSearchQuery}
         />
@@ -321,27 +326,41 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#1c1c1c',
     padding: 15,
-    paddingTop: Platform.OS === 'ios' ? 0 : 15,
+    paddingTop: Platform.OS === 'ios' ? 15 : 25,
+    paddingBottom: 20,
   },
   headerTitle: {
-    color: '#fff3e5',
+    color: '#ffffff',
     fontSize: Math.min(width * 0.05, 20),
     fontWeight: 'bold',
+    flex: 1,
+    textAlign: 'center',
+  },
+  backButton: {
+    padding: 5,
+    width: 40,
+  },
+  headerRightPlaceholder: {
+    width: 40,
   },
   searchContainer: {
-    padding: 15,
+    paddingHorizontal: 15,
+    paddingTop: 0,
+    paddingBottom: 15,
     backgroundColor: '#1c1c1c',
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(255, 243, 229, 0.1)',
+    marginTop: -10,
   },
   searchInput: {
     height: 40,
     borderWidth: 1,
-    borderColor: 'rgba(255, 243, 229, 0.2)',
-    borderRadius: 15,
-    paddingHorizontal: 15,
-    backgroundColor: '#2e2e2e',
-    color: '#fff3e5',
+    borderColor: 'rgba(28, 28, 28, 0.3)',
+    borderRadius: 30,
+    paddingHorizontal: 20,
+    backgroundColor: '#fff3e5',
+    color: '#333333',
+    fontSize: 15,
   },
   errorText: {
     color: '#ff5252',
@@ -356,8 +375,7 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     marginTop: 10,
-    color: '#fff3e5',
-    opacity: 0.7,
+    color: '#ffffff',
     fontSize: Math.min(width * 0.035, 14),
   },
   statsContainer: {
@@ -375,12 +393,11 @@ const styles = StyleSheet.create({
   statValue: {
     fontSize: Math.min(width * 0.045, 18),
     fontWeight: 'bold',
-    color: '#fff3e5',
+    color: '#ffffff',
   },
   statLabel: {
     fontSize: Math.min(width * 0.03, 12),
-    color: '#fff3e5',
-    opacity: 0.7,
+    color: '#ffffff',
   },
   userItem: {
     backgroundColor: '#1c1c1c',
@@ -402,7 +419,7 @@ const styles = StyleSheet.create({
   username: {
     fontSize: Math.min(width * 0.04, 16),
     fontWeight: 'bold',
-    color: '#fff3e5',
+    color: '#ffffff',
   },
   email: {
     fontSize: Math.min(width * 0.035, 14),
@@ -427,7 +444,7 @@ const styles = StyleSheet.create({
   },
   userRole: {
     fontSize: Math.min(width * 0.03, 12),
-    color: '#fff3e5',
+    color: '#ffffff',
     fontWeight: 'bold',
     paddingVertical: 3,
   },
@@ -454,7 +471,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#1c1c1c',
   },
   buttonText: {
-    color: '#fff3e5',
+    color: '#ffffff',
     fontSize: Math.min(width * 0.03, 12),
     fontWeight: 'bold',
   },
@@ -463,8 +480,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   emptyText: {
-    color: '#fff3e5',
-    opacity: 0.7,
+    color: '#ffffff',
     textAlign: 'center',
     fontSize: Math.min(width * 0.035, 14),
   },
@@ -490,7 +506,7 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: Math.min(width * 0.045, 18),
     fontWeight: 'bold',
-    color: '#fff3e5',
+    color: '#ffffff',
     marginBottom: 15,
     textAlign: 'center',
   },
@@ -502,12 +518,11 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: Math.min(width * 0.035, 14),
     color: '#ffffff',
-    opacity: 0.7,
   },
   detailValue: {
     flex: 2,
     fontSize: Math.min(width * 0.035, 14),
-    color: '#fff3e5',
+    color: '#ffffff',
     fontWeight: '500',
   },
   modalActions: {
@@ -528,7 +543,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#1c1c1c',
   },
   closeButtonText: {
-    color: '#fff3e5',
+    color: '#ffffff',
     fontWeight: 'bold',
     fontSize: Math.min(width * 0.035, 14),
   },

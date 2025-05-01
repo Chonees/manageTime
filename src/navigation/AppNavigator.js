@@ -6,13 +6,13 @@ import { startLocationMonitoring, stopLocationMonitoring } from '../services/loc
 // Pantallas de autenticación
 import LoginScreen from '../screens/auth/loginScreen1/LoginScreen';
 import RegisterScreen from '../screens/auth/RegisterScreen';
-import DiagnosticScreen from '../screens/DiagnosticScreen';
+import WelcomeScreen from '../screens/auth/WelcomeScreen';
+
 
 // Pantallas principales
 import DashboardScreen from '../screens/DashboardScreen';
 import TaskScreen from '../screens/TaskScreen';
 import TaskDetailsScreen from '../screens/TaskDetailsScreen';
-import LocationHistoryScreen from '../screens/LocationHistoryScreen';
 import VoiceAssistantScreen from '../screens/VoiceAssistantScreen';
 import LocationTrackingScreen from '../screens/LocationTrackingScreen';
 
@@ -84,6 +84,11 @@ const AuthNavigator = () => (
     }}
   >
     <Stack.Screen 
+      name="Welcome" 
+      component={WelcomeScreen} 
+      options={{ headerShown: false }}
+    />
+    <Stack.Screen 
       name="Login" 
       component={LoginScreen} 
       options={{ headerShown: false }}
@@ -92,11 +97,6 @@ const AuthNavigator = () => (
       name="Register" 
       component={RegisterScreen} 
       options={{ headerShown: false }}
-    />
-    <Stack.Screen 
-      name="Diagnostic" 
-      component={DiagnosticScreen} 
-      options={{ title: 'Diagnóstico de Conexión' }}
     />
   </Stack.Navigator>
 );
@@ -170,11 +170,6 @@ const UserNavigator = () => {
         <Stack.Screen 
           name="TaskDetails" 
           component={TaskDetailsScreen}
-          options={{ headerShown: false }}
-        />
-        <Stack.Screen 
-          name="LocationHistory" 
-          component={LocationHistoryScreen}
           options={{ headerShown: false }}
         />
         <Stack.Screen 
@@ -260,11 +255,6 @@ const AdminNavigator = () => {
       <Stack.Screen 
         name="TaskDetails" 
         component={TaskDetailsScreen}
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen 
-        name="LocationHistory" 
-        component={LocationHistoryScreen}
         options={{ headerShown: false }}
       />
       <Stack.Screen 

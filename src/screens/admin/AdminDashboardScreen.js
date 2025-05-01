@@ -36,27 +36,23 @@ const AdminDashboardScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
-  const [recentActivity, setRecentActivity] = useState([]); // Añadir estado para actividades recientes
-  const [realTimeLocations, setRealTimeLocations] = useState([]); // Añadir estado para ubicaciones en tiempo real
-  const [loadingLocations, setLoadingLocations] = useState(false); // Estado para carga de ubicaciones
-  const [mapReady, setMapReady] = useState(false); // Estado para controlar si el mapa está listo
-  const mapRef = useRef(null); // Referencia al componente de mapa
+  const [userAvailability, setUserAvailability] = useState([]); 
+  const [loadingAvailability, setLoadingAvailability] = useState(false); 
+  const [realTimeLocations, setRealTimeLocations] = useState([]); 
+  const [loadingLocations, setLoadingLocations] = useState(false); 
+  const [mapReady, setMapReady] = useState(false); 
+  const mapRef = useRef(null); 
 
-  // Load statistics and recent activities
   const loadStats = async () => {
     try {
       setLoading(true);
       setError(null);
       
-      // Load admin stats
       const statsData = await api.getAdminStats();
       setStats(statsData);
 
-      // Load recent activities
-      const activityData = await api.getRecentActivities();
-      setRecentActivity(activityData);
+      await loadUserAvailability();
 
-      // Cargar ubicaciones en tiempo real
       await loadRealTimeLocations();
     } catch (error) {
       console.error('Error loading stats:', error);
@@ -66,7 +62,42 @@ const AdminDashboardScreen = ({ navigation }) => {
     }
   };
 
-  // Función para cargar ubicaciones en tiempo real sin bloquear la UI
+  const loadUserAvailability = async (silent = false) => {
+    if (!user?.isAdmin) return;
+    
+    try {
+      if (!silent) setLoadingAvailability(true);
+      
+      const availabilityData = await api.getUserAvailabilityStatus();
+      console.log('Datos de disponibilidad cargados:', availabilityData?.length || 0);
+      
+      // Verificar que availabilityData sea un array
+      if (!availabilityData || !Array.isArray(availabilityData)) {
+        console.error('Error: getUserAvailabilityStatus no devolvió un array');
+        setUserAvailability([]);
+        return;
+      }
+      
+      // Ordenar: primero disponibles, luego no disponibles
+      const sortedAvailability = availabilityData.sort((a, b) => {
+        // Primero ordenar por disponibilidad (disponibles primero)
+        if (a.isAvailable && !b.isAvailable) return -1;
+        if (!a.isAvailable && b.isAvailable) return 1;
+        
+        // Si ambos tienen la misma disponibilidad, ordenar por timestamp (más reciente primero)
+        return new Date(b.timestamp || Date.now()) - new Date(a.timestamp || Date.now());
+      });
+      
+      setUserAvailability(sortedAvailability);
+    } catch (error) {
+      console.error('Error al cargar estado de disponibilidad:', error);
+      // En caso de error, establecer array vacío para evitar que la UI se rompa
+      setUserAvailability([]);
+    } finally {
+      if (!silent) setLoadingAvailability(false);
+    }
+  };
+
   const loadRealTimeLocations = async (silent = false) => {
     if (!user?.isAdmin) return;
     
@@ -75,28 +106,22 @@ const AdminDashboardScreen = ({ navigation }) => {
       let locations = [];
       
       try {
-        // Intentar obtener ubicaciones del nuevo endpoint
         locations = await api.getRealTimeLocations();
         console.log('Ubicaciones en tiempo real cargadas:', locations.length);
       } catch (error) {
         console.error('Error al cargar ubicaciones en tiempo real:', error);
         
-        // Plan B: Obtener ubicaciones recientes del historial
         try {
           console.log('Intentando cargar ubicaciones del historial como respaldo...');
-          // Obtener la lista de usuarios
           const usersList = await api.getUsers();
           
-          // Para cada usuario, obtener su ubicación más reciente
           const recentLocations = [];
           for (const user of usersList) {
             if (user.isActive) {
-              // Obtener historial de ubicaciones de este usuario
               const history = await api.getLocationHistory(user._id);
               
-              // Si hay historial, usar la ubicación más reciente
               if (history && history.length > 0) {
-                const mostRecent = history[0]; // El historial suele venir ordenado por fecha
+                const mostRecent = history[0]; 
                 recentLocations.push({
                   userId: user._id,
                   username: user.username,
@@ -116,14 +141,7 @@ const AdminDashboardScreen = ({ navigation }) => {
         }
       }
       
-      // Actualizar el estado con las nuevas ubicaciones
-      setRealTimeLocations(prevLocations => {
-        // Solo actualizar si hay cambios en las ubicaciones
-        if (JSON.stringify(prevLocations) !== JSON.stringify(locations)) {
-          return locations;
-        }
-        return prevLocations;
-      });
+      setRealTimeLocations(locations);
     } catch (error) {
       console.error('Error general al cargar ubicaciones:', error);
     } finally {
@@ -131,21 +149,16 @@ const AdminDashboardScreen = ({ navigation }) => {
     }
   };
 
-  // Configurar actualización silenciosa y frecuente de ubicaciones en tiempo real
-  useEffect(() => {
-    let locationInterval = null;
-    
-    if (user?.isAdmin && mapReady) {
-      // Actualizar cada 5 segundos de forma silenciosa (sin indicadores de carga)
-      locationInterval = setInterval(() => {
-        loadRealTimeLocations(true); // true = modo silencioso
-      }, 5000);
-    }
-    
-    return () => {
-      if (locationInterval) clearInterval(locationInterval);
-    };
-  }, [user, mapReady]);
+  const formatRelativeTime = (timestamp) => {
+    const now = new Date();
+    const then = new Date(timestamp);
+    const diffInSeconds = Math.floor((now - then) / 1000);
+
+    if (diffInSeconds < 60) return `${diffInSeconds} ${t('secondsAgo')}`;
+    if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)} ${t('minutesAgo')}`;
+    if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)} ${t('hoursAgo')}`;
+    return `${Math.floor(diffInSeconds / 86400)} ${t('daysAgo')}`;
+  };
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -155,96 +168,53 @@ const AdminDashboardScreen = ({ navigation }) => {
 
   useEffect(() => {
     loadStats();
+    const periodicRefresh = setInterval(() => {
+      loadUserAvailability(true);
+      loadRealTimeLocations(true);
+    }, 30000); 
+
+    return () => {
+      clearInterval(periodicRefresh);
+    };
   }, []);
 
-  const handleLogout = async () => {
-    try {
-      await logout();
-    } catch (error) {
-      Alert.alert(t('error'), t('error'));
-    }
+  const handleLogout = () => {
+    Alert.alert(
+      t('confirmLogout'),
+      t('confirmLogoutMessage'),
+      [
+        {
+          text: t('cancel'),
+          style: 'cancel'
+        },
+        {
+          text: t('logout'),
+          onPress: async () => {
+            try {
+              await logout();
+            } catch (error) {
+              console.error('Error logging out:', error);
+            }
+          }
+        }
+      ]
+    );
   };
 
-  const formatDateTime = (timestamp) => {
-    const date = new Date(timestamp);
-    return date.toLocaleString(language === 'es' ? 'es-ES' : 'en-US', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
+  const renderUserAvailabilityItem = ({ item }) => {
+    const statusColor = item.isAvailable ? '#4CAF50' : '#FF5252';
+    const statusText = item.isAvailable ? t('available') : t('unavailable');
+    const statusIcon = item.isAvailable ? 'checkmark-circle' : 'close-circle';
+    
+    const formattedTime = new Date(item.timestamp).toLocaleTimeString([], {
+      hour: '2-digit', 
       minute: '2-digit'
     });
-  };
-
-  const formatRelativeTime = (timestamp) => {
-    const now = new Date();
-    const locationTime = new Date(timestamp);
-    const diffMs = now - locationTime;
     
-    // Convertir a segundos, minutos, horas
-    const diffSecs = Math.floor(diffMs / 1000);
-    const diffMins = Math.floor(diffSecs / 60);
-    const diffHours = Math.floor(diffMins / 60);
-    const diffDays = Math.floor(diffHours / 24);
+    const formattedDate = new Date(item.timestamp).toLocaleDateString();
     
-    if (diffDays > 0) {
-      return `${diffDays} ${diffDays === 1 ? t('day') : t('days')} ${t('ago')}`;
-    } 
-    if (diffHours > 0) {
-      return `${diffHours} ${diffHours === 1 ? t('hour') : t('hours')} ${t('ago')}`;
-    } 
-    if (diffMins > 0) {
-      return `${diffMins} ${diffMins === 1 ? t('minute') : t('minutes')} ${t('ago')}`;
-    }
-    
-    return `${diffSecs} ${diffSecs === 1 ? t('second') : t('seconds')} ${t('ago')}`;
-  };
-
-  const renderActivityItem = ({ item }) => {
-    let activityColor = '#4A90E2';
-    let activityText = '';
-
-    if (item.type === 'task') {
-      switch (item.action) {
-        case 'created':
-          activityColor = '#2ecc71';
-          activityText = t('taskCreated', { task: item.title });
-          break;
-        case 'completed':
-          activityColor = '#27ae60';
-          activityText = t('taskCompleted', { task: item.title });
-          break;
-        case 'deleted':
-          activityColor = '#e74c3c';
-          activityText = t('taskDeleted', { task: item.title });
-          break;
-        case 'updated':
-          activityColor = '#f39c12';
-          activityText = t('taskUpdated', { task: item.title });
-          break;
-      }
-    } else if (item.type === 'location') {
-      switch (item.action) {
-        case 'started_working':
-          activityColor = '#2ecc71';
-          activityText = t('startedWorkingAt', { location: item.title });
-          break;
-        case 'entered_location':
-          activityColor = '#3498db';
-          activityText = t('enteredLocation', { location: item.title });
-          break;
-        case 'stopped_working':
-          activityColor = '#e74c3c';
-          activityText = t('stoppedWorkingAt', { location: item.title });
-          break;
-        case 'exited_location':
-          activityColor = '#f39c12';
-          activityText = t('exitedLocation', { location: item.title });
-          break;
-      }
-    }
-
     return (
+
       <View style={styles.activityItem}>
         <View style={styles.activityContent}>
           <Text style={styles.activityText}>
@@ -253,16 +223,15 @@ const AdminDashboardScreen = ({ navigation }) => {
           <Text style={styles.activityTime}>
             {formatRelativeTime(item.timestamp)}
           </Text>
+
         </View>
       </View>
     );
   };
 
-  // Función para validar coordenadas
   const parseSafeLocation = (location) => {
     if (!location) return null;
     
-    // Validar que las coordenadas existan y sean números válidos
     const latitude = parseFloat(location.latitude);
     const longitude = parseFloat(location.longitude);
     
@@ -271,7 +240,6 @@ const AdminDashboardScreen = ({ navigation }) => {
       return null;
     }
     
-    // Validar que las coordenadas estén en rangos válidos
     if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
       console.warn('Coordenadas fuera de rango:', { latitude, longitude });
       return null;
@@ -284,7 +252,6 @@ const AdminDashboardScreen = ({ navigation }) => {
     };
   };
 
-  // Función para renderizar de forma segura los marcadores
   const renderSafeMarker = (location, index) => {
     const safeLocation = parseSafeLocation(location);
     if (!safeLocation) return null;
@@ -302,9 +269,28 @@ const AdminDashboardScreen = ({ navigation }) => {
     );
   };
 
+  const centerMapOnUser = (location) => {
+    if (!mapRef.current) return;
+    
+    const safeLocation = parseSafeLocation(location);
+    if (!safeLocation) {
+      console.warn('No se puede centrar en una ubicación inválida');
+      return;
+    }
+
+    // Animar el mapa para centrar en la ubicación del usuario
+    mapRef.current.animateToRegion({
+      latitude: safeLocation.latitude,
+      longitude: safeLocation.longitude,
+      latitudeDelta: 0.01, // Zoom más cercano al centrar en un usuario
+      longitudeDelta: 0.01,
+    }, 1000); // Duración de la animación en ms
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar backgroundColor={theme.colors.darkGrey} barStyle="light-content" />
+
       
       <View style={styles.header}>
         <View style={styles.headerTitleContainer}>
@@ -313,6 +299,7 @@ const AdminDashboardScreen = ({ navigation }) => {
         </View>
         
         <View style={styles.headerActions}>
+
           <TouchableOpacity 
             style={styles.logoutButton}
             onPress={handleLogout}
@@ -373,6 +360,7 @@ const AdminDashboardScreen = ({ navigation }) => {
               )}
             </View>
             
+
             {/* Quick Actions Menu */}
             <View style={styles.actionsContainer}>
               <Text style={styles.sectionTitle}>{t('quickActions')}</Text>
@@ -414,6 +402,7 @@ const AdminDashboardScreen = ({ navigation }) => {
                 >
                   <Text style={[styles.actionButtonText, { color: '#fff' }]}>Test Notifications</Text>
                 </TouchableOpacity>
+
               </View>
             </View>
             
@@ -485,6 +474,7 @@ const AdminDashboardScreen = ({ navigation }) => {
               )}
             </View>
 
+
             <View style={styles.recentActivityContainer}>
               <Text style={styles.sectionTitle}>{t('recentActivity')}</Text>
               {loading ? (
@@ -514,6 +504,7 @@ const AdminDashboardScreen = ({ navigation }) => {
           />
         }
       />
+
     </SafeAreaView>
   );
 };
@@ -523,10 +514,12 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#2e2e2e',
   },
+
+
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+
     paddingHorizontal: 15,
     paddingTop: Platform.OS === 'ios' ? 10 : 15,
     paddingBottom: 15,
@@ -537,10 +530,12 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 22,
+
     fontWeight: 'bold',
     color: '#fff3e5',
   },
   headerSubtitle: {
+
     fontSize: 14,
     color: 'rgba(255, 243, 229, 0.7)',
     marginTop: 5,
@@ -554,40 +549,40 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 15,
     borderRadius: 20,
+
     borderWidth: 1,
     borderColor: 'rgba(255, 59, 48, 0.3)',
   },
   logoutButtonText: {
+
     color: '#FF3B30',
     fontWeight: 'bold',
     fontSize: 14,
+
   },
   errorText: {
-    color: '#e74c3c',
+    color: '#ff5252',
     padding: 10,
-    textAlign: 'center',
-    backgroundColor: '#fce8e6',
-    margin: 10,
+    backgroundColor: 'rgba(255, 82, 82, 0.2)',
     borderRadius: 5,
-  },
-  statsContainer: {
-    margin: 15,
+    margin: 10,
+    textAlign: 'center',
   },
   sectionTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#fff3e5',
     marginBottom: 15,
-    marginHorizontal: 15,
-    marginTop: 15,
+    color: '#fff3e5',
   },
   loadingContainer: {
     alignItems: 'center',
+    justifyContent: 'center',
     padding: 20,
   },
   loadingText: {
     marginTop: 10,
-    color: '#666',
+    color: '#fff3e5',
+    opacity: 0.7,
   },
   statsGrid: {
     flexDirection: 'row',
@@ -596,46 +591,52 @@ const styles = StyleSheet.create({
   },
   statCard: {
     width: '48%',
-    backgroundColor: '#1c1c1c',
-    borderRadius: 15,
+    backgroundColor: '#2e2e2e',
     padding: 15,
-    marginBottom: 15,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    borderRadius: 10,
+    marginBottom: 10,
+    alignItems: 'center',
     borderWidth: 1,
     borderColor: 'rgba(255, 243, 229, 0.1)',
   },
   statValue: {
+
     fontSize: 28,
+
     fontWeight: 'bold',
     color: '#fff3e5',
-    marginBottom: 5,
   },
   statLabel: {
     fontSize: 14,
+
     color: '#ffffff',
+
     opacity: 0.7,
+    marginTop: 5,
+    textAlign: 'center',
   },
   actionsContainer: {
-    margin: 15,
+    backgroundColor: '#1c1c1c',
+    borderRadius: 15,
+    margin: 10,
+    padding: 15,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 243, 229, 0.1)',
   },
   actionButtonsContainer: {
     flexDirection: 'column',
   },
   actionButton: {
-    backgroundColor: '#1c1c1c',
-    borderRadius: 15,
+    backgroundColor: '#2e2e2e',
     padding: 15,
+    borderRadius: 15,
     marginBottom: 10,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
     borderWidth: 1,
     borderColor: 'rgba(255, 243, 229, 0.2)',
   },
@@ -648,6 +649,7 @@ const styles = StyleSheet.create({
   actionButtonText: {
     color: '#fff3e5',
     fontWeight: 'bold',
+
     fontSize: 14,
   },
   recentActivityContainer: {
@@ -689,16 +691,17 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   // Estilos para ubicaciones en tiempo real
+
   realTimeLocationsContainer: {
-    marginTop: 15,
     backgroundColor: '#1c1c1c',
     borderRadius: 15,
+    margin: 10,
     padding: 15,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
-    elevation: 3,
+    elevation: 2,
     borderWidth: 1,
     borderColor: 'rgba(255, 243, 229, 0.1)',
   },
@@ -706,33 +709,36 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 15,
   },
   refreshButton: {
-    padding: 8,
+    padding: 5,
     backgroundColor: 'rgba(255, 243, 229, 0.1)',
     borderRadius: 20,
-  },
-  mapContainer: {
-    height: 250,
-    borderRadius: 8,
-    overflow: 'hidden',
-    marginVertical: 10,
-  },
-  map: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  mapLegend: {
-    position: 'absolute',
-    bottom: 10,
-    right: 10,
-    backgroundColor: 'rgba(28, 28, 28, 0.8)',
-    paddingVertical: 5,
-    paddingHorizontal: 10,
-    borderRadius: 15,
     borderWidth: 1,
     borderColor: 'rgba(255, 243, 229, 0.2)',
   },
+  mapContainer: {
+    borderRadius: 15,
+    overflow: 'hidden',
+    backgroundColor: '#2e2e2e',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 243, 229, 0.1)',
+  },
+  map: {
+    height: 250,
+    width: '100%',
+    borderRadius: 10,
+  },
+  mapLegend: {
+    padding: 10,
+    backgroundColor: '#2e2e2e',
+    borderBottomLeftRadius: 10,
+    borderBottomRightRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 243, 229, 0.1)',
+  },
+
   mapLegendTitle: {
     fontSize: 12,
     fontWeight: 'bold',
@@ -742,52 +748,72 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: 'bold',
     color: '#fff3e5',
+
   },
-  markerContainer: {
-    width: 40,
-    height: 40,
+  legendIcon: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#E74C3C',
+    marginRight: 8,
   },
-  markerBubble: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#4A90E2',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#fff',
+  legendInfo: {
+    flex: 1,
   },
-  markerText: {
-    color: '#fff',
+  legendName: {
+    fontSize: 14,
     fontWeight: 'bold',
+    color: '#fff3e5',
   },
-  markerArrow: {
-    backgroundColor: 'transparent',
-    borderColor: 'transparent',
-    borderTopColor: '#4A90E2',
-    borderWidth: 5,
-    alignSelf: 'center',
-    marginTop: -2,
+  legendTimestamp: {
+    fontSize: 12,
+    color: '#fff3e5',
+    opacity: 0.6,
   },
   noLocationsContainer: {
-    height: 150,
-    justifyContent: 'center',
+    padding: 20,
     alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#2e2e2e',
+    borderRadius: 10,
+  },
+  noLocationsText: {
+    fontSize: 16,
+    color: '#fff3e5',
+    opacity: 0.7,
+    textAlign: 'center',
+  },
+  availabilityContainer: {
     backgroundColor: '#1c1c1c',
     borderRadius: 15,
+    margin: 10,
+    padding: 15,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
     borderWidth: 1,
     borderColor: 'rgba(255, 243, 229, 0.1)',
+    marginBottom: 20,
   },
+
   noLocationsText: {
     color: '#ffffff',
     opacity: 0.7,
     fontSize: 16,
+
   },
-  legendItem: {
+  availabilityItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 5,
+    paddingVertical: 12,
+    paddingHorizontal: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 243, 229, 0.1)',
+    backgroundColor: '#2e2e2e',
   },
+
   legendInfo: {
     flex: 1,
   },
@@ -799,9 +825,30 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#ffffff',
     opacity: 0.6,
+
   },
-  legendList: {
-    maxHeight: 150,
+  statusText: {
+    fontSize: 14,
+    color: '#fff3e5',
+    opacity: 0.7,
+  },
+  timestampText: {
+    fontSize: 12,
+    color: '#fff3e5',
+    opacity: 0.5,
+  },
+  noDataContainer: {
+    padding: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#2e2e2e',
+    borderRadius: 10,
+  },
+  noDataText: {
+    fontSize: 16,
+    color: '#fff3e5',
+    opacity: 0.7,
+    textAlign: 'center',
   },
 });
 
