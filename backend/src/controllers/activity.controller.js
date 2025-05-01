@@ -24,6 +24,8 @@ exports.createActivity = async (req, res) => {
     const { type, taskId, message, metadata } = req.body;
     const userId = req.user.id;
 
+    console.log('Creando actividad:', { type, userId, taskId });
+
     // Validar el tipo de actividad
     const validTypes = [
       'location_enter', 'location_exit', 
@@ -61,15 +63,34 @@ exports.createActivity = async (req, res) => {
     // Guardar la actividad
     await activity.save();
     
+    console.log(`Actividad guardada con ID: ${activity._id}. Tipo: ${type}`);
+    
     // Enviar notificación push a administradores según el tipo de actividad
     try {
-      if (['clock_in', 'clock_out', 'started_working', 'stopped_working', 'task_complete', 'location_enter', 'location_exit'].includes(type)) {
+      // Enviar notificación para todos los tipos relevantes
+      if (['clock_in', 'clock_out', 'started_working', 'stopped_working', 'task_complete', 'location_enter', 'location_exit', 'task_activity'].includes(type)) {
+        console.log(`Intentando enviar notificación para actividad tipo: ${type}`);
+        
         const savedActivity = activity.toObject();
-        await notificationUtil.notifyAdminActivity(savedActivity);
-        console.log(`Notificación push enviada para actividad ${type}`);
+        
+        // Añadir información crítica para iOS
+        if (!savedActivity.metadata) {
+          savedActivity.metadata = {};
+        }
+        
+        // Asegurar que se genere un sonido y notificación aunque la app esté en segundo plano
+        savedActivity.metadata.critical = true;
+        savedActivity.metadata.push_priority = 'high';
+        
+        // Enviar notificación
+        const result = await notificationUtil.notifyAdminActivity(savedActivity);
+        console.log(`Resultado envío notificación:`, JSON.stringify(result));
+      } else {
+        console.log(`Tipo de actividad ${type} no requiere notificación push`);
       }
     } catch (notificationError) {
       console.error('Error enviando notificación push:', notificationError);
+      console.error('Detalles del error:', notificationError.stack);
       // No interrumpimos el flujo si falla la notificación
     }
 

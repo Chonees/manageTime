@@ -40,6 +40,8 @@ const sendPushNotifications = async (tokens, title, body, data = {}) => {
       return { success: false, error: 'No hay tokens válidos' };
     }
 
+    logger.info(`Enviando notificación a ${validTokens.length} dispositivos con título: "${title}"`);
+
     // Crear mensajes para cada token
     const messages = validTokens.map(token => ({
       to: token,
@@ -51,6 +53,10 @@ const sendPushNotifications = async (tokens, title, body, data = {}) => {
       channelId: 'default', // Canal para Android
       badge: 1, // Incrementa el contador de notificaciones en iOS
       _displayInForeground: true, // Mostrar incluso si la app está en primer plano
+      // Configuraciones específicas para iOS
+      categoryId: 'activity',
+      mutableContent: true,
+      contentAvailable: true,
     }));
 
     // Dividir los mensajes en bloques según recomendaciones de Expo
@@ -60,11 +66,22 @@ const sendPushNotifications = async (tokens, title, body, data = {}) => {
     const tickets = [];
     for (const chunk of chunks) {
       try {
+        console.log('Enviando chunk de notificaciones a Expo:', JSON.stringify(chunk[0]));
         const ticketChunk = await expo.sendPushNotificationsAsync(chunk);
         tickets.push(...ticketChunk);
         logger.debug(`Enviado bloque de ${chunk.length} notificaciones`);
+        
+        // Log detallado para depuración
+        ticketChunk.forEach((ticket, i) => {
+          if (ticket.status === 'error') {
+            console.error(`Error en ticket #${i}:`, ticket.message);
+          } else {
+            console.log(`Ticket #${i} enviado correctamente:`, ticket.id);
+          }
+        });
       } catch (chunkError) {
         logger.error('Error enviando bloque de notificaciones', chunkError);
+        console.error('Error completo:', chunkError);
       }
     }
     
@@ -104,6 +121,11 @@ const notifyByRole = async (title, body, data = {}, role = null) => {
     // Extraer tokens
     const tokens = users.map(user => user.pushToken).filter(Boolean);
     logger.info(`Enviando notificación a ${tokens.length} usuarios con rol ${role || 'cualquiera'}`);
+    
+    // Log de usuarios que recibirán notificación
+    users.forEach(user => {
+      console.log(`Usuario que recibirá notificación: ${user.username}, Token: ${user.pushToken}`);
+    });
     
     // Enviar notificaciones
     return await sendPushNotifications(tokens, title, body, data);
@@ -162,6 +184,9 @@ const notifyAdminActivity = async (activity) => {
       case 'location_exit':
         body = `${activity.username || 'Un usuario'} ha ${activity.type === 'location_enter' ? 'entrado en' : 'salido de'} una ubicación asignada`;
         break;
+      case 'task_activity':
+        body = `${activity.username || 'Un usuario'} marcó una tarea como completada`;
+        break;
       default:
         body = activity.message || body;
     }
@@ -172,10 +197,12 @@ const notifyAdminActivity = async (activity) => {
       type: activity.type,
       timestamp: new Date().toISOString(),
       userId: activity.userId,
-      critical: ['clock_in', 'clock_out', 'task_complete'].includes(activity.type)
+      critical: true,
+      priority: 'high'
     };
     
     logger.info(`Enviando notificación de actividad "${activity.type}" a administradores`);
+    console.log(`Enviando notificación para actividad: ${activity.type}, mensaje: "${body}"`);
     
     // Enviar notificación a todos los administradores
     return await notifyByRole(title, body, notificationData, 'admin');
