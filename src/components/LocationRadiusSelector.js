@@ -10,7 +10,7 @@ import {
   ActivityIndicator,
   SafeAreaView,
   Platform,
-
+  StatusBar,
   Alert
 
 } from 'react-native';
@@ -189,7 +189,7 @@ const LocationRadiusSelector = ({
           // iOS supports prompt in Alert
           Alert.prompt(
             t('saveLocation') || 'Save Location',
-            t('enterLocationName') || 'Enter a name for this location',
+            t('saveLocationPrompt') || 'Please enter a name for this location',
             [
               {
                 text: t('cancel') || 'Cancel',
@@ -248,57 +248,52 @@ const LocationRadiusSelector = ({
   const saveLocationWithName = async (name) => {
     try {
       console.log('Saving location with name:', name);
+      setLoading(true);
       
       // Create location object
       const locationData = {
-        _id: `local_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
         name: name,
         location: {
           type: 'Point',
           coordinates: [location.longitude, location.latitude]
         },
-        radius: radius,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
+        radius: radius
       };
       
-      // Get existing saved locations
-      const locationsJson = await AsyncStorage.getItem(STORAGE_KEYS.SAVED_LOCATIONS);
-      let locations = [];
+      // Importar y usar la API que guarda en el backend
+      const apiLocations = require('../services/api-locations');
       
-      if (locationsJson) {
-        try {
-          locations = JSON.parse(locationsJson);
-        } catch (error) {
-          console.error('Error parsing saved locations:', error);
-          locations = [];
-        }
+      try {
+        // Guardar en el backend usando la API
+        const savedLocation = await apiLocations.saveLocation(locationData);
+        console.log('Location saved successfully to server:', savedLocation);
+        
+        // Show success message
+        Alert.alert(
+          t('success') || 'Success',
+          t('locationSaved') || 'Location saved successfully to server',
+          [{ text: t('ok') || 'OK' }]
+        );
+        
+        // Update location name in the UI
+        setLocationName(name);
+      } catch (apiError) {
+        console.error('Error saving location to backend:', apiError);
+        Alert.alert(
+          t('error') || 'Error',
+          t('errorSavingLocationToBackend') || 'Error saving location to server. Please check your connection.',
+          [{ text: t('ok') || 'OK' }]
+        );
       }
-      
-      // Add new location to the beginning of the array
-      locations.unshift(locationData);
-      
-      // Save updated locations to AsyncStorage
-      await AsyncStorage.setItem(STORAGE_KEYS.SAVED_LOCATIONS, JSON.stringify(locations));
-      
-      // Show success message
-      Alert.alert(
-        t('success') || 'Success',
-        t('locationSaved') || 'Location saved successfully',
-        [{ text: t('ok') || 'OK' }]
-      );
-      
-      // Update location name in the UI
-      setLocationName(name);
-      
-      console.log('Location saved successfully');
     } catch (error) {
-      console.error('Error saving location with name:', error);
+      console.error('Error in saveLocationWithName:', error);
       Alert.alert(
         t('error') || 'Error',
         t('errorSavingLocation') || 'Error saving location',
         [{ text: t('ok') || 'OK' }]
       );
+    } finally {
+      setLoading(false);
     }
   };
 

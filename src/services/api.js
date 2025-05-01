@@ -1873,7 +1873,7 @@ export const getTaskActivities = async (taskId) => {
     
     const url = `${getApiUrl()}/api/activities/task/${taskId}`;
     
-    console.log(`Fetching activities for task: ${taskId}`);
+    console.log('Fetching activities for task:', taskId);
     const response = await fetchWithRetry(url, options);
     const data = await handleResponse(response);
     
@@ -2146,5 +2146,64 @@ export const getUserAvailabilityStatus = async () => {
     // Devolver array vacío en caso de error para evitar que la UI se rompa
     return [];
 
+  }
+};
+
+// Function to get admin activities with pagination
+// @param {Object} options - Options for query (page, limit, sort)
+// @returns {Promise<Object>} - List of activities and pagination info
+export const getAdminActivities = async (options = {}) => {
+  try {
+    // Asegurarnos de que options es un objeto
+    const params = options || {};
+    
+    // Extraer opciones o usar valores predeterminados
+    const page = params.page || 1;
+    const limit = params.limit || 100;
+    const sort = params.sort || '-createdAt'; // Por defecto ordenar por fecha de creación descendente
+    
+    console.log(`Obteniendo actividades de administrador (página ${page}, límite ${limit}, ordenación ${sort})...`);
+    
+    const authHeader = await getAuthHeader();
+    if (!Object.keys(authHeader).length) {
+      throw new Error('No hay token de autenticación disponible');
+    }
+    
+    // Construir URL con parámetros de query
+    const queryParams = new URLSearchParams({
+      page,
+      limit,
+      sort
+    }).toString();
+    
+    const url = `${getApiUrl()}/api/activities?${queryParams}`;
+    
+    const fetchOptions = {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeader
+      }
+    };
+    
+    const response = await fetchWithRetry(url, fetchOptions);
+    const data = await handleResponse(response);
+    
+    // Asegurar que la respuesta tenga la estructura esperada por AdminActivityList
+    const result = {
+      activities: data.activities || data.data || data.results || [],
+      pagination: data.pagination || {
+        currentPage: page,
+        pages: Math.ceil((data.total || 0) / limit),
+        total: data.total || 0
+      }
+    };
+    
+    console.log(`Se cargaron ${result.activities.length} actividades de administrador`);
+    
+    return result;
+  } catch (error) {
+    console.error('Error al obtener actividades de administrador:', error);
+    throw error;
   }
 };

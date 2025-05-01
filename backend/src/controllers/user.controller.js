@@ -165,21 +165,42 @@ exports.getActiveLocations = async (req, res) => {
 // Resetear todos los usuarios a inactivo (solo admin)
 exports.resetAllUsersToInactive = async (req, res) => {
   try {
-    // Solo administradores pueden resetear el estado de los usuarios
-    if (!req.user.isAdmin) {
-      return res.status(403).json({ 
-        message: 'No tienes permiso para realizar esta acción' 
+    await User.updateMany({}, { isActive: false });
+    res.status(200).json({
+      message: 'All users marked as inactive successfully'
+    });
+  } catch (error) {
+    console.error('Error resetting users active status:', error);
+    res.status(500).json({
+      message: 'Error resetting users active status',
+      error: error.message
+    });
+  }
+};
+
+// Registrar o actualizar token de notificaciones push
+exports.registerPushToken = async (req, res) => {
+  try {
+    const { pushToken } = req.body;
+    const userId = req.userId;
+    
+    if (!pushToken) {
+      return res.status(400).json({
+        message: 'Push token is required'
       });
     }
     
-    // Actualizar todos los usuarios a inactivo
-    const result = await User.updateMany({}, { isActive: false });
+    // Actualizar usuario con el nuevo token
+    await User.findByIdAndUpdate(userId, { pushToken });
     
-    res.status(200).json({ 
-      message: `${result.modifiedCount} usuarios actualizados a estado inactivo` 
+    res.status(200).json({
+      message: 'Push token registered successfully'
     });
   } catch (error) {
-    console.error('Error al resetear usuarios:', error);
-    res.status(500).json({ message: 'Error al resetear usuarios' });
+    console.error('Error registering push token:', error);
+    res.status(500).json({
+      message: 'Error registering push token',
+      error: error.message
+    });
   }
 };

@@ -49,6 +49,9 @@ export const translations = {
     loadingLocations: 'Loading locations...',
     noActiveUsers: 'No active users',
     locationLegend: 'Location Legend',
+    loggedInUsers: 'Logged In Users',
+    user: 'User',
+    users: 'Users',
     
     // Activity translations
     userActivities: 'User Activities',
@@ -521,6 +524,13 @@ export const translations = {
     spokenKeywords: "Spoken keywords",
     keywordDetected: "Keyword detected",
     keywordsConfigured: "Keywords configured in task",
+    delete: 'Delete',
+    deleteLocation: 'Delete Location',
+    deleteLocationConfirmation: 'Are you sure you want to delete this location?',
+    errorDeletingLocation: 'Error deleting location. Please try again.',
+    errorSavingLocationToBackend: 'Error saving location to server. Please check your connection.',
+    saveLocationPrompt: 'Please enter a name for this location',
+    locationSaved: 'Location saved successfully to server',
   },
   es: {
     login: 'Iniciar Sesión',
@@ -569,6 +579,9 @@ export const translations = {
     loadingLocations: 'Cargando ubicaciones...',
     noActiveUsers: 'No hay usuarios activos',
     locationLegend: 'Leyenda de Ubicaciones',
+    loggedInUsers: 'Usuarios logueados',
+    user: 'Usuario',
+    users: 'Usuarios',
     
     // Activity translations
     userActivities: 'Actividades de Usuarios',
@@ -1022,6 +1035,13 @@ export const translations = {
     spokenKeywords: "Palabras clave dichas",
     keywordDetected: "Palabra clave detectada",
     keywordsConfigured: "Palabras clave configuradas en la tarea",
+    delete: 'Eliminar',
+    deleteLocation: 'Eliminar Ubicación',
+    deleteLocationConfirmation: '¿Está seguro que desea eliminar esta ubicación?',
+    errorDeletingLocation: 'Error al eliminar la ubicación. Por favor, inténtelo de nuevo.',
+    errorSavingLocationToBackend: 'Error al guardar la ubicación en el servidor. Por favor, verifique su conexión.',
+    saveLocationPrompt: 'Por favor, ingrese un nombre para esta ubicación',
+    locationSaved: 'Ubicación guardada exitosamente en el servidor',
   }
 };
 

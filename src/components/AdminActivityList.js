@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
-import { getAdminActivities } from '../services/api';
+import * as api from '../services/api';
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
 import { formatDistanceToNow } from 'date-fns';
@@ -41,23 +41,57 @@ const AdminActivityList = () => {
   const loadActivities = async (page = 1) => {
     try {
       setLoading(true);
-      const response = await getAdminActivities({ 
-        page, 
-        limit: 100,
-        sort: '-createdAt'
-      });
       
-      if (page === 1) {
-        setActivities(response.activities || []);
-      } else {
-        setActivities(prevActivities => [...prevActivities, ...(response.activities || [])]);
+      // Obtener el token de autenticación
+      const token = await AsyncStorage.getItem('token');
+      if (!token) {
+        throw new Error('No hay token de autenticación disponible');
       }
       
-      setPagination(response.pagination || {
-        currentPage: 1,
-        pages: 1,
-        total: 0
+      // Usar el endpoint CORRECTO para administradores
+      const url = `${api.getApiUrl()}/api/activities/admin/all?page=${page}&limit=100`;
+      console.log(`Obteniendo actividades de administrador desde: ${url}`);
+      
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
       });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('Error en respuesta de actividades:', errorData);
+        throw new Error(errorData.message || `Error ${response.status}: ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      console.log('Datos de actividades recibidos:', data);
+      
+      // Extraer las actividades del resultado
+      const activitiesFromApi = data.activities || [];
+      
+      if (page === 1) {
+        setActivities(activitiesFromApi);
+      } else {
+        setActivities(prevActivities => [...prevActivities, ...activitiesFromApi]);
+      }
+      
+      // Usar la paginación del servidor si está disponible
+      setPagination(data.pagination || {
+        currentPage: page,
+        pages: Math.ceil((data.total || 0) / 100),
+        total: data.total || 0
+      });
+      
+      console.log(`Actividades cargadas: ${activitiesFromApi.length}`);
+      
+      if (activitiesFromApi.length === 0 && page === 1) {
+        setError('No hay actividades disponibles para mostrar');
+      } else {
+        setError(null);
+      }
     } catch (error) {
       console.error('Error loading activities:', error);
       setError(error.message || t('error'));
@@ -318,7 +352,17 @@ const AdminActivityList = () => {
     
     // Agrupar por usuario
     filteredActivities.forEach(activity => {
-      const userName = activity.userId?.username || 'Usuario desconocido';
+      // Determinar el nombre de usuario para la agrupación
+      let userName = 'Usuario desconocido';
+      const userId = activity.userId;
+      
+      if (typeof userId === 'object' && userId?.username) {
+        userName = userId.username;
+      } else if (typeof userId === 'string') {
+        // Si solo tenemos el ID, usarlo como clave temporal
+        userName = `Usuario ID: ${userId.substring(0, 8)}...`;
+      }
+      
       if (!groupedByUser[userName]) {
         groupedByUser[userName] = [];
       }
@@ -334,12 +378,23 @@ const AdminActivityList = () => {
 
   // Renderizar un elemento de actividad
   const renderActivityItem = ({ item }) => {
-    const { type, createdAt, userId, taskId, metadata } = item;
-    const userName = userId?.username || 'Usuario desconocido';
+    const { type, createdAt, userId, taskId, metadata, message } = item;
+    
+    // Obtener nombre de usuario (puede venir de diferentes formas)
+    let userName = 'Usuario desconocido';
+    if (typeof userId === 'object' && userId?.username) {
+      userName = userId.username;
+    } else if (typeof userId === 'string') {
+      userName = `Usuario ID: ${userId.substring(0, 8)}...`;
+    }
+    
+    // Obtener información de tipo y estilo
     const typeText = getActivityTypeText(type);
     const color = getActivityColor(type);
     const icon = getActivityIcon(type);
-    const detailedDescription = getDetailedDescription(item);
+    
+    // Utilizar el mensaje directamente si existe
+    const detailedDescription = message || getDetailedDescription(item);
 
     return (
       <View style={styles.activityItem}>
@@ -350,7 +405,7 @@ const AdminActivityList = () => {
         <View style={styles.activityContent}>
           <View style={styles.activityHeader}>
             <Text style={styles.activityType}>{typeText}</Text>
-            <Text style={styles.activityTime}>{formatTime(createdAt)}</Text>
+            <Text style={styles.activityTime}>{formatTime(createdAt || item.timestamp)}</Text>
           </View>
           
           {viewMode === 'list' && (
@@ -359,7 +414,7 @@ const AdminActivityList = () => {
           
           <Text style={styles.activityDescription}>{detailedDescription}</Text>
           
-          <Text style={styles.activityDateTime}>{formatDate(createdAt)}</Text>
+          <Text style={styles.activityDateTime}>{formatDate(createdAt || item.timestamp)}</Text>
           
           {metadata && metadata.duration && (
             <Text style={styles.activityDuration}>

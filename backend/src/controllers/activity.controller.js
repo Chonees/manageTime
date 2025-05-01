@@ -1,6 +1,7 @@
 const Activity = require('../models/activity.model');
 const User = require('../models/user.model');
 const Task = require('../models/task.model');
+const notificationUtil = require('../utils/notification.util');
 
 /**
  * Crear una nueva actividad
@@ -16,7 +17,7 @@ exports.createActivity = async (req, res) => {
     const validTypes = [
       'location_enter', 'location_exit', 
       'task_complete', 'task_create', 'task_update', 'task_delete',
-      'started_working', 'stopped_working', 'task_activity'
+      'started_working', 'stopped_working', 'clock_in', 'clock_out', 'task_activity'
     ];
     
     if (!validTypes.includes(type)) {
@@ -31,9 +32,14 @@ exports.createActivity = async (req, res) => {
       }
     }
 
+    // Obtener el usuario para incluir su nombre en la actividad
+    const user = await User.findById(userId);
+    const username = user ? user.username : 'Usuario';
+
     // Crear la actividad
     const activity = new Activity({
       userId,
+      username,
       taskId: taskId || null,
       type,
       message: message || '',
@@ -43,6 +49,18 @@ exports.createActivity = async (req, res) => {
 
     // Guardar la actividad
     await activity.save();
+    
+    // Enviar notificación push a administradores según el tipo de actividad
+    try {
+      if (['clock_in', 'clock_out', 'started_working', 'stopped_working', 'task_complete', 'location_enter', 'location_exit'].includes(type)) {
+        const savedActivity = activity.toObject();
+        await notificationUtil.notifyAdminActivity(savedActivity);
+        console.log(`Notificación push enviada para actividad ${type}`);
+      }
+    } catch (notificationError) {
+      console.error('Error enviando notificación push:', notificationError);
+      // No interrumpimos el flujo si falla la notificación
+    }
 
     // Responder con la actividad creada
     res.status(201).json(activity);

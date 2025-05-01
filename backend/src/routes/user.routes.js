@@ -17,4 +17,7 @@ router.get('/:id', userController.getUserById);
 router.put('/:id', userController.updateUser);
 router.put('/:id/change-password', userController.changePassword);
 
+// Ruta para notificaciones push
+router.post('/push-token', userController.registerPushToken);
+
 module.exports = router;

@@ -14,6 +14,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useLanguage } from '../context/LanguageContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as apiLocations from '../services/api-locations';
 
 // Storage keys with platform-specific prefixes to avoid conflicts
 const STORAGE_KEYS = {
@@ -33,6 +34,7 @@ const SavedLocationsSelector = ({ visible, onClose, onSelect }) => {
   const [loading, setLoading] = useState(true);
   const [locations, setLocations] = useState([]);
   const [error, setError] = useState(null);
+  const [deletingLocationId, setDeletingLocationId] = useState(null);
 
   // Load saved locations when the component becomes visible
   useEffect(() => {
@@ -49,43 +51,10 @@ const SavedLocationsSelector = ({ visible, onClose, onSelect }) => {
       
       console.log('Loading saved locations from storage');
       
-      // Get locations directly from AsyncStorage
-      const locationsJson = await AsyncStorage.getItem(STORAGE_KEYS.SAVED_LOCATIONS);
-      console.log('Locations JSON from storage:', locationsJson);
+      // Use the API to get locations rather than directly from AsyncStorage
+      const savedLocations = await apiLocations.getSavedLocations();
+      setLocations(savedLocations);
       
-      if (locationsJson) {
-        try {
-          const locations = JSON.parse(locationsJson);
-          console.log(`Retrieved ${locations.length} saved locations`);
-          
-          // Validate each location
-          const validLocations = locations.filter(loc => {
-            const isValid = loc && 
-              loc._id && 
-              loc.name && 
-              loc.location && 
-              loc.location.coordinates && 
-              Array.isArray(loc.location.coordinates) && 
-              loc.location.coordinates.length === 2;
-            
-            if (!isValid) {
-              console.log('Found invalid location:', JSON.stringify(loc, null, 2));
-            }
-            
-            return isValid;
-          });
-          
-          console.log(`${validLocations.length} valid locations out of ${locations.length} total`);
-          setLocations(validLocations);
-        } catch (parseError) {
-          console.error('Error parsing saved locations:', parseError);
-          setError('Error parsing saved locations');
-          setLocations([]);
-        }
-      } else {
-        console.log('No saved locations found in local storage');
-        setLocations([]);
-      }
     } catch (error) {
       console.error('Error loading saved locations:', error);
       setError(error.message || 'Error loading saved locations');
@@ -116,6 +85,48 @@ const SavedLocationsSelector = ({ visible, onClose, onSelect }) => {
     }
   };
 
+  // Handle location deletion
+  const handleDeleteLocation = (locationId) => {
+    Alert.alert(
+      t('deleteLocation'),
+      t('deleteLocationConfirmation'),
+      [
+        {
+          text: t('cancel'),
+          style: 'cancel'
+        },
+        {
+          text: t('delete'),
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setDeletingLocationId(locationId);
+              
+              // Use the API to delete the location
+              await apiLocations.deleteLocation(locationId);
+              
+              // Update the locations list
+              setLocations(prevLocations => 
+                prevLocations.filter(location => location._id !== locationId)
+              );
+              
+              console.log(`Location ${locationId} deleted successfully`);
+            } catch (error) {
+              console.error('Error deleting location:', error);
+              Alert.alert(
+                t('error'),
+                t('errorDeletingLocation'),
+                [{ text: 'OK' }]
+              );
+            } finally {
+              setDeletingLocationId(null);
+            }
+          }
+        }
+      ]
+    );
+  };
+
   // Render a location item
   const renderLocationItem = ({ item }) => {
     // Check if location data is valid
@@ -139,19 +150,36 @@ const SavedLocationsSelector = ({ visible, onClose, onSelect }) => {
     const longitude = hasValidCoordinates ? item.location.coordinates[0] : 0;
     const latitude = hasValidCoordinates ? item.location.coordinates[1] : 0;
     
+    const isDeleting = deletingLocationId === item._id;
+    
     return (
-      <TouchableOpacity
-        style={styles.locationItem}
-        onPress={() => handleSelectLocation(item)}
-      >
-        <View style={styles.locationInfo}>
-          <Text style={styles.locationName}>{item.name || 'Unnamed Location'}</Text>
-          <Text style={styles.locationDetails}>
-            {formatCoordinate(latitude)}, {formatCoordinate(longitude)} • {(item.radius || 0).toFixed(1)} km
-          </Text>
-        </View>
-        <Ionicons name="chevron-forward" size={20} color="#999" />
-      </TouchableOpacity>
+      <View style={styles.locationItemContainer}>
+        <TouchableOpacity
+          style={[styles.locationItem, { opacity: isDeleting ? 0.5 : 1 }]}
+          onPress={() => handleSelectLocation(item)}
+          disabled={isDeleting}
+        >
+          <View style={styles.locationInfo}>
+            <Text style={styles.locationName}>{item.name || 'Unnamed Location'}</Text>
+            <Text style={styles.locationDetails}>
+              {formatCoordinate(latitude)}, {formatCoordinate(longitude)} • {(item.radius || 0).toFixed(1)} km
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color="#999" />
+        </TouchableOpacity>
+        
+        <TouchableOpacity
+          style={styles.deleteButton}
+          onPress={() => handleDeleteLocation(item._id)}
+          disabled={isDeleting}
+        >
+          {isDeleting ? (
+            <ActivityIndicator size="small" color="#D32F2F" />
+          ) : (
+            <Ionicons name="trash-outline" size={22} color="#D32F2F" />
+          )}
+        </TouchableOpacity>
+      </View>
     );
   };
 
@@ -296,11 +324,16 @@ const styles = StyleSheet.create({
   listContent: {
     padding: 15
   },
-  locationItem: {
+  locationItemContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     paddingVertical: 15
+  },
+  locationItem: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between'
   },
   locationInfo: {
     flex: 1
@@ -314,6 +347,10 @@ const styles = StyleSheet.create({
     marginTop: 5,
     fontSize: 14,
     color: '#666'
+  },
+  deleteButton: {
+    padding: 10,
+    marginLeft: 10
   },
   separator: {
     height: 1,

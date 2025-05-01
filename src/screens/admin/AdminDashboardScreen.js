@@ -108,6 +108,25 @@ const AdminDashboardScreen = ({ navigation }) => {
       try {
         locations = await api.getRealTimeLocations();
         console.log('Ubicaciones en tiempo real cargadas:', locations.length);
+        
+        // Obtener información de disponibilidad para combinarla con las ubicaciones
+        const availabilityData = await api.getUserAvailabilityStatus();
+        console.log('Datos de disponibilidad combinados:', availabilityData?.length || 0);
+        
+        // Crear un mapa de disponibilidad por userId
+        const availabilityMap = {};
+        availabilityData.forEach(item => {
+          if (item && item.userId) {
+            availabilityMap[item.userId] = item.isAvailable;
+          }
+        });
+        
+        // Agregar la información de disponibilidad a las ubicaciones
+        locations = locations.map(location => ({
+          ...location,
+          isAvailable: availabilityMap[location.userId] || false
+        }));
+        
       } catch (error) {
         console.error('Error al cargar ubicaciones en tiempo real:', error);
         
@@ -214,16 +233,14 @@ const AdminDashboardScreen = ({ navigation }) => {
     const formattedDate = new Date(item.timestamp).toLocaleDateString();
     
     return (
-
       <View style={styles.activityItem}>
         <View style={styles.activityContent}>
           <Text style={styles.activityText}>
-            {item.username} {activityText}
+            {item.username} 
           </Text>
           <Text style={styles.activityTime}>
             {formatRelativeTime(item.timestamp)}
           </Text>
-
         </View>
       </View>
     );
@@ -278,13 +295,15 @@ const AdminDashboardScreen = ({ navigation }) => {
       return;
     }
 
-    // Animar el mapa para centrar en la ubicación del usuario
+    console.log(`Centrando mapa en usuario: ${location.username}, coords: ${safeLocation.latitude}, ${safeLocation.longitude}`);
+
+    // Animar el mapa para centrar en la ubicación del usuario con zoom cercano
     mapRef.current.animateToRegion({
       latitude: safeLocation.latitude,
       longitude: safeLocation.longitude,
-      latitudeDelta: 0.01, // Zoom más cercano al centrar en un usuario
-      longitudeDelta: 0.01,
-    }, 1000); // Duración de la animación en ms
+      latitudeDelta: 0.005, // Zoom más cercano al centrar en un usuario específico
+      longitudeDelta: 0.005,
+    }, 800); // Duración de la animación en ms
   };
 
   return (
@@ -380,13 +399,6 @@ const AdminDashboardScreen = ({ navigation }) => {
                 </TouchableOpacity>
                 
                 <TouchableOpacity 
-                  style={styles.actionButton}
-                  onPress={() => navigation.navigate('LocationHistory')}
-                >
-                  <Text style={styles.actionButtonText}>{t('locationHistory')}</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity 
                   style={[styles.actionButton, { backgroundColor: '#fff3e5' }]}
                   onPress={() => navigation.navigate('AdminActivities')}
                 >
@@ -395,7 +407,7 @@ const AdminDashboardScreen = ({ navigation }) => {
                     <AdminNotificationBadge />
                   </View>
                 </TouchableOpacity>
-                
+
                 <TouchableOpacity 
                   style={[styles.actionButton, { backgroundColor: '#FF3B30', marginTop: 10 }]}
                   onPress={() => navigation.navigate('NotificationTest')}
@@ -424,46 +436,62 @@ const AdminDashboardScreen = ({ navigation }) => {
                   <Text style={styles.loadingText}>{t('loadingLocations')}</Text>
                 </View>
               ) : realTimeLocations.length > 0 ? (
-                <View style={styles.mapContainer}>
-                  <MapView
-                    ref={mapRef}
-                    style={styles.map}
-                    provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
-                    initialRegion={{
-                      latitude: realTimeLocations[0]?.latitude || -34.603722,
-                      longitude: realTimeLocations[0]?.longitude || -58.381592,
-                      latitudeDelta: 0.0922,
-                      longitudeDelta: 0.0421,
-                    }}
-                    onMapReady={() => setMapReady(true)}
-                  >
-                    {realTimeLocations.map((location, index) => 
-                      renderSafeMarker(location, index)
-                    )}
-                  </MapView>
-                  
-                  <View style={styles.mapLegend}>
-                    <Text style={styles.mapLegendTitle}>{t('locationLegend')}</Text>
+                <View>
+                  <View style={styles.mapContainer}>
+                    <MapView
+                      ref={mapRef}
+                      style={styles.map}
+                      provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
+                      initialRegion={{
+                        latitude: realTimeLocations[0]?.latitude || -34.603722,
+                        longitude: realTimeLocations[0]?.longitude || -58.381592,
+                        latitudeDelta: 0.0922,
+                        longitudeDelta: 0.0421,
+                      }}
+                      onMapReady={() => setMapReady(true)}
+                    >
+                      {realTimeLocations.map((location, index) => 
+                        renderSafeMarker(location, index)
+                      )}
+                    </MapView>
+                  </View>
+                  <View style={styles.usersLegendContainer}>
+                    <View style={styles.mapLegendHeader}>
+                      <Text style={styles.mapLegendTitle}>{t('loggedInUsers')}</Text>
+                      <Text style={styles.userCount}>{realTimeLocations.length} {realTimeLocations.length === 1 ? t('user') : t('users')}</Text>
+                    </View>
                     <FlatList
                       data={realTimeLocations}
                       keyExtractor={(item, index) => `legend-${item.userId}-${index}`}
-                      renderItem={({ item }) => {
-                        // Verificar que las coordenadas sean válidas
-                        const safeLocation = parseSafeLocation(item);
-                        if (!safeLocation) return null;
-                        
-                        return (
-                          <View style={styles.legendItem}>
-                            <View style={styles.legendInfo}>
-                              <Text style={styles.legendName}>{item.username}</Text>
-                              <Text style={styles.legendTimestamp}>
-                                {new Date(item.timestamp).toLocaleString()}
-                              </Text>
-                            </View>
+                      renderItem={({ item }) => (
+                        <TouchableOpacity 
+                          style={styles.legendItem}
+                          onPress={() => centerMapOnUser(item)}
+                          activeOpacity={0.7}
+                        >
+                          <View style={[
+                            styles.userCircle,
+                            item.isAvailable ? styles.userCircleAvailable : null
+                          ]}>
+                            <Text style={styles.userInitial}>{item.username ? item.username.charAt(0).toUpperCase() : '?'}</Text>
                           </View>
-                        );
-                      }}
+                          <View style={styles.userInfoContainer}>
+                            <Text style={styles.userName} numberOfLines={1}>{item.username}</Text>
+                          </View>
+                          <Text style={[
+                            styles.statusText,
+                            item.isAvailable ? styles.availableText : styles.unavailableText
+                          ]}>
+                            - {item.isAvailable ? t('available') : t('unavailable')}
+                          </Text>
+                        </TouchableOpacity>
+                      )}
                       style={styles.legendList}
+                      showsVerticalScrollIndicator={true}
+                      initialNumToRender={10}
+                      maxToRenderPerBatch={20}
+                      windowSize={10}
+                      horizontal={false}
                     />
                   </View>
                 </View>
@@ -474,25 +502,7 @@ const AdminDashboardScreen = ({ navigation }) => {
               )}
             </View>
 
-
-            <View style={styles.recentActivityContainer}>
-              <Text style={styles.sectionTitle}>{t('recentActivity')}</Text>
-              {loading ? (
-                <View style={styles.loadingContainer}>
-                  <ActivityIndicator size="large" color="#4A90E2" />
-                  <Text style={styles.loadingText}>{t('loading')}</Text>
-                </View>
-              ) : (
-                <View style={styles.activityList}>
-                  <FlatList
-                    data={recentActivity}
-                    renderItem={renderActivityItem}
-                    keyExtractor={(item) => item.id}
-                    scrollEnabled={false}
-                  />
-                </View>
-              )}
-            </View>
+            
           </View>
         )}
         refreshControl={
@@ -652,46 +662,6 @@ const styles = StyleSheet.create({
 
     fontSize: 14,
   },
-  recentActivityContainer: {
-    margin: 15,
-    flex: 1,
-  },
-  activityList: {
-    backgroundColor: '#1c1c1c',
-    borderRadius: 15,
-    padding: 15,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-    maxHeight: 300,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 243, 229, 0.1)',
-  },
-  activityItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 243, 229, 0.1)',
-  },
-  activityContent: {
-    flex: 1,
-  },
-  activityText: {
-    fontSize: 14,
-    color: '#ffffff',
-    opacity: 0.9,
-  },
-  activityTime: {
-    fontSize: 12,
-    color: '#ffffff',
-    opacity: 0.6,
-    marginTop: 2,
-  },
-  // Estilos para ubicaciones en tiempo real
-
   realTimeLocationsContainer: {
     backgroundColor: '#1c1c1c',
     borderRadius: 15,
@@ -719,56 +689,92 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255, 243, 229, 0.2)',
   },
   mapContainer: {
-    borderRadius: 15,
+    height: height * 0.4,
+    borderRadius: 10,
     overflow: 'hidden',
-    backgroundColor: '#2e2e2e',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 243, 229, 0.1)',
+    marginBottom: 10,
   },
   map: {
-    height: 250,
-    width: '100%',
-    borderRadius: 10,
+    ...StyleSheet.absoluteFillObject,
   },
-  mapLegend: {
-    padding: 10,
+  usersLegendContainer: {
     backgroundColor: '#2e2e2e',
-    borderBottomLeftRadius: 10,
-    borderBottomRightRadius: 10,
+    borderRadius: 15,
+    padding: 12,
+    marginBottom: 15,
     borderWidth: 1,
     borderColor: 'rgba(255, 243, 229, 0.1)',
   },
-
+  mapLegendHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+    paddingBottom: 5,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.3)',
+  },
   mapLegendTitle: {
-    fontSize: 12,
+    color: '#fff',
     fontWeight: 'bold',
-    color: '#fff3e5',
+    fontSize: 13,
   },
-  mapLegendText: {
-    fontSize: 12,
+  userCount: {
+    color: '#fff',
+    fontSize: 11,
+    opacity: 0.8,
+  },
+  legendList: {
+    maxHeight: height * 0.2,
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 2,
+    padding: 6,
+    paddingVertical: 5,
+    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+    borderRadius: 20,
+    paddingRight: 15,
+    minWidth: 160,
+  },
+  userCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#4A90E2',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#FFF',
+    marginRight: 12,
+  },
+  userCircleAvailable: {
+    backgroundColor: '#4CAF50', // Verde para usuarios disponibles
+  },
+  userInitial: {
+    color: 'white',
     fontWeight: 'bold',
-    color: '#fff3e5',
-
+    fontSize: 16,
   },
-  legendIcon: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: '#E74C3C',
-    marginRight: 8,
-  },
-  legendInfo: {
+  userInfoContainer: {
     flex: 1,
   },
-  legendName: {
-    fontSize: 14,
+  userName: {
+    color: 'white',
     fontWeight: 'bold',
-    color: '#fff3e5',
+    fontSize: 14,
   },
-  legendTimestamp: {
+  statusText: {
+    fontWeight: 'bold',
     fontSize: 12,
-    color: '#fff3e5',
-    opacity: 0.6,
+    marginLeft: 5,
+  },
+  availableText: {
+    color: '#4CAF50',
+  },
+  unavailableText: {
+    color: '#FF5252',
   },
   noLocationsContainer: {
     padding: 20,
@@ -778,73 +784,6 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   noLocationsText: {
-    fontSize: 16,
-    color: '#fff3e5',
-    opacity: 0.7,
-    textAlign: 'center',
-  },
-  availabilityContainer: {
-    backgroundColor: '#1c1c1c',
-    borderRadius: 15,
-    margin: 10,
-    padding: 15,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 243, 229, 0.1)',
-    marginBottom: 20,
-  },
-
-  noLocationsText: {
-    color: '#ffffff',
-    opacity: 0.7,
-    fontSize: 16,
-
-  },
-  availabilityItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 243, 229, 0.1)',
-    backgroundColor: '#2e2e2e',
-  },
-
-  legendInfo: {
-    flex: 1,
-  },
-  legendName: {
-    fontSize: 14,
-    color: '#fff3e5',
-  },
-  legendTimestamp: {
-    fontSize: 12,
-    color: '#ffffff',
-    opacity: 0.6,
-
-  },
-  statusText: {
-    fontSize: 14,
-    color: '#fff3e5',
-    opacity: 0.7,
-  },
-  timestampText: {
-    fontSize: 12,
-    color: '#fff3e5',
-    opacity: 0.5,
-  },
-  noDataContainer: {
-    padding: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#2e2e2e',
-    borderRadius: 10,
-  },
-  noDataText: {
     fontSize: 16,
     color: '#fff3e5',
     opacity: 0.7,
