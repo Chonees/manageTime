@@ -42,6 +42,9 @@ const AdminDashboardScreen = ({ navigation }) => {
   const [loadingLocations, setLoadingLocations] = useState(false); 
   const [mapReady, setMapReady] = useState(false); 
   const mapRef = useRef(null); 
+  // Añadir temporizadores como referencias para poder limpiarlos en el useEffect
+  const availabilityTimerRef = useRef(null);
+  const locationsTimerRef = useRef(null);
 
   const loadStats = async () => {
     try {
@@ -98,6 +101,7 @@ const AdminDashboardScreen = ({ navigation }) => {
     }
   };
 
+  // Sobrescribir la lógica de la función loadRealTimeLocations para actualizar en tiempo real
   const loadRealTimeLocations = async (silent = false) => {
     if (!user?.isAdmin) return;
     
@@ -106,30 +110,47 @@ const AdminDashboardScreen = ({ navigation }) => {
       let locations = [];
       
       try {
+        // Cargar ubicaciones en tiempo real
         locations = await api.getRealTimeLocations();
         console.log('Ubicaciones en tiempo real cargadas:', locations.length);
         
-        // Obtener información de disponibilidad para combinarla con las ubicaciones
+        // Obtener información de disponibilidad actualizada - haciendo una petición nueva cada vez
+        // para asegurar que obtenemos los datos más recientes de la base de datos
         const availabilityData = await api.getUserAvailabilityStatus();
-        console.log('Datos de disponibilidad combinados:', availabilityData?.length || 0);
+        console.log('Datos de disponibilidad obtenidos:', availabilityData?.length || 0);
         
         // Crear un mapa de disponibilidad por userId
         const availabilityMap = {};
         availabilityData.forEach(item => {
           if (item && item.userId) {
-            availabilityMap[item.userId] = item.isAvailable;
+            // Normalizar ID para comparación (podría ser un objeto o string)
+            const userId = typeof item.userId === 'object' ? item.userId._id : String(item.userId);
+            availabilityMap[userId] = item.isAvailable;
           }
         });
         
         // Agregar la información de disponibilidad a las ubicaciones
-        locations = locations.map(location => ({
-          ...location,
-          isAvailable: availabilityMap[location.userId] || false
-        }));
+        locations = locations.map(location => {
+          // Normalizar el userId de la ubicación para comparar correctamente
+          const locationUserId = typeof location.userId === 'object' ? 
+            location.userId._id : String(location.userId);
+          
+          // Verificar si tenemos información de disponibilidad para este usuario
+          const isUserAvailable = availabilityMap[locationUserId];
+          
+          return {
+            ...location,
+            isAvailable: isUserAvailable === true // Aseguramos que sea booleano
+          };
+        });
+        
+        // Actualizar el estado con las ubicaciones y sus estados de disponibilidad
+        setRealTimeLocations(locations);
         
       } catch (error) {
         console.error('Error al cargar ubicaciones en tiempo real:', error);
         
+        // Código de respaldo si falla la obtención de ubicaciones en tiempo real
         try {
           console.log('Intentando cargar ubicaciones del historial como respaldo...');
           const usersList = await api.getUsers();
@@ -160,7 +181,9 @@ const AdminDashboardScreen = ({ navigation }) => {
         }
       }
       
+      // Actualizar el estado con las ubicaciones obtenidas
       setRealTimeLocations(locations);
+      
     } catch (error) {
       console.error('Error general al cargar ubicaciones:', error);
     } finally {
@@ -185,17 +208,27 @@ const AdminDashboardScreen = ({ navigation }) => {
     setRefreshing(false);
   };
 
+  // Configurar intervalos para actualización automática
   useEffect(() => {
+    // Cargar datos iniciales
     loadStats();
-    const periodicRefresh = setInterval(() => {
-      loadUserAvailability(true);
-      loadRealTimeLocations(true);
-    }, 30000); 
-
+    
+    // Configurar intervalo para actualizar disponibilidad cada 15 segundos
+    availabilityTimerRef.current = setInterval(() => {
+      loadUserAvailability(true); // Modo silencioso para evitar indicadores de carga
+    }, 15000); // 15 segundos
+    
+    // Configurar intervalo para actualizar ubicaciones cada 30 segundos
+    locationsTimerRef.current = setInterval(() => {
+      loadRealTimeLocations(true); // Modo silencioso
+    }, 30000); // 30 segundos
+    
+    // Limpiar intervalos al desmontar el componente
     return () => {
-      clearInterval(periodicRefresh);
+      if (availabilityTimerRef.current) clearInterval(availabilityTimerRef.current);
+      if (locationsTimerRef.current) clearInterval(locationsTimerRef.current);
     };
-  }, []);
+  }, [user]); // Solo se ejecuta cuando cambia el usuario
 
   const handleLogout = () => {
     Alert.alert(
@@ -218,6 +251,11 @@ const AdminDashboardScreen = ({ navigation }) => {
         }
       ]
     );
+  };
+
+  const handleManualRefresh = () => {
+    console.log('Actualización manual iniciada');
+    loadRealTimeLocations(false);
   };
 
   const renderUserAvailabilityItem = ({ item }) => {
@@ -341,7 +379,7 @@ const AdminDashboardScreen = ({ navigation }) => {
               
               {loading ? (
                 <View style={styles.loadingContainer}>
-                  <ActivityIndicator size="large" color="#4A90E2" />
+                  <ActivityIndicator size="large" color="#fff3e5" />
                   <Text style={styles.loadingText}>{t('loading')}</Text>
                 </View>
               ) : (
@@ -408,13 +446,6 @@ const AdminDashboardScreen = ({ navigation }) => {
                   </View>
                 </TouchableOpacity>
 
-                <TouchableOpacity 
-                  style={[styles.actionButton, { backgroundColor: '#FF3B30', marginTop: 10 }]}
-                  onPress={() => navigation.navigate('NotificationTest')}
-                >
-                  <Text style={[styles.actionButtonText, { color: '#fff' }]}>Test Notifications</Text>
-                </TouchableOpacity>
-
               </View>
             </View>
             
@@ -423,16 +454,21 @@ const AdminDashboardScreen = ({ navigation }) => {
               <View style={styles.sectionHeader}>
                 <Text style={styles.sectionTitle}>{t('Real Time Location Of Users')}</Text>
                 <TouchableOpacity 
-                  style={styles.refreshButton}
-                  onPress={() => loadRealTimeLocations(false)}
+                  onPress={handleManualRefresh}
+                  style={{marginLeft: 10}}
+                  disabled={loadingLocations}
                 >
-                  <Ionicons name="refresh" size={20} color="#4A90E2" />
+                  <Ionicons 
+                    name="refresh-circle" 
+                    size={24} 
+                    color={loadingLocations ? '#666' : '#fff3e5'} 
+                  />
                 </TouchableOpacity>
               </View>
               
               {loadingLocations ? (
                 <View style={styles.loadingContainer}>
-                  <ActivityIndicator size="large" color="#4A90E2" />
+                  <ActivityIndicator size="large" color="#fff3e5" />
                   <Text style={styles.loadingText}>{t('loadingLocations')}</Text>
                 </View>
               ) : realTimeLocations.length > 0 ? (
@@ -458,7 +494,20 @@ const AdminDashboardScreen = ({ navigation }) => {
                   <View style={styles.usersLegendContainer}>
                     <View style={styles.mapLegendHeader}>
                       <Text style={styles.mapLegendTitle}>{t('loggedInUsers')}</Text>
-                      <Text style={styles.userCount}>{realTimeLocations.length} {realTimeLocations.length === 1 ? t('user') : t('users')}</Text>
+                      <View style={{flexDirection: 'row', alignItems: 'center'}}>
+                        <Text style={styles.userCount}>{realTimeLocations.length} {realTimeLocations.length === 1 ? t('user') : t('users')}</Text>
+                        <TouchableOpacity 
+                          onPress={handleManualRefresh}
+                          style={{marginLeft: 8}}
+                          disabled={loadingLocations}
+                        >
+                          <Ionicons 
+                            name="refresh-circle" 
+                            size={22} 
+                            color={loadingLocations ? '#666' : '#fff3e5'} 
+                          />
+                        </TouchableOpacity>
+                      </View>
                     </View>
                     <FlatList
                       data={realTimeLocations}
@@ -482,7 +531,7 @@ const AdminDashboardScreen = ({ navigation }) => {
                             styles.statusText,
                             item.isAvailable ? styles.availableText : styles.unavailableText
                           ]}>
-                            - {item.isAvailable ? t('available') : t('unavailable')}
+                            {`- ${item.isAvailable ? t('available') : t('unavailable')}`}
                           </Text>
                         </TouchableOpacity>
                       )}
@@ -555,20 +604,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   logoutButton: {
-    backgroundColor: 'rgba(255, 59, 48, 0.1)',
+    backgroundColor: 'rgba(255, 243, 229, 0.1)',
     paddingVertical: 8,
     paddingHorizontal: 15,
     borderRadius: 20,
-
     borderWidth: 1,
-    borderColor: 'rgba(255, 59, 48, 0.3)',
+    borderColor: 'rgba(255, 243, 229, 0.3)',
   },
   logoutButtonText: {
-
-    color: '#FF3B30',
+    color: '#fff3e5',
     fontWeight: 'bold',
     fontSize: 14,
-
   },
   errorText: {
     color: '#ff5252',

@@ -60,7 +60,6 @@ export const getAuthHeader = async () => {
     const token = await AsyncStorage.getItem('token');
     return token ? { 'Authorization': `Bearer ${token}` } : {};
   } catch (error) {
-    console.error('Error al obtener token de autenticación:', error);
     return {};
   }
 };
@@ -86,21 +85,16 @@ export const createFetchOptions = async (method, body = null) => {
       options.body = JSON.stringify(body);
     }
     
-    console.log('Created fetch options:', JSON.stringify(options, null, 2));
     return options;
   } catch (error) {
-    console.error('Error creating fetch options:', error);
     throw error;
   }
 };
 
 // Login function
 export const login = async (username, password) => {
-  console.log(`Intentando login con usuario: ${username}`);
-  
   try {
     const url = `${getApiUrl()}/api/auth/login`;
-    console.log('URL de login:', url);
     
     // Crear opciones específicas para el login
     const options = {
@@ -112,8 +106,6 @@ export const login = async (username, password) => {
       body: JSON.stringify({ username, password })
     };
     
-    console.log('Opciones de login:', JSON.stringify(options, null, 2));
-    
     // Usar la función directa para el login (más confiable)
     const loginResult = await new Promise((resolve, reject) => {
       // Usar XMLHttpRequest que puede ser más estable en algunos dispositivos Android
@@ -121,7 +113,6 @@ export const login = async (username, password) => {
       
       // Establecer un timeout largo para el login
       const timeout = setTimeout(() => {
-        console.error('Timeout en login después de 2 minutos');
         xhr.abort();
         reject(new Error('Tiempo de espera agotado en login'));
       }, 120000); // 2 minutos
@@ -130,7 +121,6 @@ export const login = async (username, password) => {
         if (xhr.readyState === 4) {
           clearTimeout(timeout);
           
-          console.log('Respuesta XHR login recibida, status:', xhr.status);
           if (xhr.status >= 200 && xhr.status < 300) {
             try {
               const responseData = JSON.parse(xhr.responseText);
@@ -148,7 +138,6 @@ export const login = async (username, password) => {
       
       xhr.onerror = function(e) {
         clearTimeout(timeout);
-        console.error('Error XHR en login:', e);
         reject(new Error('Error de red en login'));
       };
       
@@ -156,25 +145,18 @@ export const login = async (username, password) => {
       xhr.setRequestHeader('Content-Type', 'application/json');
       xhr.setRequestHeader('Accept', 'application/json');
       xhr.send(JSON.stringify({ username, password }));
-      
-      console.log('Petición XHR de login enviada');
     });
-    
-    console.log('Login exitoso, guardando token y datos de usuario');
     
     // Si hay token, lo guardamos en AsyncStorage
     if (loginResult.token) {
       try {
         await AsyncStorage.setItem('token', loginResult.token);
-        console.log('Token guardado correctamente');
         
         // Si hay datos de usuario, los guardamos en AsyncStorage
         if (loginResult.user) {
           await AsyncStorage.setItem('user', JSON.stringify(loginResult.user));
-          console.log('Datos de usuario guardados correctamente');
         }
       } catch (storageError) {
-        console.error('Error al guardar en AsyncStorage:', storageError);
         // Continuamos a pesar del error para devolver los datos al usuario
       }
     }
@@ -185,7 +167,6 @@ export const login = async (username, password) => {
       token: loginResult.token
     };
   } catch (error) {
-    console.error('Error en login:', error);
     return {
       success: false,
       error: error.message || 'Error desconocido en el inicio de sesión'
@@ -196,9 +177,6 @@ export const login = async (username, password) => {
 // Register function
 export const register = async (username, password, email) => {
   try {
-    console.log('Enviando solicitud de registro a:', `${getApiUrl()}/api/auth/register`);
-    console.log('Datos:', { username, email, password: '********' });
-    
     // Establecemos un timeout para la solicitud
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), getTimeout()); // Timeout según la plataforma
@@ -224,7 +202,6 @@ export const register = async (username, password, email) => {
       
       // Procesamos la respuesta
       const data = await response.json();
-      console.log('Registro exitoso:', data.message || 'Usuario registrado correctamente');
       
       return {
         success: true,
@@ -238,7 +215,6 @@ export const register = async (username, password, email) => {
       throw error;
     }
   } catch (error) {
-    console.error('Error al registrar usuario:', error);
     return {
       success: false,
       error: error.message || 'Error al registrar usuario'
@@ -250,10 +226,8 @@ export const register = async (username, password, email) => {
 export const checkToken = async () => {
   try {
     const token = await AsyncStorage.getItem('token');
-    console.log('Verificando token:', token ? 'Token existe' : 'No hay token');
     
     if (!token) {
-      console.log('No hay token, retornando valid: false');
       return { valid: false };
     }
     
@@ -262,7 +236,6 @@ export const checkToken = async () => {
       const userString = await AsyncStorage.getItem('user');
       if (userString) {
         const user = JSON.parse(userString);
-        console.log('Usuario recuperado del almacenamiento:', user);
         
         // Intentamos verificar el token en segundo plano, pero no esperamos la respuesta
         // Esto evita que la aplicación se quede cargando si hay problemas de red
@@ -271,23 +244,21 @@ export const checkToken = async () => {
           headers: await getAuthHeader()
         }).then(async (response) => {
           if (!response.ok) {
-            console.log('Token inválido según el servidor, limpiando almacenamiento');
             await AsyncStorage.removeItem('token');
             await AsyncStorage.removeItem('user');
           }
         }).catch(e => {
-          console.log('Error al verificar token en segundo plano:', e);
+          // Manejo silencioso de errores
         });
         
         // Retornamos inmediatamente con los datos del usuario
         return { valid: true, user };
       }
     } catch (e) {
-      console.log('Error al recuperar usuario del almacenamiento:', e);
+      // Manejo silencioso de errores
     }
     
     // Si no tenemos datos del usuario en el almacenamiento, intentamos obtenerlos del servidor
-    console.log('Enviando solicitud a:', `${getApiUrl()}/api/auth/check-token`);
     
     // Establecemos un timeout para la solicitud
     const controller = new AbortController();
@@ -301,17 +272,14 @@ export const checkToken = async () => {
       });
       
       clearTimeout(timeoutId);
-      console.log('Respuesta recibida, status:', response.status);
       
       if (!response.ok) {
-        console.log('Token inválido, limpiando almacenamiento');
         await AsyncStorage.removeItem('token');
         await AsyncStorage.removeItem('user');
         return { valid: false };
       }
       
       const data = await response.json();
-      console.log('Datos de respuesta:', data);
       
       // Guardar datos del usuario
       await AsyncStorage.setItem('user', JSON.stringify(data.user));
@@ -319,25 +287,21 @@ export const checkToken = async () => {
       return data;
     } catch (error) {
       if (error.name === 'AbortError') {
-        console.log('La solicitud de verificación de token ha excedido el tiempo de espera');
         // Asumimos que el token es válido temporalmente
         return { valid: true, user: { username: 'Usuario' }, offline: true };
       }
       throw error;
     }
   } catch (error) {
-    console.error('Error al verificar token:', error);
-    
     // Si hay un error, intentamos usar los datos del usuario almacenados localmente
     try {
       const userString = await AsyncStorage.getItem('user');
       if (userString) {
         const user = JSON.parse(userString);
-        console.log('Usando datos de usuario almacenados debido a error:', error.message);
         return { valid: true, user, offline: true };
       }
     } catch (e) {
-      console.log('Error al recuperar usuario del almacenamiento:', e);
+      // Manejo silencioso de errores
     }
     
     return { valid: false, error: error.message };
@@ -364,7 +328,6 @@ export const logout = async () => {
         // Llamar al endpoint de logout
         await fetchWithRetry(`${getApiUrl()}/api/auth/logout`, options);
       } catch (logoutError) {
-        console.warn('Error al notificar logout al servidor:', logoutError);
         // Continuamos con el logout local incluso si falla la notificación al servidor
       }
     }
@@ -375,7 +338,6 @@ export const logout = async () => {
     
     return { success: true };
   } catch (error) {
-    console.error('Error en logout:', error);
     throw error;
   }
 };
@@ -383,8 +345,6 @@ export const logout = async () => {
 // Function to start work
 export const startWork = async (coords) => {
   try {
-    console.log('API startWork - Enviando coordenadas:', coords);
-    
     if (!coords || typeof coords.latitude !== 'number' || typeof coords.longitude !== 'number') {
       throw new Error('Coordenadas inválidas');
     }
@@ -394,8 +354,6 @@ export const startWork = async (coords) => {
       latitude: String(coords.latitude),
       longitude: String(coords.longitude)
     };
-    
-    console.log('API startWork - Payload final:', payload);
     
     const headers = await getAuthHeader();
     headers['Content-Type'] = 'application/json';
@@ -408,7 +366,6 @@ export const startWork = async (coords) => {
     
     return await handleResponse(response);
   } catch (error) {
-    console.error('Error al iniciar trabajo:', error);
     throw error;
   }
 };
@@ -416,8 +373,6 @@ export const startWork = async (coords) => {
 // Function to end work
 export const endWork = async (coords) => {
   try {
-    console.log('API endWork - Enviando coordenadas:', coords);
-    
     if (!coords || typeof coords.latitude !== 'number' || typeof coords.longitude !== 'number') {
       throw new Error('Coordenadas inválidas');
     }
@@ -427,8 +382,6 @@ export const endWork = async (coords) => {
       latitude: String(coords.latitude),
       longitude: String(coords.longitude)
     };
-    
-    console.log('API endWork - Payload final:', payload);
     
     const headers = await getAuthHeader();
     headers['Content-Type'] = 'application/json';
@@ -441,7 +394,6 @@ export const endWork = async (coords) => {
     
     return await handleResponse(response);
   } catch (error) {
-    console.error('Error al finalizar trabajo:', error);
     throw error;
   }
 };
@@ -455,8 +407,6 @@ export const getLocationHistory = async (userId) => {
     if (userId) {
       url = `${getApiUrl()}/api/locations/user/${userId}`;
     }
-    
-    console.log('Obteniendo historial de ubicaciones desde:', url);
     
     const token = await AsyncStorage.getItem('token');
     if (!token) {
@@ -473,15 +423,12 @@ export const getLocationHistory = async (userId) => {
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      console.error('Error response from location history:', errorData);
       throw new Error(errorData.message || `Error ${response.status}: ${response.statusText}`);
     }
 
     const data = await response.json();
-    console.log('Location history response:', data);
     return data;
   } catch (error) {
-    console.error('Error in getLocationHistory:', error);
     throw error;
   }
 };
@@ -489,14 +436,11 @@ export const getLocationHistory = async (userId) => {
 // Function to get all users (admin only)
 export const getUsers = async () => {
   try {
-    console.log('Obteniendo lista de usuarios desde:', `${getApiUrl()}/api/users`);
-    
     // Obtenemos el token de autenticación directamente
     let token;
     try {
       token = await AsyncStorage.getItem('token');
     } catch (storageError) {
-      console.error('Error al obtener token de AsyncStorage:', storageError);
       throw new Error('No se pudo acceder al token de autenticación');
     }
     
@@ -523,11 +467,9 @@ export const getUsers = async () => {
     
     // Procesamos la respuesta
     const data = await response.json();
-    console.log(`Se obtuvieron ${data.length} usuarios`);
     
     return data;
   } catch (error) {
-    console.error('Error al obtener usuarios:', error);
     throw error;
   }
 };
@@ -535,14 +477,11 @@ export const getUsers = async () => {
 // Function to get current user tasks
 export const getUserTasks = async () => {
   try {
-    console.log('Obteniendo tareas del usuario desde:', `${getApiUrl()}/api/tasks/my-tasks`);
-    
     // Obtenemos el token de autenticación directamente
     let token;
     try {
       token = await AsyncStorage.getItem('token');
     } catch (storageError) {
-      console.error('Error al obtener token de AsyncStorage:', storageError);
       throw new Error('No se pudo acceder al token de autenticación');
     }
     
@@ -569,11 +508,9 @@ export const getUserTasks = async () => {
     
     // Procesamos la respuesta
     const data = await response.json();
-    console.log(`Se obtuvieron ${data.length} tareas del usuario`);
     
     return data;
   } catch (error) {
-    console.error('Error al obtener tareas:', error);
     throw error;
   }
 };
@@ -586,7 +523,6 @@ export const saveTask = async (task) => {
     try {
       token = await AsyncStorage.getItem('token');
     } catch (storageError) {
-      console.error('Error al obtener token de AsyncStorage:', storageError);
       throw new Error('No se pudo acceder al token de autenticación');
     }
     
@@ -614,7 +550,6 @@ export const saveTask = async (task) => {
     
     // Procesamos la respuesta
     const responseData = await response.json();
-    console.log('Tarea guardada correctamente:', responseData);
     
     return {
       task: {
@@ -627,7 +562,6 @@ export const saveTask = async (task) => {
       }
     };
   } catch (error) {
-    console.error('Error al guardar tarea:', error);
     throw error;
   }
 };
@@ -635,14 +569,11 @@ export const saveTask = async (task) => {
 // Function to get all tasks (admin)
 export const getTasks = async () => {
   try {
-    console.log('Obteniendo todas las tareas desde:', `${getApiUrl()}/api/tasks`);
-    
     // Obtenemos el token de autenticación directamente
     let token;
     try {
       token = await AsyncStorage.getItem('token');
     } catch (storageError) {
-      console.error('Error al obtener token de AsyncStorage:', storageError);
       throw new Error('No se pudo acceder al token de autenticación');
     }
     
@@ -669,11 +600,9 @@ export const getTasks = async () => {
     
     // Procesamos la respuesta
     const data = await response.json();
-    console.log(`Se obtuvieron ${data.length} tareas`);
     
     return data;
   } catch (error) {
-    console.error('Error al obtener todas las tareas:', error);
     throw error;
   }
 };
@@ -681,14 +610,11 @@ export const getTasks = async () => {
 // Function to delete a task
 export const deleteTask = async (taskId) => {
   try {
-    console.log('Eliminando tarea:', taskId);
-    
     // Obtenemos el token de autenticación directamente
     let token;
     try {
       token = await AsyncStorage.getItem('token');
     } catch (storageError) {
-      console.error('Error al obtener token de AsyncStorage:', storageError);
       throw new Error('No se pudo acceder al token de autenticación');
     }
     
@@ -715,11 +641,9 @@ export const deleteTask = async (taskId) => {
     
     // Procesamos la respuesta
     const data = await response.json();
-    console.log('Tarea eliminada correctamente');
     
     return data;
   } catch (error) {
-    console.error('Error al eliminar tarea:', error);
     throw error;
   }
 };
@@ -727,13 +651,10 @@ export const deleteTask = async (taskId) => {
 // Función para probar directamente la conexión con el backend sin usar fetchWithRetry
 export const directConnectionTest = async () => {
   try {
-    console.log('Realizando prueba de conexión directa con:', getApiUrl());
-    
     // Crear una promesa que se resolverá con el resultado de la petición
     return new Promise((resolve, reject) => {
       // Establecer un timeout largo para esta prueba
       const timeout = setTimeout(() => {
-        console.error('Timeout en prueba directa después de 2 minutos');
         reject(new Error('Timeout en prueba directa después de 2 minutos'));
       }, 120000); // 2 minutos
       
@@ -743,7 +664,6 @@ export const directConnectionTest = async () => {
         if (xhr.readyState === 4) {
           clearTimeout(timeout);
           
-          console.log('Respuesta XHR recibida, status:', xhr.status);
           if (xhr.status >= 200 && xhr.status < 300) {
             try {
               const responseData = JSON.parse(xhr.responseText);
@@ -769,18 +689,14 @@ export const directConnectionTest = async () => {
       
       xhr.onerror = function(e) {
         clearTimeout(timeout);
-        console.error('Error XHR:', e);
         reject(new Error('Error de red en conexión directa'));
       };
       
       xhr.open('GET', getApiUrl(), true);
       xhr.setRequestHeader('Content-Type', 'application/json');
       xhr.send();
-      
-      console.log('Petición XHR enviada');
     });
   } catch (error) {
-    console.error('Error en prueba de conexión directa:', error);
     return {
       success: false,
       error: error.message || 'Error desconocido en prueba de conexión directa'
@@ -791,16 +707,11 @@ export const directConnectionTest = async () => {
 // Function to test connection
 export const testConnection = async () => {
   try {
-    console.log('Probando conexión con:', getApiUrl());
-    
     // Primero intentar con XMLHttpRequest directo
     try {
-      console.log('Intentando conexión directa con XMLHttpRequest...');
       const directResult = await directConnectionTest();
-      console.log('Resultado de conexión directa:', directResult);
       return directResult;
     } catch (directError) {
-      console.log('Conexión directa falló, intentando con fetchWithRetry:', directError);
       // Si falla, intentar con fetchWithRetry
     }
     
@@ -815,16 +726,12 @@ export const testConnection = async () => {
     // Usar la nueva función con reintentos
     const response = await fetchWithRetry(url, options, 3); // 3 reintentos para la prueba de conexión
     
-    console.log('Respuesta recibida, status:', response.status);
-    
     // Intentar leer el cuerpo de la respuesta
     let responseBody;
     try {
       const text = await response.text();
-      console.log('Texto de respuesta:', text.substring(0, 150) + '...');
       responseBody = text ? JSON.parse(text) : {};
     } catch (e) {
-      console.error('Error al parsear respuesta JSON:', e);
       return { 
         success: response.ok, 
         status: response.status,
@@ -839,7 +746,6 @@ export const testConnection = async () => {
       data: responseBody
     };
   } catch (error) {
-    console.error('Error en testConnection:', error);
     return { 
       success: false, 
       error: error.message || 'Error al probar la conexión'
@@ -850,8 +756,6 @@ export const testConnection = async () => {
 // Función para probar el inicio de sesión
 export const testLogin = async (username, password) => {
   try {
-    console.log(`Probando login con usuario: ${username}`);
-    
     const url = `${getApiUrl()}/api/auth/login`;
     const options = {
       method: 'POST',
@@ -864,16 +768,12 @@ export const testLogin = async (username, password) => {
     // Usar la nueva función con reintentos
     const response = await fetchWithRetry(url, options);
     
-    console.log('Respuesta recibida, status:', response.status);
-    
     // Intentar leer el cuerpo de la respuesta
     let responseBody;
     try {
       const text = await response.text();
-      console.log('Texto de respuesta:', text.substring(0, 150) + '...');
       responseBody = text ? JSON.parse(text) : {};
     } catch (e) {
-      console.error('Error al parsear respuesta JSON:', e);
       return { 
         success: false, 
         status: response.status,
@@ -897,7 +797,6 @@ export const testLogin = async (username, password) => {
       token: responseBody.token
     };
   } catch (error) {
-    console.error('Error en testLogin:', error);
     return { 
       success: false, 
       error: error.message || 'Error al probar el login'
@@ -908,8 +807,6 @@ export const testLogin = async (username, password) => {
 // Function to assign a task to another user (admin only)
 export const assignTask = async (taskData) => {
   try {
-    console.log('Asignando tarea a otro usuario:', JSON.stringify(taskData));
-    
     if (!taskData.userId) {
       throw new Error('Se requiere el ID del usuario para asignar la tarea');
     }
@@ -919,7 +816,6 @@ export const assignTask = async (taskData) => {
     try {
       token = await AsyncStorage.getItem('token');
     } catch (storageError) {
-      console.error('Error al obtener token de AsyncStorage:', storageError);
       throw new Error('No se pudo acceder al token de autenticación');
     }
     
@@ -950,7 +846,6 @@ export const assignTask = async (taskData) => {
     
     // Procesamos la respuesta
     const responseData = await response.json();
-    console.log('Tarea asignada correctamente:', responseData);
     
     return {
       task: {
@@ -963,7 +858,6 @@ export const assignTask = async (taskData) => {
       }
     };
   } catch (error) {
-    console.error('Error al asignar tarea:', error);
     throw error;
   }
 };
@@ -976,7 +870,6 @@ export const getAdminStats = async () => {
     try {
       token = await AsyncStorage.getItem('token');
     } catch (storageError) {
-      console.error('Error al obtener token de AsyncStorage:', storageError);
       throw new Error('No se pudo acceder al token de autenticación');
     }
     
@@ -1003,9 +896,9 @@ export const getAdminStats = async () => {
     
     // Procesamos la respuesta
     const data = await response.json();
+    
     return data;
   } catch (error) {
-    console.error('Error al obtener estadísticas:', error);
     throw error;
   }
 };
@@ -1016,21 +909,17 @@ export const getRecentActivities = async () => {
     const url = `${getApiUrl()}/api/stats/recent-activity`;
     const options = await createFetchOptions('GET');
     
-    console.log('Fetching recent activities from:', url);
     const response = await fetchWithRetry(url, options);
     
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      console.error('Error response from recent activities:', errorData);
       throw new Error(errorData.message || `Error ${response.status}: ${response.statusText}`);
     }
     
     const data = await response.json();
-    console.log('Received activities data:', JSON.stringify(data, null, 2));
     
     if (!Array.isArray(data)) {
-      console.error('Invalid response format:', data);
-      return [];
+      throw new Error('Invalid response format');
     }
     
     // Transform the data to match the expected format
@@ -1045,11 +934,9 @@ export const getRecentActivities = async () => {
       metadata: activity.metadata || {}
     }));
     
-    console.log('Transformed activities data:', JSON.stringify(transformedData, null, 2));
     return transformedData;
   } catch (error) {
-    console.error('Error fetching recent activities:', error);
-    return [];
+    throw error;
   }
 };
 
@@ -1061,7 +948,6 @@ export const getNearbyTasks = async (longitude, latitude, maxDistance = 10000) =
     try {
       token = await AsyncStorage.getItem('token');
     } catch (storageError) {
-      console.error('Error al obtener token de AsyncStorage:', storageError);
       throw new Error('No se pudo acceder al token de autenticación');
     }
     
@@ -1091,7 +977,6 @@ export const getNearbyTasks = async (longitude, latitude, maxDistance = 10000) =
     
     // Procesamos la respuesta
     const responseData = await response.json();
-    console.log(`Se encontraron ${responseData.length} tareas cercanas`);
     
     // Aseguramos que todas las tareas tengan la propiedad completed definida
     const tasks = responseData.map(task => ({
@@ -1101,7 +986,6 @@ export const getNearbyTasks = async (longitude, latitude, maxDistance = 10000) =
     
     return tasks;
   } catch (error) {
-    console.error('Error al obtener tareas cercanas:', error);
     throw error;
   }
 };
@@ -1114,8 +998,6 @@ export const getNearbyTasks = async (longitude, latitude, maxDistance = 10000) =
  */
 export const updateTask = async (taskId, taskData) => {
   try {
-    console.log(`Actualizando tarea ${taskId} con datos:`, JSON.stringify(taskData));
-    
     // Obtener el token de autenticación
     const token = await AsyncStorage.getItem('token');
     
@@ -1124,7 +1006,6 @@ export const updateTask = async (taskId, taskData) => {
     }
     
     const url = `${getApiUrl()}/api/tasks/${taskId}`;
-    console.log(`Enviando petición PUT a ${url}`);
     
     // Crear opciones de la petición con mayor detalle de logs
     const options = {
@@ -1136,36 +1017,20 @@ export const updateTask = async (taskId, taskData) => {
       body: JSON.stringify(taskData)
     };
     
-    console.log(`Configurando opciones de la petición: ${JSON.stringify({
-      method: options.method,
-      headers: { ...options.headers, Authorization: 'Bearer ***' }
-    })}`);
-    
-    // Obtener configuración de la plataforma
-    const config = getPlatformConfig(Platform.OS);
-    console.log(`Usando configuración de red para ${Platform.OS}: timeout=${getTimeout()}ms, maxRetries=${config.config.maxRetries}`);
-    
     // Realizar la petición con reintentos automáticos
-    console.log(`Iniciando petición para actualizar tarea ${taskId}`);
     const response = await fetchWithRetry(url, options);
     
     // Manejar la respuesta
     if (!response.ok) {
-      console.error(`Error al actualizar tarea: Status ${response.status}`);
       const errorData = await response.json().catch(() => ({}));
       throw new Error(errorData.message || `Error ${response.status}: ${response.statusText}`);
     }
     
     // Procesar la respuesta
     const updatedTask = await response.json();
-    console.log(`Tarea ${taskId} actualizada correctamente:`, JSON.stringify(updatedTask).substring(0, 100) + '...');
     
     return updatedTask;
   } catch (error) {
-    console.error('Error detallado al actualizar tarea:', error.message);
-    console.error('Stack:', error.stack);
-    
-    // Registrar el error y relanzarlo para que el llamador lo maneje
     throw new Error(`Error al actualizar tarea: ${error.message}`);
   }
 };
@@ -1177,50 +1042,46 @@ export const updateTask = async (taskId, taskData) => {
  */
 export const saveActivity = async (activityData) => {
   try {
-    console.log('Saving activity data:', JSON.stringify(activityData));
-    
     // Validate required fields
     if (!activityData.type) {
       throw new Error('Activity data missing required fields: type');
     }
     
-    // Check if this is an availability status activity
-    const isAvailabilityActivity = activityData.metadata && 
-                                  activityData.metadata.availability && 
-                                  (activityData.metadata.availability === 'available' || 
-                                   activityData.metadata.availability === 'unavailable');
-    
-    // For most activity types, taskId is required
-    // Exception for task_delete and availability status activities
-    if (activityData.type !== 'task_delete' && 
-        !isAvailabilityActivity && 
-        !activityData.taskId) {
-      throw new Error('Activity data missing required field: taskId');
-    }
-    
     // Create a copy of the data to send
     const dataToSend = { ...activityData };
     
-    // For availability status activities, remove taskId completely to avoid ObjectId casting
-    if (isAvailabilityActivity) {
-      delete dataToSend.taskId;
-      
-      // Set a special type for availability activities
+    // Mapear los tipos a los que el backend realmente reconoce
+    // La validación demuestra que started_working/stopped_working no son válidos
+    if (dataToSend.type === 'clock_in' || dataToSend.type === 'started_working') {
       dataToSend.type = 'task_activity';
-      
-      // Store the availability status in metadata
-      if (!dataToSend.metadata) {
-        dataToSend.metadata = {};
-      }
-      dataToSend.metadata.activitySubtype = activityData.metadata.availability === 'available' ? 
-                                           'clock_in' : 'clock_out';
+      if (!dataToSend.metadata) dataToSend.metadata = {};
+      dataToSend.metadata.availability = 'available';
+    } else if (dataToSend.type === 'clock_out' || dataToSend.type === 'stopped_working') {
+      dataToSend.type = 'task_activity';
+      if (!dataToSend.metadata) dataToSend.metadata = {};
+      dataToSend.metadata.availability = 'unavailable';
+    }
+    
+    // Check if this is an availability activity
+    const isAvailabilityActivity = 
+      dataToSend.type === 'task_activity' && 
+      dataToSend.metadata && 
+      dataToSend.metadata.availability && 
+      (dataToSend.metadata.availability === 'available' || 
+       dataToSend.metadata.availability === 'unavailable');
+    
+    // Para actividades que no son de disponibilidad ni de eliminación de tareas, taskId es requerido
+    if (dataToSend.type !== 'task_delete' && 
+        !isAvailabilityActivity && 
+        !dataToSend.taskId) {
+      throw new Error('Activity data missing required field: taskId');
     }
     
     // Valid activity types according to the backend
     const validTypes = [
       'task_create', 'task_update', 'task_complete', 'task_delete',
       'task_assign', 'location_enter', 'location_exit',
-      'started_working', 'stopped_working', 'task_activity'
+      'task_activity'
     ];
     
     if (!validTypes.includes(dataToSend.type)) {
@@ -1237,7 +1098,7 @@ export const saveActivity = async (activityData) => {
           dataToSend.username = parsedUserInfo.name || parsedUserInfo.username || 'User';
         }
       } catch (storageError) {
-        console.error('Error getting user info from AsyncStorage:', storageError);
+        // Manejo silencioso de errores
       }
     }
     
@@ -1246,8 +1107,13 @@ export const saveActivity = async (activityData) => {
       dataToSend.metadata = {};
     }
     
+    // Si es una actividad de disponibilidad, asegurarse de que el taskId sea null
+    if (isAvailabilityActivity) {
+      delete dataToSend.taskId;
+    }
+    
     // Special handling for task_delete
-    if (activityData.type === 'task_delete' && activityData.taskId) {
+    if (dataToSend.type === 'task_delete' && activityData.taskId) {
       if (!dataToSend.metadata) {
         dataToSend.metadata = {};
       }
@@ -1257,8 +1123,6 @@ export const saveActivity = async (activityData) => {
     // Get API URL and token
     const url = `${getApiUrl()}/api/activities`;
     const token = await AsyncStorage.getItem('token');
-    
-    console.log(`Sending activity data to: ${url}`);
     
     const response = await fetchWithRetry(url, {
       method: 'POST',
@@ -1271,26 +1135,15 @@ export const saveActivity = async (activityData) => {
     
     if (!response.ok) {
       const errorText = await response.text();
-      console.error(`Activity save failed with status ${response.status}:`, errorText);
-      
-      // Special case for task_delete with 404
-      if (activityData.type === 'task_delete' && response.status === 404) {
-        console.log('Task was already deleted, continuing...');
-        return { success: true, activitySaved: false, message: 'Tarea eliminada pero no se pudo registrar la actividad' };
-      }
-      
       throw new Error(`Error ${response.status}: ${errorText}`);
     }
     
     const responseData = await response.json();
-    console.log('Activity saved successfully:', responseData);
     
     // Send notification to admin users
     try {
       // Get all admin users and send them notifications
       // This is a more reliable approach than checking if current user is admin
-      console.log('Attempting to send admin notifications for activity');
-      
       // Import Notifications directly to avoid circular dependencies
       const Notifications = require('expo-notifications');
       
@@ -1301,12 +1154,10 @@ export const saveActivity = async (activityData) => {
         const isCurrentUserAdmin = userInfo.isAdmin === true;
         
         if (isCurrentUserAdmin) {
-          console.log('Current user is admin, sending local notification');
-          
           // Prepare notification content
           const title = getActivityTitle(activityData.type);
           const username = activityData.username || userInfo.name || 'User';
-          const message = activityData.message || getActivityMessage(activityData);
+          const message = getActivityMessage(activityData);
           
           // Send immediate notification
           try {
@@ -1321,26 +1172,21 @@ export const saveActivity = async (activityData) => {
               },
               trigger: null // Show immediately
             });
-            
-            console.log('Admin notification sent successfully');
           } catch (notifError) {
-            console.error('Error sending admin notification:', notifError);
+            // Manejo silencioso de errores
           }
         } else {
-          console.log('Current user is not admin, no local notification sent');
+          // Manejo silencioso de errores
         }
       }
     } catch (error) {
-      console.error('Error checking admin status:', error);
+      // Manejo silencioso de errores
     }
     
     return responseData;
   } catch (error) {
-    console.error('Error en saveActivity:', error);
-    
     // Special case for task_delete
     if (activityData && activityData.type === 'task_delete') {
-      console.log('Continuing despite error for task_delete...');
       return { success: true, activitySaved: false, message: 'Tarea eliminada pero no se pudo registrar la actividad' };
     }
     
@@ -1415,7 +1261,6 @@ export const getRealTimeLocations = async () => {
     const data = await handleResponse(response);
     return data.locations || [];
   } catch (error) {
-    console.error('Error al obtener ubicaciones en tiempo real:', error);
     throw error;
   }
 };
@@ -1423,14 +1268,11 @@ export const getRealTimeLocations = async () => {
 // Function to update task completion status
 export const updateTaskCompletion = async (taskId, completed) => {
   try {
-    console.log(`Actualizando estado de completado de tarea ${taskId} a ${completed}`);
-    
     // Obtenemos el token de autenticación
     let token;
     try {
       token = await AsyncStorage.getItem('token');
     } catch (storageError) {
-      console.error('Error al obtener token de AsyncStorage:', storageError);
       throw new Error('No se pudo acceder al token de autenticación');
     }
     
@@ -1458,11 +1300,9 @@ export const updateTaskCompletion = async (taskId, completed) => {
     
     // Procesamos la respuesta
     const responseData = await response.json();
-    console.log('Estado de completado actualizado correctamente:', responseData);
     
     return responseData;
   } catch (error) {
-    console.error('Error al actualizar estado de completado:', error);
     throw error;
   }
 };
@@ -1470,8 +1310,6 @@ export const updateTaskCompletion = async (taskId, completed) => {
 // Get task by ID
 export const getTaskById = async (taskId) => {
   try {
-    console.log(`Obteniendo tarea con ID: ${taskId}`);
-    
     // Try to get from local cache first
     try {
       const cachedTasksString = await AsyncStorage.getItem('cachedTasks');
@@ -1479,13 +1317,11 @@ export const getTaskById = async (taskId) => {
         const cachedTasks = JSON.parse(cachedTasksString);
         const cachedTask = cachedTasks.find(task => task._id === taskId);
         if (cachedTask) {
-          console.log('Found task in local cache, using cached data');
           return cachedTask;
         }
       }
     } catch (cacheError) {
-      console.warn('Error checking task cache:', cacheError);
-      // Continue with API request even if cache check fails
+      // Manejo silencioso de errores
     }
     
     // Obtenemos el token de autenticación directamente
@@ -1493,7 +1329,6 @@ export const getTaskById = async (taskId) => {
     try {
       token = await AsyncStorage.getItem('token');
     } catch (storageError) {
-      console.error('Error al obtener token de AsyncStorage:', storageError);
       throw new Error('No se pudo acceder al token de autenticación');
     }
     
@@ -1521,13 +1356,11 @@ export const getTaskById = async (taskId) => {
     
     for (const url of urls) {
       try {
-        console.log(`Realizando petición a: ${url}`);
         const response = await fetchWithRetry(url, options);
         
         // Si la respuesta es exitosa, procesamos y devolvemos los datos
         if (response.ok) {
           const data = await response.json();
-          console.log('Datos de tarea recibidos:', JSON.stringify(data).substring(0, 100) + '...');
           
           // Cache the task for future use
           try {
@@ -1543,8 +1376,7 @@ export const getTaskById = async (taskId) => {
             // Store back in AsyncStorage (limit to 50 tasks to avoid storage issues)
             await AsyncStorage.setItem('cachedTasks', JSON.stringify(filteredTasks.slice(-50)));
           } catch (cacheError) {
-            console.warn('Error caching task data:', cacheError);
-            // Continue even if caching fails
+            // Manejo silencioso de errores
           }
           
           return data;
@@ -1554,7 +1386,6 @@ export const getTaskById = async (taskId) => {
         const errorData = await response.json().catch(() => ({}));
         lastError = new Error(errorData.message || `Error ${response.status}: ${response.statusText}`);
       } catch (err) {
-        console.error(`Error intentando obtener tarea desde ${url}:`, err);
         lastError = err;
         // Continuamos con la siguiente URL
       }
@@ -1562,12 +1393,9 @@ export const getTaskById = async (taskId) => {
     
     // If we reach here, try to get from user's tasks as a last resort
     try {
-      console.log('Trying to find task in user tasks list as last resort...');
       const userTasks = await getUserTasks();
       const foundTask = userTasks.find(task => task._id === taskId);
       if (foundTask) {
-        console.log('Found task in user tasks list:', foundTask);
-        
         // Cache this task for future use
         try {
           const cachedTasksString = await AsyncStorage.getItem('cachedTasks');
@@ -1581,24 +1409,20 @@ export const getTaskById = async (taskId) => {
           
           // Store back in AsyncStorage
           await AsyncStorage.setItem('cachedTasks', JSON.stringify(filteredTasks.slice(-50)));
-          console.log('Task cached for future use');
         } catch (cacheError) {
-          console.warn('Error caching fallback task data:', cacheError);
+          // Manejo silencioso de errores
         }
         
         return foundTask;
       }
     } catch (userTasksError) {
-      console.error('Error getting user tasks as fallback:', userTasksError);
-      // Continue to throw the original error
+      // Manejo silencioso de errores
     }
     
     // Si llegamos aquí es porque ninguna URL funcionó
     throw lastError || new Error(`No se pudo obtener la tarea con ID ${taskId}`);
   } catch (error) {
-    console.error(`Error al obtener tarea con ID ${taskId}:`, error);
     if (error.message.includes('401')) {
-      console.log('Error de autorización, intentando obtener tarea sin token');
       try {
         const tokenlessOptions = {
           method: 'GET',
@@ -1609,13 +1433,11 @@ export const getTaskById = async (taskId) => {
         const response = await fetchWithRetry(`${getApiUrl()}/api/tasks/${taskId}`, tokenlessOptions);
         if (response.ok) {
           const data = await response.json();
-          console.log('Datos de tarea recibidos sin token:', JSON.stringify(data).substring(0, 100) + '...');
           return data;
         } else {
           throw new Error(`Error ${response.status}: ${response.statusText}`);
         }
       } catch (tokenlessError) {
-        console.error('Error al obtener tarea sin token:', tokenlessError);
         throw error;
       }
     } else {
@@ -1631,18 +1453,14 @@ export const getTaskById = async (taskId) => {
  */
 export const getUserById = async (userId) => {
   try {
-    console.log(`Obteniendo usuario con ID: ${userId}`);
-    
     // Ensure userId is a string (not an object)
-    const userIdString = typeof userId === 'object' && userId._id ? userId._id : String(userId);
-    console.log(`Usando userId normalizado: ${userIdString}`);
+    const userIdString = typeof userId === 'object' ? userId._id : String(userId);
     
     // Obtenemos el token de autenticación directamente
     let token;
     try {
       token = await AsyncStorage.getItem('token');
     } catch (storageError) {
-      console.error('Error al obtener token de AsyncStorage:', storageError);
       throw new Error('No se pudo acceder al token de autenticación');
     }
     
@@ -1670,13 +1488,11 @@ export const getUserById = async (userId) => {
     
     for (const url of urls) {
       try {
-        console.log(`Realizando petición a: ${url}`);
         const response = await fetchWithRetry(url, options);
         
         // Si la respuesta es exitosa, procesamos y devolvemos los datos
         if (response.ok) {
           const data = await response.json();
-          console.log('Datos de usuario recibidos:', JSON.stringify(data).substring(0, 100) + '...');
           return data;
         }
         
@@ -1684,7 +1500,6 @@ export const getUserById = async (userId) => {
         const errorData = await response.json().catch(() => ({}));
         lastError = new Error(errorData.message || `Error ${response.status}: ${response.statusText}`);
       } catch (err) {
-        console.error(`Error intentando obtener usuario desde ${url}:`, err);
         lastError = err;
         // Continuamos con la siguiente URL
       }
@@ -1693,7 +1508,6 @@ export const getUserById = async (userId) => {
     // Si llegamos aquí es porque ninguna URL funcionó
     throw lastError || new Error('Error al obtener usuario');
   } catch (error) {
-    console.error(`Error al obtener usuario con ID ${userId}:`, error);
     throw error;
   }
 };
@@ -1708,14 +1522,11 @@ export const getLocationHistoryWithTasks = async (userId) => {
       url = `${getApiUrl()}/api/locations/history-with-tasks/${userId}`;
     }
     
-    console.log('Obteniendo historial de ubicaciones con tareas desde:', url);
-    
     // Obtenemos el token de autenticación directamente
     let token;
     try {
       token = await AsyncStorage.getItem('token');
     } catch (storageError) {
-      console.error('Error al obtener token de AsyncStorage:', storageError);
       throw new Error('No se pudo acceder al token de autenticación');
     }
     
@@ -1749,14 +1560,11 @@ export const getLocationHistoryWithTasks = async (userId) => {
     
     // Procesamos la respuesta
     const data = await response.json();
-    console.log(`Se obtuvieron ${data.length} registros de ubicación con tareas`);
     
     return data;
   } catch (error) {
-    console.error('Error al obtener historial de ubicaciones con tareas:', error);
     // If this is a 404, fall back to regular location history
     if (error.message && error.message.includes('404')) {
-      console.log('Cayendo en fallback de historial simple debido a 404');
       try {
         const fallbackData = await (userId ? getUserById(userId) : getLocationHistory());
         return fallbackData.map(location => ({
@@ -1764,7 +1572,7 @@ export const getLocationHistoryWithTasks = async (userId) => {
           nearbyTasks: []
         }));
       } catch (fallbackError) {
-        console.error('Error en fallback de historial:', fallbackError);
+        throw error;
       }
     }
     throw error;
@@ -1785,7 +1593,6 @@ export const getUserActivities = async (limit = 10) => {
     }
     
     const url = `${getApiUrl()}/api/activities/user?limit=${limit}`;
-    console.log(`Fetching user activities from: ${url}`);
     
     const response = await fetchWithRetry(url, {
       method: 'GET',
@@ -1797,15 +1604,13 @@ export const getUserActivities = async (limit = 10) => {
     
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      console.error('Error response from user activities:', errorData);
       throw new Error(errorData.message || `Error ${response.status}: ${response.statusText}`);
     }
     
     const data = await response.json();
     
     if (!data.activities || !Array.isArray(data.activities)) {
-      console.error('Invalid response format:', data);
-      return [];
+      throw new Error('Invalid response format');
     }
     
     // Transform the data to match the expected format
@@ -1819,11 +1624,9 @@ export const getUserActivities = async (limit = 10) => {
       metadata: activity.metadata || {}
     }));
     
-    console.log(`Retrieved ${transformedData.length} user activities`);
     return transformedData;
   } catch (error) {
-    console.error('Error fetching user activities:', error);
-    return [];
+    throw error;
   }
 };
 
@@ -1873,14 +1676,11 @@ export const getTaskActivities = async (taskId) => {
     
     const url = `${getApiUrl()}/api/activities/task/${taskId}`;
     
-    console.log('Fetching activities for task:', taskId);
     const response = await fetchWithRetry(url, options);
     const data = await handleResponse(response);
     
-    console.log(`Retrieved ${data.length || 0} activities for task`);
     return data;
   } catch (error) {
-    console.error('Error fetching task activities:', error);
     throw error;
   }
 };
@@ -1892,9 +1692,7 @@ export const getTaskActivities = async (taskId) => {
  */
 export const getActiveTask = async (token) => {
   try {
-    console.log('[API] Obteniendo tarea activa con modo manos libres...');
     const apiUrl = `${getApiUrl()}/api/tasks/active`;
-    console.log('[API] URL de petición:', apiUrl);
     
     const response = await fetch(apiUrl, {
       method: 'GET',
@@ -1905,14 +1703,10 @@ export const getActiveTask = async (token) => {
     });
 
     const statusCode = response.status;
-    console.log('[API] Status de respuesta:', statusCode);
     
     if (!response.ok) {
       const errorBody = await response.text();
-      console.error('[API] Error obteniendo tarea activa:', errorBody);
-      
       if (statusCode === 404) {
-        console.log('[API] No se encontró ninguna tarea activa con modo manos libres');
         return null;
       }
       
@@ -1920,10 +1714,9 @@ export const getActiveTask = async (token) => {
     }
 
     const data = await response.json();
-    console.log('[API] Tarea activa encontrada:', JSON.stringify(data, null, 2));
+    
     return data;
   } catch (error) {
-    console.error('[API] Error en getActiveTask:', error.message);
     return null;
   }
 };
@@ -1952,7 +1745,6 @@ export const addTaskNote = async (noteData, token) => {
 
     return await response.json();
   } catch (error) {
-    console.error('Error en addTaskNote:', error);
     throw error;
   }
 };
@@ -1964,15 +1756,10 @@ export const addTaskNote = async (noteData, token) => {
  */
 export const enableHandsFreeMode = async (taskId) => {
   try {
-    console.log(`Activando modo manos libres para tarea ${taskId}`);
-    
     const options = await createFetchOptions('PUT', {
       handsFreeMode: true,
       status: 'in-progress'
     });
-    
-    console.log(`Enviando petición PUT a ${getApiUrl()}/api/tasks/${taskId}`);
-    console.log(`Configurando opciones de la petición:`, JSON.stringify(options, null, 2));
     
     const response = await fetchWithRetry(`${getApiUrl()}/api/tasks/${taskId}`, options);
     
@@ -1982,10 +1769,9 @@ export const enableHandsFreeMode = async (taskId) => {
     }
     
     const updatedTask = await response.json();
-    console.log(`Modo manos libres activado para tarea ${taskId}`);
+    
     return updatedTask;
   } catch (error) {
-    console.error('Error al activar modo manos libres:', error);
     throw error;
   }
 };
@@ -1998,11 +1784,8 @@ export const enableHandsFreeMode = async (taskId) => {
  */
 export const addSimpleVoiceNote = async (taskId, text, token) => {
   try {
-    console.log(`Guardando nota directa para tarea ${taskId}: "${text}"`);
-    
     // Construir una URL más directa
     const url = `${getApiUrl()}/api/tasks/${taskId}/note`;
-    console.log(`URL para guardar nota: ${url}`);
     
     // Configurar las opciones de la petición directamente
     const options = {
@@ -2018,24 +1801,19 @@ export const addSimpleVoiceNote = async (taskId, text, token) => {
       })
     };
     
-    console.log(`Opciones de la petición:`, JSON.stringify(options, null, 2));
-    
     // Realizar petición sin usar fetchWithRetry para tener control directo
     const response = await fetch(url, options);
-    console.log(`Respuesta del servidor: ${response.status}`);
     
     // Manejar los errores manualmente
     if (!response.ok) {
       const errorText = await response.text();
-      console.error(`Error del servidor: ${errorText}`);
       throw new Error(`Error al guardar nota de voz: ${response.status} ${errorText}`);
     }
     
     const data = await response.json();
-    console.log(`Nota guardada con éxito:`, JSON.stringify(data, null, 2));
+    
     return data;
   } catch (error) {
-    console.error('Error en addSimpleVoiceNote:', error);
     throw error;
   }
 };
@@ -2057,18 +1835,13 @@ export const saveLocations = async (locations) => {
     // Endpoint para guardar ubicaciones
     const url = `${getApiUrl()}/api/locations/batch`;
     
-    console.log('Guardando batch de ubicaciones:', locations.length);
-    
-    // Realizar la petición al servidor
     const response = await fetchWithRetry(url, options);
     
     // Manejar la respuesta
     const result = await handleResponse(response);
     
-    console.log('Ubicaciones guardadas correctamente:', result);
     return result;
   } catch (error) {
-    console.error('Error al guardar ubicaciones:', error);
     throw error;
   }
 };
@@ -2078,74 +1851,106 @@ export const saveLocations = async (locations) => {
 // @returns {Promise<Array>} Lista de usuarios con su estado de disponibilidad
 export const getUserAvailabilityStatus = async () => {
   try {
-    // Obtener las actividades recientes como objeto con formato { activities: [...], pagination: {...} }
-    console.log('Obteniendo estado de disponibilidad a través de las actividades recientes...');
+    // Obtener todas las actividades recientes con un límite mayor para capturar más historial
+    const activitiesResponse = await getAdminActivities({ 
+      limit: 300,   // Aumentamos el límite para asegurar capturar todas las actividades relevantes
+      sort: '-createdAt' // Ordenar por fecha descendente (más recientes primero)
+    });
     
-    const activitiesResponse = await getAdminActivities({ limit: 100, sort: '-createdAt' });
-    
-    // Extraer el array de actividades del objeto de respuesta
+    // Extraer el array de actividades
     const activities = activitiesResponse?.activities || [];
     
-    // Verificar que activities sea un array
     if (!Array.isArray(activities)) {
-      console.error('Error: activitiesResponse no contiene un array de actividades:', typeof activities);
-      return [];
+      throw new Error('Invalid response format');
     }
     
-    console.log(`Se obtuvieron ${activities.length} actividades para analizar.`);
+    // Imprimir actividades para debugging
+    console.log(`Total de actividades obtenidas: ${activities.length}`);
     
-    // Usamos un Map para guardar el estado más reciente de cada usuario
-    const userStatusMap = new Map();
-    
-    // Procesamos todas las actividades para encontrar la más reciente de cada usuario
+    // Vamos a inspeccionar en detalle las actividades para depurar
+    console.log('Actividades por tipo:');
+    const typeCount = {};
     activities.forEach(activity => {
-      if (!activity) return;
+      if (!activity || !activity.type) return;
       
-      // Tipos de actividad que indican disponibilidad (tanto clock_in/out como started/stopped_working)
-      if (activity.type === 'clock_in' || activity.type === 'started_working' || 
-          activity.type === 'clock_out' || activity.type === 'stopped_working') {
-        
-        // Extraer userId asegurándonos de manejar tanto string como objeto
-        const userId = activity.userId?._id || activity.userId;
-        if (!userId) {
-          console.log('Actividad sin userId:', activity);
-          return;
-        }
-        
-        // Extraer nombre de usuario
-        const username = activity.userId?.username || 
-                        activity.username || 
-                        activity.metadata?.username || 
-                        'Usuario';
-        
-        // Determinar si está disponible según el tipo de actividad
-        const isAvailable = activity.type === 'clock_in' || activity.type === 'started_working';
-        
-        // Solo actualizamos si no tenemos un registro para este usuario o si esta actividad es más reciente
-        if (!userStatusMap.has(userId) || 
-            new Date(activity.createdAt || activity.timestamp) > 
-            new Date(userStatusMap.get(userId).timestamp)) {
-          
-          userStatusMap.set(userId, {
-            userId,
-            username,
-            isAvailable,
-            timestamp: activity.createdAt || activity.timestamp,
-            metadata: activity.metadata || {}
-          });
-        }
+      if (!typeCount[activity.type]) {
+        typeCount[activity.type] = 0;
+      }
+      typeCount[activity.type]++;
+      
+      // Verificar si es una actividad task_activity con metadatos de disponibilidad
+      if (activity.type === 'task_activity' && activity.metadata && activity.metadata.availability) {
+        console.log(`Encontrada actividad de disponibilidad: ${JSON.stringify({
+          type: activity.type,
+          userId: activity.userId,
+          username: activity.username,
+          availability: activity.metadata.availability,
+          timestamp: activity.createdAt
+        })}`);
       }
     });
     
-    console.log(`Se encontraron estados de disponibilidad para ${userStatusMap.size} usuarios.`);
+    // Mostrar conteo por tipo
+    Object.keys(typeCount).forEach(type => {
+      console.log(`- ${type}: ${typeCount[type]} actividades`);
+    });
     
-    // Convertir el Map a un array de objetos
-    return Array.from(userStatusMap.values());
+    // Map para almacenar el estado más reciente de cada usuario
+    const userStatusMap = new Map();
+    
+    // Recorrer todas las actividades y encontrar las más recientes de disponibilidad para cada usuario
+    for (const activity of activities) {
+      if (!activity || !activity.type) continue;
+      
+      // Verificar si es una actividad relacionada con disponibilidad
+      let isAvailabilityActivity = false;
+      let isAvailable = false;
+      
+      // Caso principal: task_activity con metadata de disponibilidad
+      if (activity.type === 'task_activity' && activity.metadata && activity.metadata.availability) {
+        isAvailabilityActivity = true;
+        isAvailable = activity.metadata.availability === 'available';
+        console.log(`Actividad de disponibilidad encontrada - userId: ${activity.userId}, tipo: ${activity.type}, disponible: ${isAvailable}`);
+      }
+      
+      // Ignorar actividades que no son de disponibilidad
+      if (!isAvailabilityActivity) continue;
+      
+      // Extraer información del usuario y normalizar ID
+      const userId = typeof activity.userId === 'object' ? activity.userId._id : activity.userId;
+      if (!userId) continue;
+      
+      const username = activity.userId?.username || activity.username || activity.metadata?.username || 'Usuario';
+      
+      // Generar timestamp normalizado
+      const timestamp = activity.createdAt || activity.timestamp || new Date().toISOString();
+      const activityDate = new Date(timestamp);
+      
+      // Solo actualizar si es la actividad más reciente para este usuario
+      const existingStatus = userStatusMap.get(userId);
+      if (!existingStatus || activityDate > new Date(existingStatus.timestamp)) {
+        console.log(`Actualizando estado de ${username} (${userId}): ${isAvailable ? 'DISPONIBLE' : 'NO DISPONIBLE'} - ${timestamp}`);
+        userStatusMap.set(userId, {
+          userId,
+          username,
+          isAvailable,
+          timestamp
+        });
+      }
+    }
+    
+    // Convertir el Map a un array de objetos para la respuesta
+    const result = Array.from(userStatusMap.values());
+    
+    console.log(`Resultado final: ${result.length} usuarios con estado de disponibilidad`);
+    result.forEach(user => {
+      console.log(`- ${user.username} (${user.userId}): ${user.isAvailable ? 'DISPONIBLE' : 'NO DISPONIBLE'}`);
+    });
+    
+    return result;
   } catch (error) {
-    console.error('Error al cargar estado de disponibilidad:', error);
-    // Devolver array vacío en caso de error para evitar que la UI se rompa
-    return [];
-
+    console.error('Error al obtener estado de disponibilidad:', error);
+    throw error;
   }
 };
 
@@ -2162,10 +1967,15 @@ export const getAdminActivities = async (options = {}) => {
     const limit = params.limit || 100;
     const sort = params.sort || '-createdAt'; // Por defecto ordenar por fecha de creación descendente
     
-    console.log(`Obteniendo actividades de administrador (página ${page}, límite ${limit}, ordenación ${sort})...`);
+    // Obtenemos el token de autenticación
+    let token;
+    try {
+      token = await AsyncStorage.getItem('token');
+    } catch (storageError) {
+      throw new Error('No se pudo acceder al token de autenticación');
+    }
     
-    const authHeader = await getAuthHeader();
-    if (!Object.keys(authHeader).length) {
+    if (!token) {
       throw new Error('No hay token de autenticación disponible');
     }
     
@@ -2182,7 +1992,7 @@ export const getAdminActivities = async (options = {}) => {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
-        ...authHeader
+        'Authorization': `Bearer ${token}`
       }
     };
     
@@ -2199,11 +2009,8 @@ export const getAdminActivities = async (options = {}) => {
       }
     };
     
-    console.log(`Se cargaron ${result.activities.length} actividades de administrador`);
-    
     return result;
   } catch (error) {
-    console.error('Error al obtener actividades de administrador:', error);
     throw error;
   }
 };

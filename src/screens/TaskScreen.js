@@ -479,9 +479,9 @@ const TaskScreen = ({ navigation }) => {
             <Text style={styles.modalTitle}>{t('selectUser')}</Text>
             <TouchableOpacity 
               onPress={() => setShowUserSelector(false)}
-              style={styles.closeButton}
+              style={{ padding: 5 }}
             >
-              <Text style={styles.closeButtonText}>×</Text>
+              <Text style={{ color: '#fff3e5', fontSize: 24, fontWeight: 'bold' }}>×</Text>
             </TouchableOpacity>
           </View>
           <ScrollView style={styles.userList}>
@@ -494,7 +494,10 @@ const TaskScreen = ({ navigation }) => {
                 ]}
                 onPress={() => selectUser(user._id)}
               >
-                <Text style={styles.userItemText}>{user.username}</Text>
+                <Text style={[
+                  styles.userItemText,
+                  selectedUserId === user._id && { color: '#000000' }
+                ]}>{user.username}</Text>
               </TouchableOpacity>
             ))}
           </ScrollView>
@@ -562,19 +565,21 @@ const TaskScreen = ({ navigation }) => {
         </View>
         
         <TextInput
-          style={styles.input}
+          style={[styles.input, { color: '#fff3e5', borderColor: '#fff3e5' }]}
           placeholder={t('taskTitle')}
           value={newTaskTitle}
           onChangeText={setNewTaskTitle}
+          placeholderTextColor="#a8a8a8"
         />
         
         <TextInput
-          style={[styles.input, styles.textArea]}
+          style={[styles.input, styles.textArea, { color: '#fff3e5', borderColor: '#fff3e5' }]}
           placeholder={t('taskDescription')}
           value={newTaskDescription}
           onChangeText={setNewTaskDescription}
           multiline={true}
           numberOfLines={3}
+          placeholderTextColor="#a8a8a8"
         />
         
         {/* Botón para abrir selector de ubicación y radio */}
@@ -583,8 +588,8 @@ const TaskScreen = ({ navigation }) => {
             style={styles.locationButton}
             onPress={() => setShowLocationSelector(true)}
           >
-            <Ionicons name="location" size={20} color="#4A90E2" />
-            <Text style={styles.locationButtonText}>
+            <Ionicons name="location" size={20} color="#000000" />
+            <Text style={[styles.locationButtonText, { color: '#fff3e5' }]}>
               {taskLocation 
                 ? `${taskLocationName || t('selectedLocation')} (${taskRadius} km)` 
                 : t('addLocationAndRadius')}
@@ -593,32 +598,29 @@ const TaskScreen = ({ navigation }) => {
           
           {/* Botón para seleccionar ubicaciones guardadas */}
           <TouchableOpacity 
-            style={styles.savedLocationsButton}
+            style={[styles.savedLocationsButton, { backgroundColor: '#fff3e5', padding: 10, marginLeft: 8, width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }]}
             onPress={() => setShowSavedLocationsSelector(true)}
           >
-            <Ionicons name="bookmark" size={20} color="#4A90E2" />
-            <Text style={styles.locationButtonText}>
-              {t('savedLocations') || 'Saved Locations'}
-            </Text>
+            <Ionicons name="bookmark" size={24} color="#000000" />
           </TouchableOpacity>
         </View>
         
         {/* Opción de Modo Manos Libres */}
         <View style={styles.handsFreeContainer}>
           <View style={styles.handsFreeTextContainer}>
-            <Ionicons name="mic-outline" size={20} color="#4A90E2" />
-            <Text style={styles.handsFreeText}>{t('handsFreeMode')}</Text>
+            <Ionicons name="mic-outline" size={20} color="#fff3e5" />
+            <Text style={[styles.handsFreeText, { color: '#fff3e5' }]}>{t('handsFreeMode')}</Text>
           </View>
           <TouchableOpacity 
             style={[
               styles.handsFreeSwitch, 
-              handsFreeMode ? styles.handsFreeActive : styles.handsFreeInactive
+              handsFreeMode ? { backgroundColor: '#fff3e5' } : styles.handsFreeInactive
             ]}
             onPress={() => setHandsFreeMode(!handsFreeMode)}
           >
             <View style={[
               styles.handsFreeHandle,
-              handsFreeMode ? styles.handsFreeHandleActive : styles.handsFreeHandleInactive
+              handsFreeMode ? { backgroundColor: '#000000' } : styles.handsFreeHandleInactive
             ]} />
           </TouchableOpacity>
         </View>
@@ -626,17 +628,18 @@ const TaskScreen = ({ navigation }) => {
         {/* Campo para palabras clave solo si handsFreeMode está activado */}
         {handsFreeMode && (
           <View style={styles.keywordsContainer}>
-            <Text style={styles.keywordsLabel}>{t('voiceKeywords') || 'Palabras clave para activación por voz'}</Text>
+            <Text style={[styles.keywordsLabel, { color: '#fff3e5' }]}>{t('voiceKeywords') || 'Palabras clave para activación por voz'}</Text>
             
             <View style={styles.keywordInputRow}>
               <TextInput
-                style={[styles.input, styles.keywordInput]}
+                style={[styles.input, styles.keywordInput, { color: '#fff3e5', borderColor: '#fff3e5' }]}
                 placeholder={t('keywordPlaceholder') || "Escriba una palabra clave"}
                 value={currentKeyword}
                 onChangeText={setCurrentKeyword}
+                placeholderTextColor="#a8a8a8"
               />
               <TouchableOpacity 
-                style={styles.addKeywordButton}
+                style={[styles.addKeywordButton, { backgroundColor: '#fff3e5' }]}
                 onPress={() => {
                   if (currentKeyword.trim()) {
                     setTaskKeywords([...taskKeywords, currentKeyword.trim()]);
@@ -644,7 +647,7 @@ const TaskScreen = ({ navigation }) => {
                   }
                 }}
               >
-                <Text style={styles.addKeywordButtonText}>+</Text>
+                <Text style={[styles.addKeywordButtonText, { color: '#000000' }]}>+</Text>
               </TouchableOpacity>
             </View>
             
@@ -678,12 +681,12 @@ const TaskScreen = ({ navigation }) => {
             style={styles.userSelectButton}
             onPress={() => setShowUserSelector(true)}
           >
-            <Text style={styles.userSelectButtonText}>
+            <Text style={[styles.userSelectButtonText, { color: '#fff3e5' }]}>
               {selectedUserId 
                 ? users.find(u => u._id === selectedUserId)?.username || t('userSelected')
                 : t('assignToUser')}
             </Text>
-            <Ionicons name="chevron-forward" size={16} color="#4A90E2" />
+            <Ionicons name="chevron-forward" size={16} color="#fff3e5" />
           </TouchableOpacity>
         )}
         
@@ -768,8 +771,8 @@ const TaskScreen = ({ navigation }) => {
       
       {loading && !refreshing ? (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#4A90E2" />
-          <Text style={styles.loadingText}>{t('loadingTasks')}</Text>
+          <ActivityIndicator size="large" color="#fff3e5" />
+          <Text style={[styles.loadingText, { color: '#fff3e5' }]}>{t('loadingTasks')}</Text>
         </View>
       ) : (
         <>
@@ -1078,10 +1081,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#f9f9f9',
+    backgroundColor: '#fff3e5',
     borderRadius: 5,
-    padding: 12,
-    marginLeft: 5,
+    padding: 10,
+    marginLeft: 8,
     borderWidth: 1,
     borderColor: 'rgba(255, 243, 229, 0.2)',
   },
@@ -1155,8 +1158,11 @@ const styles = StyleSheet.create({
   },
   userItem: {
     padding: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 243, 229, 0.1)',
+    backgroundColor: '#2e2e2e',
+    borderRadius: 10,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 243, 229, 0.2)',
   },
   userItemText: {
     fontSize: 16,
@@ -1202,7 +1208,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#f0f0f0',
   },
   handsFreeActive: {
-    backgroundColor: '#4A90E2',
+    backgroundColor: '#fff3e5',
   },
   handsFreeInactive: {
     backgroundColor: '#f0f0f0',
@@ -1215,6 +1221,7 @@ const styles = StyleSheet.create({
   },
   handsFreeHandleActive: {
     marginLeft: 25,
+    backgroundColor: '#000000',
   },
   handsFreeHandleInactive: {
     marginLeft: 5,
@@ -1238,7 +1245,7 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   addKeywordButton: {
-    backgroundColor: '#4A90E2',
+    backgroundColor: '#fff3e5',
     borderRadius: 20,
     width: 40,
     height: 40,
@@ -1246,7 +1253,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   addKeywordButtonText: {
-    color: '#fff',
+    color: '#000000',
     fontSize: 24,
     fontWeight: 'bold',
   },

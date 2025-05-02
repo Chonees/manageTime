@@ -18,7 +18,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as FileSystem from 'expo-file-system';
 import { useLanguage } from '../context/LanguageContext';
 
-const VERIFICATION_INTERVAL = 10000; // 10 segundos en milisegundos (antes era 600000 - 10 minutos)
+const VERIFICATION_INTERVAL = 100000; // 10 segundos en milisegundos (antes era 600000 - 10 minutos)
 const VIBRATION_PATTERN = Platform.OS === 'android' ? [1000, 1000] : [1000, 2000, 1000, 2000]; // Patrón de vibración (vibrar, pausa)
 const SPEECH_DELAY = 1000; // Retraso antes de leer el código en voz alta (ms)
 const LISTENING_DELAY = 0; // Retraso antes de activar el micrófono (ms)

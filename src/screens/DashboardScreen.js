@@ -19,7 +19,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../context/ThemeContext';
 import { startLocationMonitoring, stopLocationMonitoring } from '../services/location-service';
-import { startWork, endWork } from '../services/api';
 import { formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
 
@@ -130,37 +129,34 @@ const DashboardScreen = ({ navigation }) => {
         longitude: position.longitude
       };
       
-      console.log('Enviando coordenadas al servidor:', coords);
+      console.log('Registrando disponibilidad con coordenadas:', coords);
       
-      // Start work and location tracking
-      const result = await api.startWork(coords);
-      
-      // Registrar explícitamente la actividad de disponibilidad
+      // Registrar actividad de disponibilidad directamente, sin llamar a startWork
       try {
-        console.log('Intentando registrar actividad de disponibilidad...');
+        console.log('Registrando actividad de disponibilidad...');
         const activityData = {
-          type: 'task_activity',
+          type: 'task_activity', // Usar el tipo que el backend reconoce
           message: 'Usuario marcado como disponible',
           metadata: {
-            availability: 'available',
-            activitySubtype: 'clock_in',
             latitude: String(coords.latitude),
             longitude: String(coords.longitude),
-            timestamp: new Date().toISOString()
+            timestamp: new Date().toISOString(),
+            availability: 'available' // Esto es crucial para identificar que es una actividad de disponibilidad
           }
         };
         
         console.log('Datos de actividad a enviar:', JSON.stringify(activityData));
         const activityResult = await api.saveActivity(activityData);
         console.log('Actividad registrada correctamente:', JSON.stringify(activityResult));
+        
+        setIsWorking(true);
+        setWorkStartTime(new Date());
+        
+        Alert.alert(t('success'), t('workStarted'));
       } catch (activityError) {
         console.error('Error al registrar actividad:', activityError);
+        Alert.alert(t('error'), activityError.message || t('errorStartingWork'));
       }
-      
-      setIsWorking(true);
-      setWorkStartTime(new Date());
-      
-      Alert.alert(t('success'), t('workStarted'));
     } catch (error) {
       console.error('Error al iniciar trabajo:', error);
       Alert.alert(t('error'), error.message || t('errorStartingWork'));
@@ -184,39 +180,36 @@ const DashboardScreen = ({ navigation }) => {
         longitude: position.longitude
       };
       
-      console.log('Enviando coordenadas al servidor:', coords);
+      console.log('Registrando no disponibilidad con coordenadas:', coords);
       
-      // End work and stop location tracking
-      const result = await api.endWork(coords);
-      
-      // Registrar explícitamente la actividad de no disponibilidad
+      // Registrar actividad de no disponibilidad directamente, sin llamar a endWork
       try {
-        console.log('Intentando registrar actividad de no disponibilidad...');
+        console.log('Registrando actividad de no disponibilidad...');
         const duration = workStartTime ? Math.floor((new Date() - workStartTime) / 1000) : 0;
         const activityData = {
-          type: 'task_activity',
+          type: 'task_activity', // Usar el tipo que el backend reconoce
           message: `Usuario marcado como no disponible (duración: ${Math.floor(duration/60)} minutos)`,
           metadata: {
-            availability: 'unavailable',
-            activitySubtype: 'clock_out',
             duration: duration,
             latitude: String(coords.latitude),
             longitude: String(coords.longitude),
-            timestamp: new Date().toISOString()
+            timestamp: new Date().toISOString(),
+            availability: 'unavailable' // Esto es crucial para identificar que es una actividad de disponibilidad
           }
         };
         
         console.log('Datos de actividad a enviar:', JSON.stringify(activityData));
         const activityResult = await api.saveActivity(activityData);
         console.log('Actividad registrada correctamente:', JSON.stringify(activityResult));
+        
+        setIsWorking(false);
+        setWorkStartTime(null);
+        
+        Alert.alert(t('success'), t('workEnded'));
       } catch (activityError) {
         console.error('Error al registrar actividad:', activityError);
+        Alert.alert(t('error'), activityError.message || t('errorEndingWork'));
       }
-      
-      setIsWorking(false);
-      setWorkStartTime(null);
-      
-      Alert.alert(t('success'), t('workEnded'));
     } catch (error) {
       console.error('Error al finalizar trabajo:', error);
       Alert.alert(t('error'), error.message || t('errorEndingWork'));
@@ -327,7 +320,7 @@ const DashboardScreen = ({ navigation }) => {
               disabled={loadingAction}
             >
               {loadingAction ? (
-                <ActivityIndicator size="small" color="#ffffff" />
+                <ActivityIndicator size="small" color="#fff3e5" />
               ) : (
                 <Text style={[styles.workButtonText, { color: theme.colors.text.dark }]}>{t('endWork')}</Text>
               )}
@@ -340,7 +333,7 @@ const DashboardScreen = ({ navigation }) => {
             disabled={loadingAction}
           >
             {loadingAction ? (
-              <ActivityIndicator size="small" color="#ffffff" />
+              <ActivityIndicator size="small" color="#fff3e5" />
             ) : (
               <Text style={[styles.workButtonText, { color: theme.colors.text.dark }]}>{t('startWork')}</Text>
             )}
@@ -375,7 +368,7 @@ const DashboardScreen = ({ navigation }) => {
         </View>
 
         {loading ? (
-          <ActivityIndicator style={{padding: 15}} size="small" color={theme.colors.primary} />
+          <ActivityIndicator style={{padding: 15}} size="small" color="#fff3e5" />
         ) : tasks.length > 0 ? (
           <View style={{paddingTop: 5, paddingBottom: 5}}>
             {tasks.map((task, index) => (

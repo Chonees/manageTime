@@ -50,7 +50,6 @@ const toRad = (value) => {
 export const configureNotifications = async () => {
   const { status } = await Notifications.requestPermissionsAsync();
   if (status !== 'granted') {
-    console.log(t('noNotificationPermission'));
     return false;
   }
 
@@ -76,7 +75,7 @@ const sendNotification = async (title, body) => {
       trigger: null, // Inmediatamente
     });
   } catch (error) {
-    console.error(t('errorSendingNotification'), error);
+    // Manejo silencioso de errores
   }
 };
 
@@ -92,7 +91,7 @@ const createActivity = async (taskId, action, coords) => {
         userId = userInfo._id;
       }
     } catch (e) {
-      console.error(t('errorGettingUserId'), e);
+      // Manejo silencioso de errores
     }
     
     // If no coords provided, try to get current location
@@ -103,7 +102,7 @@ const createActivity = async (taskId, action, coords) => {
         });
         coords = location.coords;
       } catch (locError) {
-        console.error('Error getting current location for activity:', locError);
+        // Manejo silencioso de errores
       }
     }
     
@@ -131,32 +130,24 @@ const createActivity = async (taskId, action, coords) => {
       }
     };
     
-    console.log(t('registeringActivity', { action, taskId }));
-    console.log('Activity data:', JSON.stringify(activityData));
-    
     // Save the activity
     await saveActivity(activityData);
-    console.log(t('activitySaved', { action, taskId }));
   } catch (error) {
-    console.error(t('errorCreatingActivity'), error);
+    // Manejo silencioso de errores
   }
 };
 
 // Comprobar si el usuario está dentro del radio de las tareas
 export const checkTasksProximity = async () => {
   try {
-    console.log(t('checkingTaskProximity'));
-    
     // Verificar si los servicios de ubicación están habilitados
     let isLocationEnabled;
     try {
       isLocationEnabled = await Location.hasServicesEnabledAsync();
       if (!isLocationEnabled) {
-        console.log('Location services are disabled, showing alert to enable them');
         throw new Error(t('locationServicesDisabled'));
       }
     } catch (error) {
-      console.error('Error checking location services:', error);
       throw error;
     }
     
@@ -164,57 +155,32 @@ export const checkTasksProximity = async () => {
     let coords;
     try {
       // First attempt with high accuracy
-      console.log('Attempting to get location with high accuracy...');
       try {
         const location = await Location.getCurrentPositionAsync({
           accuracy: Location.Accuracy.High,
           timeout: 10000
         });
         coords = location.coords;
-        console.log('Successfully got high accuracy location:', coords);
       } catch (highAccError) {
-        console.error('High accuracy location failed:', highAccError);
-        
         // Second attempt with balanced accuracy
-        console.log('Intentando con precisión media...');
         try {
           const location = await Location.getCurrentPositionAsync({
             accuracy: Location.Accuracy.Balanced,
             timeout: 15000
           });
           coords = location.coords;
-          console.log('Successfully got balanced accuracy location:', coords);
         } catch (balancedAccError) {
-          console.error('Balanced accuracy location failed:', balancedAccError);
-          
           // Last attempt with low accuracy
-          console.log('Intentando con precisión menor...');
           const location = await Location.getCurrentPositionAsync({
             accuracy: Location.Accuracy.Low,
             timeout: 20000
           });
           coords = location.coords;
-          console.log('Successfully got low accuracy location:', coords);
         }
       }
     } catch (locationError) {
-      console.error('Error en fallback de ubicación:', locationError);
-      
       // Try foreground location service as last resort
       try {
-        console.log('Configurando watch position con opciones:', {
-          accuracy: 3, // low precision
-          distanceInterval: 5,
-          timeInterval: 5000,
-          enableHighAccuracy: true,
-          distanceFilter: 5, 
-          fastestInterval: 5000,
-          interval: 10000,
-          maxWaitTime: 15000,
-          showLocationDialog: true,
-          forceRequestLocation: true
-        });
-        
         const permStatus = await Location.requestForegroundPermissionsAsync();
         if (permStatus.status !== 'granted') {
           throw new Error('Location permission not granted');
@@ -230,13 +196,11 @@ export const checkTasksProximity = async () => {
             },
             position => {
               // Got location update, process it
-              console.log('Got location from watchPosition:', position.coords);
               processLocationUpdate(position.coords);
               watchId.then(subscription => subscription.remove());
               resolve(true);
             }
           ).catch(error => {
-            console.error('WatchPosition failed:', error);
             reject(error);
           });
           
@@ -247,7 +211,6 @@ export const checkTasksProximity = async () => {
           }, 20000);
         });
       } catch (watchError) {
-        console.error('Watch position error:', watchError);
         throw watchError;
       }
     }
@@ -256,8 +219,6 @@ export const checkTasksProximity = async () => {
     return processLocationUpdate(coords);
     
   } catch (error) {
-    console.error(t('errorCheckingProximity'), error);
-    
     // Mostrar alerta al usuario según el tipo de error
     if (error.message.includes('location') || error.message.includes('Location')) {
       Alert.alert(
@@ -303,7 +264,6 @@ export const checkTasksProximity = async () => {
 const processLocationUpdate = async (coords) => {
   try {
     const { latitude, longitude } = coords;
-    console.log(t('currentLocation', { latitude, longitude }));
     
     // Save the successful location for fallback use
     try {
@@ -312,19 +272,17 @@ const processLocationUpdate = async (coords) => {
         timestamp: new Date().toISOString()
       }));
     } catch (storageError) {
-      console.warn('Could not save last known location:', storageError);
+      // Manejo silencioso de errores
     }
     
     // Obtener las tareas del usuario
     const response = await getUserTasks();
     const tasks = response || [];
-    console.log(t('tasksFound', { count: tasks.length }));
     
     // Para cada tarea con ubicación, comprobar si estamos dentro del radio
     for (const task of tasks) {
       // Skip completed tasks
       if (task.completed) {
-        console.log(`Skipping completed task: ${task.title}`);
         continue;
       }
 
@@ -334,12 +292,6 @@ const processLocationUpdate = async (coords) => {
         const taskLng = task.location.coordinates[0]; // Longitud
         const taskRadius = task.radius; // Radio en km
         
-        console.log(t('checkingTask', { 
-          title: task.title,
-          location: `[${taskLng}, ${taskLat}]`,
-          radius: taskRadius 
-        }));
-        
         // Calcular la distancia a la tarea
         const distance = calculateDistance(
           latitude, 
@@ -348,27 +300,11 @@ const processLocationUpdate = async (coords) => {
           taskLng
         );
         
-        console.log(t('distanceToTask', { 
-          km: distance.toFixed(6),
-          meters: (distance * 1000).toFixed(2) 
-        }));
-        
-        console.log(`Task distance details: 
-          - Task ID: ${task._id}
-          - Task title: ${task.title}
-          - Task coordinates: [${taskLat}, ${taskLng}]
-          - User coordinates: [${latitude}, ${longitude}]
-          - Distance: ${distance.toFixed(3)} km (${(distance * 1000).toFixed(0)} meters)
-          - Task radius: ${taskRadius} km (${taskRadius * 1000} meters)
-          - Within radius: ${distance <= taskRadius ? 'YES' : 'NO'}
-        `);
-        
         const isInRange = distance <= taskRadius; // Both in km
         const wasInRange = tasksInRange[task._id] || false;
         
         // Si entramos en el radio
         if (isInRange && !wasInRange) {
-          console.log(t('enteredTaskRadius', { title: task.title }));
           sendNotification(
             t('taskNearby'),
             t('enteredTaskArea', { title: task.title })
@@ -378,7 +314,6 @@ const processLocationUpdate = async (coords) => {
         } 
         // Si salimos del radio
         else if (!isInRange && wasInRange) {
-          console.log(t('exitedTaskRadius', { title: task.title }));
           sendNotification(
             t('exitedArea'),
             t('leftTaskArea', { title: task.title })
@@ -386,18 +321,11 @@ const processLocationUpdate = async (coords) => {
           createActivity(task._id, 'exit', coords);
           tasksInRange[task._id] = false;
         }
-        // Si estamos fuera del radio
-        else if (!isInRange) {
-          const distanceMeters = (distance * 1000).toFixed(0);
-          const radiusMeters = (taskRadius * 1000).toFixed(0);
-          console.log(`OUTSIDE RADIUS: ${distanceMeters}m to task '${task.title}' (radius: ${radiusMeters}m)`);
-        }
       }
     }
     
     return true;
   } catch (error) {
-    console.error('Error processing location update:', error);
     throw error;
   }
 };
@@ -413,25 +341,22 @@ const tryUseLastKnownLocation = async () => {
       const ageInMinutes = (now - timestamp) / (1000 * 60);
       
       if (ageInMinutes < 60) { // Use if less than 1 hour old
-        console.log('Using last known location from storage:', lastLocation.coords);
         processLocationUpdate(lastLocation.coords);
         return true;
       } else {
-        console.log('Last known location too old:', ageInMinutes.toFixed(1), 'minutes');
         Alert.alert(
           t('locationError'),
           t('lastLocationTooOld')
         );
       }
     } else {
-      console.log('No last known location found in storage');
       Alert.alert(
         t('locationError'),
         t('noLastLocation')
       );
     }
   } catch (error) {
-    console.error('Error using last known location:', error);
+    // Manejo silencioso de errores
   }
   return false;
 };
@@ -441,13 +366,10 @@ export let locationMonitoringInterval = null;
 
 // Detener monitoreo de ubicación
 export const stopLocationMonitoring = () => {
-  console.log('Stopping location monitoring');
-  
   // Detener monitoreo constante
   if (locationMonitoringInterval) {
     clearInterval(locationMonitoringInterval);
     locationMonitoringInterval = null;
-    console.log(t('location Monitoring Stopped'));
   }
   
   // Resetear el estado
@@ -499,8 +421,6 @@ export const startLocationMonitoring = async () => {
       return false;
     }
     
-    console.log(t('starting Location Monitoring'));
-    
     // Configurar notificaciones
     await configureNotifications();
     
@@ -510,10 +430,8 @@ export const startLocationMonitoring = async () => {
     // Realizar la primera comprobación inmediatamente
     await checkTasksProximity();
     
-    console.log(t('location Monitoring Started'));
     return true;
   } catch (error) {
-    console.error(t('error Starting Monitoring'), error);
     Alert.alert(
       t('error'),
       t('error Starting Monitoring'),

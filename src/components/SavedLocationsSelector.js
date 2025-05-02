@@ -162,10 +162,13 @@ const SavedLocationsSelector = ({ visible, onClose, onSelect }) => {
           <View style={styles.locationInfo}>
             <Text style={styles.locationName}>{item.name || 'Unnamed Location'}</Text>
             <Text style={styles.locationDetails}>
-              {formatCoordinate(latitude)}, {formatCoordinate(longitude)} • {(item.radius || 0).toFixed(1)} km
+              {t('assignedRadius')} {(item.radius || 0).toFixed(1)} km
+            </Text>
+            <Text style={styles.locationDetails}>
+              {t('coordinates')} {formatCoordinate(latitude)}, {formatCoordinate(longitude)}
             </Text>
           </View>
-          <Ionicons name="chevron-forward" size={20} color="#999" />
+          <Ionicons name="chevron-forward" size={20} color="#fff3e5" />
         </TouchableOpacity>
         
         <TouchableOpacity
@@ -174,9 +177,9 @@ const SavedLocationsSelector = ({ visible, onClose, onSelect }) => {
           disabled={isDeleting}
         >
           {isDeleting ? (
-            <ActivityIndicator size="small" color="#D32F2F" />
+            <ActivityIndicator size="small" color="#fff3e5" />
           ) : (
-            <Ionicons name="trash-outline" size={22} color="#D32F2F" />
+            <Ionicons name="trash-outline" size={22} color="#fff3e5" />
           )}
         </TouchableOpacity>
       </View>
@@ -201,20 +204,20 @@ const SavedLocationsSelector = ({ visible, onClose, onSelect }) => {
             style={styles.closeButton}
             onPress={onClose}
           >
-            <Ionicons name="close" size={24} color="#333" />
+            <Text style={{ color: '#fff3e5', fontSize: 24, fontWeight: 'bold' }}>×</Text>
           </TouchableOpacity>
-          <Text style={styles.title}>{t('selectSavedLocation')}</Text>
+          <Text style={styles.title}>{t('savedLocations')}</Text>
           <View style={styles.headerRight} />
         </View>
 
         {loading ? (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#4A90E2" />
+            <ActivityIndicator size="large" color="#fff3e5" />
             <Text style={styles.loadingText}>{t('loadingSavedLocations')}</Text>
           </View>
         ) : error ? (
           <View style={styles.errorContainer}>
-            <Ionicons name="alert-circle" size={40} color="#D32F2F" />
+            <Ionicons name="alert-circle" size={40} color="#fff3e5" />
             <Text style={styles.errorText}>{error}</Text>
             <TouchableOpacity
               style={styles.retryButton}
@@ -225,7 +228,7 @@ const SavedLocationsSelector = ({ visible, onClose, onSelect }) => {
           </View>
         ) : locations.length === 0 ? (
           <View style={styles.emptyContainer}>
-            <Ionicons name="location" size={40} color="#999" />
+            <Ionicons name="location" size={40} color="#fff3e5" />
             <Text style={styles.emptyText}>{t('noSavedLocations')}</Text>
             <Text style={styles.emptySubtext}>{t('saveLocationHint')}</Text>
           </View>
@@ -246,7 +249,7 @@ const SavedLocationsSelector = ({ visible, onClose, onSelect }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa'
+    backgroundColor: '#2e2e2e'
   },
   header: {
     flexDirection: 'row',
@@ -254,9 +257,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 15,
     paddingVertical: 10,
-    backgroundColor: '#fff',
+    backgroundColor: '#1c1c1c',
     borderBottomWidth: 1,
-    borderBottomColor: '#e1e4e8'
+    borderBottomColor: 'rgba(255, 243, 229, 0.1)'
   },
   closeButton: {
     padding: 5
@@ -264,7 +267,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#333'
+    color: '#fff3e5'
   },
   headerRight: {
     width: 34
@@ -277,7 +280,7 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 10,
     fontSize: 16,
-    color: '#666'
+    color: '#fff3e5'
   },
   errorContainer: {
     flex: 1,
@@ -288,18 +291,18 @@ const styles = StyleSheet.create({
   errorText: {
     marginTop: 10,
     fontSize: 16,
-    color: '#666',
+    color: '#fff3e5',
     textAlign: 'center'
   },
   retryButton: {
     marginTop: 20,
     paddingVertical: 10,
     paddingHorizontal: 20,
-    backgroundColor: '#4A90E2',
-    borderRadius: 5
+    backgroundColor: '#fff3e5',
+    borderRadius: 10
   },
   retryButtonText: {
-    color: '#fff',
+    color: '#000000',
     fontWeight: 'bold'
   },
   emptyContainer: {
@@ -312,13 +315,13 @@ const styles = StyleSheet.create({
     marginTop: 10,
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#333',
+    color: '#fff3e5',
     textAlign: 'center'
   },
   emptySubtext: {
     marginTop: 5,
     fontSize: 14,
-    color: '#666',
+    color: '#fff3e5',
     textAlign: 'center'
   },
   listContent: {
@@ -333,7 +336,10 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between'
+    justifyContent: 'space-between',
+    backgroundColor: '#3a3a3a',
+    borderRadius: 10,
+    padding: 12
   },
   locationInfo: {
     flex: 1
@@ -341,20 +347,20 @@ const styles = StyleSheet.create({
   locationName: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#333'
+    color: '#fff3e5'
   },
   locationDetails: {
     marginTop: 5,
     fontSize: 14,
-    color: '#666'
+    color: '#fff3e5'
   },
   deleteButton: {
     padding: 10,
     marginLeft: 10
   },
   separator: {
-    height: 1,
-    backgroundColor: '#e1e4e8'
+    height: 10,
+    backgroundColor: 'transparent'
   }
 });
 

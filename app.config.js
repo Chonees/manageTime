@@ -1,6 +1,6 @@
 // Configuración de Expo
 module.exports = {
-  name: "ManageTime",
+  name: "Workproof",
   slug: "manage-time",
   version: "1.0.0",
   orientation: "portrait",
@@ -8,7 +8,7 @@ module.exports = {
   splash: {
     image: "./assets/splash.png",
     resizeMode: "contain",
-    backgroundColor: "#ffffff"
+    backgroundColor: "#282828"
   },
   updates: {
     fallbackToCacheTimeout: 0
@@ -17,15 +17,25 @@ module.exports = {
     "**/*"
   ],
   ios: {
-    supportsTablet: true
+    supportsTablet: true,
+    bundleIdentifier: "com.workproof.app",
+    buildNumber: "6",
+    infoPlist: {
+      ITSAppUsesNonExemptEncryption: false,
+      NSPhotoLibraryUsageDescription: "Esta aplicación requiere acceso a tu biblioteca de fotos para permitirte subir imágenes de verificación de trabajo y ubicación.",
+      NSMicrophoneUsageDescription: "Esta aplicación requiere acceso al micrófono para funciones de comunicación con el equipo de trabajo.",
+      NSSpeechRecognitionUsageDescription: "Esta aplicación requiere acceso al reconocimiento de voz para permitir comandos por voz en situaciones donde el uso manual no es posible.",
+      NSLocationWhenInUseUsageDescription: "Tu ubicación es utilizada para verificar que estás dentro del área de trabajo asignada y registrar tus actividades.",
+      NSLocationAlwaysAndWhenInUseUsageDescription: "Esta aplicación requiere acceso continuo a tu ubicación para verificar tu presencia en el área de trabajo asignada."
+    }
   },
   android: {
     adaptiveIcon: {
-      foregroundImage: "./assets/adaptive-icon.png",
-      backgroundColor: "#FFFFFF"
+      foregroundImage: "./assets/icon.png",
+      backgroundColor: "#282828"
     },
     softwareKeyboardLayoutMode: "pan",
-    package: "com.managetime.app"
+    package: "com.workproof.app"
   },
   web: {
     favicon: "./assets/favicon.png"

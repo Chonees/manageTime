@@ -126,7 +126,6 @@ function detectTunnelUrl() {
     // Para desarrollo web, también usar Heroku
     return BACKEND_URL;
   } catch (error) {
-    console.error('Error al detectar modo:', error);
     return BACKEND_URL;
   }
 }

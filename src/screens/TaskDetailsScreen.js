@@ -779,8 +779,8 @@ const TaskDetailsScreen = ({ route, navigation }) => {
                 }}
                 radius={task.radius * 1000} // Convert km to meters for map display
                 strokeWidth={1}
-                strokeColor={'rgba(255, 243, 229, 0.8)'}
-                fillColor={'rgba(255, 243, 229, 0.2)'}
+                strokeColor={'#4b4b4b'}
+                fillColor={'rgba(75, 75, 75, 0.3)'}
               />
             )}
             {userLocation && (

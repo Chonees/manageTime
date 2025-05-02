@@ -1,25 +1,28 @@
 {
   "expo": {
-    "name": "app-task",
-    "slug": "app-task",
+    "name": "Workproof",
+    "slug": "manage-time",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
+    "backgroundColor": "#282828",
+    "primaryColor": "#fff3e5",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#282828"
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.managetime.app"
+      "bundleIdentifier": "com.workproof.app",
+      "buildNumber": "1"
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "foregroundImage": "./assets/icon.png",
+        "backgroundColor": "#282828"
       },
       "package": "com.managetime.app",
       "config": {

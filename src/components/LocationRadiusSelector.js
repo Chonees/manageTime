@@ -376,9 +376,9 @@ const LocationRadiusSelector = ({
                           longitude: Number(location.longitude)
                         }}
                         radius={getRadiusInMeters()}
-                        fillColor="rgba(255, 243, 229, 0.2)"
-                        strokeColor="rgba(255, 243, 229, 0.8)"
-                        strokeWidth={2}
+                        fillColor="rgba(75, 75, 75, 0.3)"
+                        strokeColor="#4b4b4b"
+                        strokeWidth={3}
                       />
                     )}
                   </>
@@ -417,9 +417,9 @@ const LocationRadiusSelector = ({
                         longitude: location.longitude
                       }}
                       radius={getRadiusInMeters()}
-                      fillColor="rgba(255, 243, 229, 0.2)"
-                      strokeColor="rgba(255, 243, 229, 0.8)"
-                      strokeWidth={2}
+                      fillColor="rgba(75, 75, 75, 0.3)"
+                      strokeColor="#4b4b4b"
+                      strokeWidth={3}
                     />
                   </>
                 )}
@@ -470,11 +470,11 @@ const LocationRadiusSelector = ({
         
         {/* Save Location Button */}
         <TouchableOpacity 
-          style={styles.saveLocationButton}
+          style={[styles.saveLocationButton, { backgroundColor: '#fff3e5' }]}
           onPress={saveLocation}
         >
-          <Ionicons name="bookmark-outline" size={24} color="#fff" />
-          <Text style={styles.saveLocationButtonText}>{t('saveLocation') || 'Save Location'}</Text>
+          <Ionicons name="bookmark-outline" size={24} color="#000000" />
+          <Text style={[styles.saveLocationButtonText, { color: '#000000' }]}>{t('saveLocation') || 'Save Location'}</Text>
         </TouchableOpacity>
 
       </SafeAreaView>

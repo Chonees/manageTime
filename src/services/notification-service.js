@@ -10,7 +10,6 @@ const fetchWithRetry = async (url, options, maxRetries = 3, delay = 1000) => {
     try {
       return await fetch(url, options);
     } catch (error) {
-      console.log(`Fetch attempt ${i + 1} failed:`, error);
       lastError = error;
       // Wait before retrying
       await new Promise(resolve => setTimeout(resolve, delay));
@@ -24,7 +23,6 @@ export const configureNotifications = async () => {
   try {
     const { status } = await Notifications.requestPermissionsAsync();
     if (status !== 'granted') {
-      console.log('Notification permission not granted');
       return false;
     }
 
@@ -38,7 +36,6 @@ export const configureNotifications = async () => {
 
     return true;
   } catch (error) {
-    console.error('Error configuring notifications:', error);
     return false;
   }
 };
@@ -56,7 +53,6 @@ export const sendLocalNotification = async (title, body, data = {}) => {
     });
     return true;
   } catch (error) {
-    console.error('Error sending local notification:', error);
     return false;
   }
 };
@@ -84,7 +80,6 @@ export const sendAdminActivityNotification = async (activityData) => {
     
     return true;
   } catch (error) {
-    console.error('Error sending admin notification:', error);
     return false;
   }
 };
@@ -107,13 +102,11 @@ const sendActivityToServer = async (activityData) => {
     
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('Failed to send admin notification to server:', errorText);
       return false;
     }
     
     return true;
   } catch (error) {
-    console.error('Error sending notification to server:', error);
     return false;
   }
 };
@@ -121,98 +114,135 @@ const sendActivityToServer = async (activityData) => {
 // Register for push notifications and store the token
 export const registerForPushNotifications = async () => {
   try {
-    const { status } = await Notifications.getPermissionsAsync();
-    if (status !== 'granted') {
+    console.log('Comenzando registro para notificaciones push...');
+    
+    // Primero, verificar si tenemos permiso
+    const { status: existingStatus } = await Notifications.getPermissionsAsync();
+    let finalStatus = existingStatus;
+    
+    // Si no tenemos permiso, solicitarlo
+    if (existingStatus !== 'granted') {
+      console.log('Solicitando permisos de notificaciones...');
       const { status } = await Notifications.requestPermissionsAsync();
-      if (status !== 'granted') {
-        return false;
-      }
+      finalStatus = status;
     }
     
-    const tokenData = await Notifications.getExpoPushTokenAsync();
-    const token = tokenData.data;
+    // Si después de solicitar aún no tenemos permiso, salir
+    if (finalStatus !== 'granted') {
+      console.log('¡Permiso de notificaciones denegado!');
+      return null;
+    }
     
-    // Store token locally
+    console.log('Permiso de notificaciones concedido. Obteniendo token...');
+    
+    // Obtener token del dispositivo
+    const tokenData = await Notifications.getExpoPushTokenAsync({
+      experienceId: '@lucasbranchini/manage-time',
+    });
+    
+    const token = tokenData.data;
+    console.log('Token de notificaciones obtenido:', token);
+    
+    // Guardar token localmente
     await AsyncStorage.setItem('pushToken', token);
     
-    // Send token to server
-    await sendPushTokenToServer(token);
+    // Enviar token al servidor
+    try {
+      await sendPushTokenToServer(token);
+      console.log('Token enviado exitosamente al servidor');
+    } catch (error) {
+      console.error('Error al enviar token al servidor:', error);
+      // Seguir adelante aunque no se pueda enviar el token al servidor
+    }
     
-    return true;
+    // Configurar notificaciones
+    if (Platform.OS === 'android') {
+      Notifications.setNotificationChannelAsync('default', {
+        name: 'default',
+        importance: Notifications.AndroidImportance.MAX,
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: '#FF231F7C',
+      });
+    }
+    
+    // Configurar manejador para recibir notificaciones
+    const subscription = Notifications.addNotificationReceivedListener(notification => {
+      console.log('Notificación recibida:', notification);
+    });
+    
+    return token;
   } catch (error) {
-    console.error('Error registering for push notifications:', error);
-    return false;
+    console.error('Error en registro de notificaciones:', error);
+    return null;
   }
 };
 
 // Send push token to server
-const sendPushTokenToServer = async (pushToken) => {
+export const sendPushTokenToServer = async (pushToken) => {
   try {
-    const token = await AsyncStorage.getItem('token');
-    if (!token) return false;
+    console.log('Enviando token al servidor:', pushToken);
     
-    // Check if the endpoint exists by making a lightweight OPTIONS request first
-    try {
-      const checkUrl = `${getApiUrl()}/api/users/push-token`;
-      const checkResponse = await fetch(checkUrl, {
-        method: 'OPTIONS',
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      // If the endpoint doesn't exist (404), log it but don't treat as an error
-      if (checkResponse.status === 404) {
-        console.log('Push token endpoint not available on server, skipping token registration');
-        return true; // Return success to avoid showing errors to users
-      }
-    } catch (checkError) {
-      // If check fails, assume endpoint might exist and try anyway
-      console.log('Error checking push token endpoint:', checkError);
+    // Obtener token de autenticación
+    const authToken = await AsyncStorage.getItem('userToken');
+    if (!authToken) {
+      console.error('No hay token de autenticación disponible');
+      throw new Error('NO_AUTH_TOKEN');
     }
     
-    const url = `${getApiUrl()}/api/users/push-token`;
+    // Obtener URL base de la API
+    const apiUrl = getApiUrl();
+    const url = `${apiUrl}/users/push-token`;
+    
+    // Preparar la solicitud
     const response = await fetchWithRetry(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
+        'Authorization': `Bearer ${authToken}`
       },
       body: JSON.stringify({ pushToken })
     });
     
+    // Verificar respuesta
     if (!response.ok) {
-      const errorText = await response.text();
-      // Don't show this as an error, just log it
-      console.log('Note: Push token registration not supported by server:', errorText);
-      return true; // Return success to avoid showing errors to users
+      let errorText = await response.text();
+      console.error('Error en respuesta del servidor:', errorText);
+      throw new Error(`Error en respuesta del servidor: ${response.status}`);
     }
     
-    return true;
+    const data = await response.json();
+    console.log('Respuesta del servidor:', data);
+    
+    return data;
   } catch (error) {
-    // Log but don't treat as a critical error
-    console.log('Note: Could not register push token with server:', error);
-    return true; // Return success to avoid showing errors to users
+    console.error('Error enviando token al servidor:', error);
+    throw error;
   }
 };
 
 // Send a direct test notification - this bypasses all checks and directly sends a notification
 export const sendDirectTestNotification = async (title = 'Test Notification', body = 'This is a test notification') => {
   try {
-    console.log('Attempting to send direct test notification...');
-    
-    // First ensure we have permission
+    // Attempt to send direct test notification
     const { status } = await Notifications.getPermissionsAsync();
     if (status !== 'granted') {
-      console.log('Requesting notification permission...');
-      const { status: newStatus } = await Notifications.requestPermissionsAsync();
-      if (newStatus !== 'granted') {
-        console.error('Notification permission denied');
-        return false;
+      try {
+        const { status: newStatus } = await Notifications.requestPermissionsAsync();
+        if (newStatus !== 'granted') {
+          return {
+            success: false,
+            error: 'Notification permission denied'
+          };
+        }
+      } catch (permissionError) {
+        return {
+          success: false,
+          error: `Permission error: ${permissionError.message}`
+        };
       }
     }
     
-    // Set notification handler if not already set
+    // Configure notification handler if needed
     Notifications.setNotificationHandler({
       handleNotification: async () => ({
         shouldShowAlert: true,
@@ -221,67 +251,84 @@ export const sendDirectTestNotification = async (title = 'Test Notification', bo
       }),
     });
     
-    // Send the notification with a random ID to ensure uniqueness
-    const randomId = Math.floor(Math.random() * 1000000).toString();
+    // Send the notification
     const notificationId = await Notifications.scheduleNotificationAsync({
       content: {
-        title: title,
-        body: body,
-        data: { test: true, id: randomId },
+        title,
+        body,
+        data: { directTest: true }
       },
-      identifier: `test-${randomId}`,
-      trigger: null, // Show immediately
+      trigger: null // Send immediately
     });
     
-    console.log('Direct test notification sent successfully with ID:', notificationId);
-    return true;
+    return {
+      success: true,
+      notificationId
+    };
   } catch (error) {
-    console.error('Error sending direct test notification:', error);
-    return false;
+    return {
+      success: false,
+      error: error.message
+    };
   }
 };
 
 // Function to check if notifications are working properly
 export const diagnoseNotificationIssues = async () => {
-  console.log('Diagnosing notification issues...');
   const results = {
-    permissionStatus: 'unknown',
-    deviceInfo: Platform.OS,
-    canScheduleNotifications: false,
-    testNotificationSent: false,
-    errors: []
+    permissions: 'unknown',
+    handlerConfigured: false,
+    testNotification: 'not_attempted',
+    detailedError: null
   };
   
   try {
     // Check permissions
-    const { status } = await Notifications.getPermissionsAsync();
-    results.permissionStatus = status;
+    try {
+      const { status } = await Notifications.getPermissionsAsync();
+      results.permissions = status;
+    } catch (permissionError) {
+      results.permissions = 'error';
+      results.detailedError = `Permission error: ${permissionError.message}`;
+    }
     
-    if (status !== 'granted') {
-      results.errors.push('Notification permission not granted');
-      return results;
+    // Configure handler
+    try {
+      Notifications.setNotificationHandler({
+        handleNotification: async () => ({
+          shouldShowAlert: true,
+          shouldPlaySound: true,
+          shouldSetBadge: true,
+        }),
+      });
+      results.handlerConfigured = true;
+    } catch (handlerError) {
+      results.handlerConfigured = false;
+      results.detailedError = `Handler error: ${handlerError.message}`;
     }
     
     // Try to send a test notification
-    try {
-      const notificationId = await Notifications.scheduleNotificationAsync({
-        content: {
-          title: 'Notification Diagnosis',
-          body: 'Testing if notifications are working on your device',
-        },
-        trigger: null,
-      });
-      
-      results.testNotificationSent = true;
-      results.canScheduleNotifications = true;
-      console.log('Diagnostic notification sent with ID:', notificationId);
-    } catch (notifError) {
-      results.errors.push(`Failed to schedule notification: ${notifError.message}`);
+    if (results.permissions === 'granted') {
+      try {
+        const notificationId = await Notifications.scheduleNotificationAsync({
+          content: {
+            title: 'Diagnostic Test',
+            body: 'Testing if notifications are working properly',
+            data: { diagnostic: true }
+          },
+          trigger: null
+        });
+        results.testNotification = 'sent';
+      } catch (notificationError) {
+        results.testNotification = 'failed';
+        results.detailedError = `Notification error: ${notificationError.message}`;
+      }
     }
     
     return results;
   } catch (error) {
-    results.errors.push(`Diagnostic error: ${error.message}`);
+    results.testNotification = 'exception';
+    results.detailedError = error.message;
     return results;
   }
 };
