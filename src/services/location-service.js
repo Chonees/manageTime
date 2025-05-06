@@ -1,11 +1,12 @@
 import * as Location from 'expo-location';
-import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { getUserTasks, saveActivity, saveLocation } from './api';
 import { Alert } from 'react-native';
 import { translations } from '../context/LanguageContext';
 import { getApiBaseUrl, getFetchOptions, getTimeout, getPlatformConfig } from './platform-config';
+import { sendActivityNotification } from './notification-service';
+
 export const API_URL = getApiBaseUrl();
 // Estado para manejar las tareas que actualmente estamos dentro de su radio
 let tasksInRange = {};
@@ -46,41 +47,24 @@ const toRad = (value) => {
   return value * Math.PI / 180;
 };
 
-// Configurar las notificaciones
-export const configureNotifications = async () => {
-  const { status } = await Notifications.requestPermissionsAsync();
-  if (status !== 'granted') {
-    return false;
-  }
-
-  Notifications.setNotificationHandler({
-    handleNotification: async () => ({
-      shouldShowAlert: true,
-      shouldPlaySound: true,
-      shouldSetBadge: false,
-    }),
-  });
-
-  return true;
-};
-
-// Enviar una notificación
+// Enviar una notificación utilizando el servicio centralizado
 const sendNotification = async (title, body) => {
   try {
-    await Notifications.scheduleNotificationAsync({
-      content: {
-        title,
-        body,
-      },
-      trigger: null, // Inmediatamente
+    console.log('Intentando enviar notificación desde location-service:', title, body);
+    // Usamos sendActivityNotification en lugar de sendLocalNotification
+    await sendActivityNotification({
+      title,
+      body,
+      data: { source: 'location-service' }
     });
   } catch (error) {
     // Manejo silencioso de errores
+    console.error('Error sending notification from location service:', error);
   }
 };
 
 // Crear una actividad reciente
-const createActivity = async (taskId, action, coords) => {
+const createActivity = async (taskId, action, coords, taskTitle = null) => {
   try {
     // Get userId from saved user info
     let userId = null;
@@ -115,14 +99,16 @@ const createActivity = async (taskId, action, coords) => {
       userId: userId,
       title: t(action === 'enter' ? 'taskProximityEnter' : 'taskProximityExit'),
       description: action === 'enter' 
-        ? t('enteredLocation', { location: taskId })
-        : t('exitedLocation', { location: taskId }),
+        ? t('enteredLocation', { location: taskTitle || taskId })
+        : t('exitedLocation', { location: taskTitle || taskId }),
       message: action === 'enter' 
-        ? t('enteredLocation', { location: taskId })
-        : t('exitedLocation', { location: taskId }),
+        ? t('enteredLocation', { location: taskTitle || taskId })
+        : t('exitedLocation', { location: taskTitle || taskId }),
       metadata: {
         timestamp: new Date().toISOString(),
         action,
+        taskTitle: taskTitle, // Guardar explícitamente el título de la tarea en los metadatos
+        locationName: taskTitle, // Usar el título de la tarea como nombre de ubicación
         location: coords ? {
           type: 'Point',
           coordinates: [coords.longitude, coords.latitude]
@@ -309,7 +295,8 @@ const processLocationUpdate = async (coords) => {
             t('taskNearby'),
             t('enteredTaskArea', { title: task.title })
           );
-          createActivity(task._id, 'enter', coords);
+          // Pasar también el título de la tarea al crear la actividad
+          createActivity(task._id, 'enter', coords, task.title);
           tasksInRange[task._id] = true;
         } 
         // Si salimos del radio
@@ -318,7 +305,8 @@ const processLocationUpdate = async (coords) => {
             t('exitedArea'),
             t('leftTaskArea', { title: task.title })
           );
-          createActivity(task._id, 'exit', coords);
+          // Pasar también el título de la tarea al crear la actividad
+          createActivity(task._id, 'exit', coords, task.title);
           tasksInRange[task._id] = false;
         }
       }
@@ -420,9 +408,6 @@ export const startLocationMonitoring = async () => {
       );
       return false;
     }
-    
-    // Configurar notificaciones
-    await configureNotifications();
     
     // Iniciar el monitoreo periódico
     locationMonitoringInterval = setInterval(checkTasksProximity, 30000); // Comprobar cada 30 segundos

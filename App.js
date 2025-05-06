@@ -9,7 +9,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
-import { registerForPushNotifications, sendLocalNotification } from './src/services/notification-service';
+import { registerForPushNotifications } from './src/services/notification-service';
 
 // Create a wrapper component to handle language updates
 const LanguageWrapper = ({ children }) => {
@@ -68,14 +68,11 @@ const App = () => {
         setTimeout(async () => {
           try {
             console.log('Sending guaranteed test notification...');
-            await sendLocalNotification(
-              'Notificaciones configuradas', 
-              'Las notificaciones están funcionando correctamente!',
-              { configTest: true }
-            );
-            console.log('Test notification sent');
+            // Ya no usamos notificaciones locales, solo registramos que se configuró correctamente
+            console.log('Notificaciones configuradas correctamente');
+            setNotificationsConfigured(true);
           } catch (error) {
-            console.error('Error sending test notification:', error);
+            console.error('Error setting up notifications:', error);
           }
         }, 3000); // 3 second delay
         

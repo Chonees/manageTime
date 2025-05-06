@@ -1,6 +1,6 @@
 import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getApiUrl } from './api';
+import { getApiUrl, getAdminActivities } from './api';
 import { Platform } from 'react-native';
 
 // Import fetchWithRetry directly to avoid circular dependencies
@@ -18,7 +18,7 @@ const fetchWithRetry = async (url, options, maxRetries = 3, delay = 1000) => {
   throw lastError;
 };
 
-// Configure notifications for the app
+// Configure notifications for the app - SOLO CONFIGURACIÓN, NO ENVÍA NOTIFICACIONES LOCALES
 export const configureNotifications = async () => {
   try {
     const { status } = await Notifications.requestPermissionsAsync();
@@ -40,47 +40,154 @@ export const configureNotifications = async () => {
   }
 };
 
-// Send a local notification
-export const sendLocalNotification = async (title, body, data = {}) => {
+// Función mejorada para verificar si un usuario es administrador
+export const isUserAdmin = async () => {
   try {
-    await Notifications.scheduleNotificationAsync({
-      content: {
-        title,
-        body,
-        data,
-      },
-      trigger: null, // Immediate notification
-    });
-    return true;
+    console.log('Verificando si el usuario es administrador...');
+    
+    // Intentar primero desde userInfo (guardado en login)
+    const userInfoString = await AsyncStorage.getItem('userInfo');
+    if (userInfoString) {
+      const userInfo = JSON.parse(userInfoString);
+      console.log('userInfo desde AsyncStorage:', userInfo);
+      if (userInfo && userInfo.isAdmin === true) {
+        console.log('Usuario es admin según userInfo');
+        return true;
+      }
+    }
+    
+    // Intentar también desde user (usado en algunas partes de la app)
+    const userString = await AsyncStorage.getItem('user');
+    if (userString) {
+      const user = JSON.parse(userString);
+      console.log('user desde AsyncStorage:', user);
+      if (user && user.isAdmin === true) {
+        console.log('Usuario es admin según user');
+        return true;
+      }
+    }
+    
+    // Intentar verificar directamente con el backend si tenemos un token válido
+    const token = await AsyncStorage.getItem('token');
+    if (token) {
+      try {
+        const url = `${getApiUrl()}/api/users/me`;
+        console.log('Verificando admin status desde la API:', url);
+        const response = await fetchWithRetry(url, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        if (response.ok) {
+          const userData = await response.json();
+          console.log('Datos del usuario desde API:', userData);
+          if (userData && userData.isAdmin === true) {
+            console.log('Usuario es admin según API');
+            
+            // Actualizar el almacenamiento local con la información correcta
+            await AsyncStorage.setItem('userInfo', JSON.stringify(userData));
+            
+            return true;
+          }
+        } else {
+          console.log('Error al verificar con API:', response.status);
+        }
+      } catch (apiError) {
+        console.error('Error al verificar admin con API:', apiError);
+      }
+    }
+    
+    console.log('Usuario NO es admin según verificaciones');
+    return false;
   } catch (error) {
+    console.error('Error checking admin status:', error);
     return false;
   }
 };
 
-// Send an activity notification to admin
-export const sendAdminActivityNotification = async (activityData) => {
+// Función auxiliar para obtener texto legible del tipo de actividad
+export const getActivityTypeText = (type) => {
+  const typeMap = {
+    'task_create': 'Task Created',
+    'task_update': 'Task Updated',
+    'task_complete': 'Task Completed',
+    'task_delete': 'Task Deleted',
+    'task_assign': 'Task Assigned',
+    'location_enter': 'Location Entered',
+    'location_exit': 'Location Exited',
+    'clock_in': 'Available',
+    'clock_out': 'Unavailable',
+    'started_working': 'Available',
+    'stopped_working': 'Unavailable',
+    'task_activity': 'Task Activity'
+  };
+  
+  return typeMap[type] || type;
+};
+
+// Función para verificar actividades nuevas
+export const checkForNewActivities = async (lastCheckedTime, options = {}) => {
   try {
-    // Check if current user is admin
-    const userInfoString = await AsyncStorage.getItem('userInfo');
-    if (!userInfoString) return false;
+    const isAdmin = await isUserAdmin();
+    if (!isAdmin || !lastCheckedTime) return { newActivities: [], count: 0 };
     
-    const userInfo = JSON.parse(userInfoString);
-    const isAdmin = userInfo.isAdmin === true;
+    console.log('Checking for new activities since', lastCheckedTime.toISOString());
+    const response = await getAdminActivities({
+      limit: options.limit || 50,
+      sort: '-createdAt'
+    });
     
-    // If current user is admin, send a local notification
-    if (isAdmin) {
-      const title = activityData.title || 'New Activity';
-      const body = `${activityData.username || 'A user'}: ${activityData.message || 'performed an action'}`;
-      
-      await sendLocalNotification(title, body, activityData);
+    if (!response || !response.activities || !Array.isArray(response.activities)) {
+      return { newActivities: [], count: 0 };
     }
     
-    // Always send to server for potential push notifications to other admin devices
-    await sendActivityToServer(activityData);
+    // Contar actividades más nuevas que la última hora de verificación
+    const newActivities = response.activities.filter(activity => {
+      const activityTime = new Date(activity.createdAt || activity.timestamp || activity.date);
+      return activityTime > lastCheckedTime;
+    });
     
-    return true;
+    console.log(`Found ${newActivities.length} new activities since last check`);
+    
+    return { 
+      newActivities, 
+      count: newActivities.length,
+      latestActivity: newActivities.length > 0 ? newActivities[0] : null
+    };
   } catch (error) {
-    return false;
+    console.error('Error checking for new activities:', error);
+    return { newActivities: [], count: 0 };
+  }
+};
+
+// Función para actualizar el tiempo de última verificación
+export const updateLastCheckedTime = async () => {
+  try {
+    const now = new Date();
+    await AsyncStorage.setItem('lastActivityCheckTime', now.toISOString());
+    return now;
+  } catch (error) {
+    console.error('Error updating last checked time:', error);
+    return new Date();
+  }
+};
+
+// Función para cargar el tiempo de última verificación
+export const loadLastCheckedTime = async () => {
+  try {
+    const storedTime = await AsyncStorage.getItem('lastActivityCheckTime');
+    if (storedTime) {
+      return new Date(storedTime);
+    } else {
+      // Si no hay tiempo almacenado, usar tiempo actual
+      return await updateLastCheckedTime();
+    }
+  } catch (error) {
+    console.error('Error loading last checked time:', error);
+    return new Date();
   }
 };
 
@@ -102,11 +209,13 @@ const sendActivityToServer = async (activityData) => {
     
     if (!response.ok) {
       const errorText = await response.text();
+      console.error('Error sending activity to server:', errorText);
       return false;
     }
     
     return true;
   } catch (error) {
+    console.error('Error in sendActivityToServer:', error);
     return false;
   }
 };
@@ -191,238 +300,168 @@ export const registerForPushNotifications = async () => {
     }
     
     // Adicionalmente, si es administrador, registrar el token para notificaciones de administrador
-    try {
-      const userInfoString = await AsyncStorage.getItem('user');
-      if (userInfoString) {
-        const userInfo = JSON.parse(userInfoString);
-        if (userInfo.isAdmin) {
-          console.log('Usuario es administrador, registrando token para notificaciones de admin');
-          const adminResult = await registerAdminPushToken(token);
-          console.log('Resultado de registro de token de admin:', adminResult);
+    const isAdmin = await isUserAdmin();
+    if (isAdmin) {
+      try {
+        console.log('Usuario es administrador, registrando token para notificaciones de admin');
+        const adminResult = await registerAdminPushToken(token);
+        if (adminResult.success) {
+          console.log('Token de administrador registrado correctamente');
+        } else {
+          console.error('Error registrando token de administrador:', adminResult.error);
         }
+      } catch (adminError) {
+        console.warn('Error registrando token de admin:', adminError);
       }
-    } catch (adminTokenError) {
-      console.error('Error registrando token de administrador:', adminTokenError);
+    } else {
+      console.log('Usuario no es administrador, no se registra token de admin');
     }
     
     return token;
   } catch (error) {
-    console.error('Error en registro de notificaciones:', error);
+    console.error('Error general en registerForPushNotifications:', error);
     return null;
   }
 };
 
 // Send push token to server
-export const sendPushTokenToServer = async (pushToken) => {
+const sendPushTokenToServer = async (pushToken) => {
   try {
-    console.log('Enviando token al servidor:', pushToken);
-    
-    // Obtener token de autenticación
-    const authToken = await AsyncStorage.getItem('token');
-    if (!authToken) {
-      console.error('No hay token de autenticación disponible');
-      throw new Error('NO_AUTH_TOKEN');
+    const token = await AsyncStorage.getItem('token');
+    if (!token) {
+      console.warn('No hay token de autenticación para enviar push token');
+      return false;
     }
     
-    // Obtener URL base de la API
-    const apiUrl = getApiUrl();
-    const url = `${apiUrl}/api/users/push-token`;
-    
-    // Preparar la solicitud
+    const url = `${getApiUrl()}/api/users/push-token`;
     const response = await fetchWithRetry(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${authToken}`
+        'Authorization': `Bearer ${token}`
       },
       body: JSON.stringify({ pushToken })
     });
     
-    // Verificar respuesta
     if (!response.ok) {
-      let errorText = await response.text();
-      console.error('Error en respuesta del servidor:', errorText);
-      throw new Error(`Error en respuesta del servidor: ${response.status}`);
+      const errorData = await response.json().catch(() => ({}));
+      console.warn('Error enviando push token al servidor:', errorData);
+      return false;
     }
     
-    const data = await response.json();
-    console.log('Respuesta del servidor:', data);
-    
-    return data;
+    const result = await response.json();
+    return result.success === true;
   } catch (error) {
-    console.error('Error enviando token al servidor:', error);
-    throw error;
+    console.error('Error en sendPushTokenToServer:', error);
+    return false;
   }
 };
 
 // Registrar token de notificaciones para administradores
-export const registerAdminPushToken = async (pushToken) => {
+const registerAdminPushToken = async (pushToken) => {
   try {
-    console.log('Registrando token de administrador para notificaciones:', pushToken);
+    console.log('Iniciando registro de token admin para push token:', pushToken);
     
-    // Obtener token de autenticación
-    const authToken = await AsyncStorage.getItem('token');
-    if (!authToken) {
-      console.error('No hay token de autenticación disponible');
-      throw new Error('NO_AUTH_TOKEN');
+    // Verificar si somos administrador
+    const isAdmin = await isUserAdmin();
+    if (!isAdmin) {
+      console.warn('Intento de registrar token de admin siendo usuario normal');
+      return { success: false, error: 'Solo los administradores pueden registrar tokens' };
     }
     
-    // Comprobar si el usuario es administrador
-    const userInfoString = await AsyncStorage.getItem('user');
-    if (!userInfoString) {
-      console.error('No hay información de usuario disponible');
-      throw new Error('NO_USER_INFO');
+    const token = await AsyncStorage.getItem('token');
+    if (!token) {
+      console.warn('No hay token de autenticación para registrar token de admin');
+      return { success: false, error: 'No hay token de autenticación' };
     }
     
-    const userInfo = JSON.parse(userInfoString);
-    if (!userInfo.isAdmin) {
-      console.log('El usuario no es administrador, no se registrará el token para notificaciones admin');
-      return { success: false, reason: 'NOT_ADMIN' };
+    // Obtener info del usuario para el log
+    const userInfoString = await AsyncStorage.getItem('userInfo');
+    if (userInfoString) {
+      const userInfo = JSON.parse(userInfoString);
+      console.log('Registrando token para admin:', userInfo.username, 'ID:', userInfo._id);
     }
     
-    // Obtener URL base de la API
-    const apiUrl = getApiUrl();
-    const url = `${apiUrl}/api/notifications/admin/register-token`;
+    const url = `${getApiUrl()}/api/notifications/admin/register-token`;
+    console.log('Intentando registrar token de admin en URL:', url);
     
-    // Preparar la solicitud
-    const response = await fetchWithRetry(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${authToken}`
-      },
-      body: JSON.stringify({ 
-        pushToken,
-        userId: userInfo._id || userInfo.id
-      })
-    });
-    
-    // Verificar respuesta
-    if (!response.ok) {
-      let errorText = await response.text();
-      console.error('Error registrando token de administrador:', errorText);
-      throw new Error(`Error en respuesta del servidor: ${response.status}`);
+    try {
+      const response = await fetchWithRetry(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ pushToken })
+      });
+      
+      console.log('Respuesta de registro de token admin:', response.status);
+      const responseText = await response.text();
+      console.log('Respuesta completa:', responseText);
+      
+      if (!response.ok) {
+        console.error('Error al registrar token de admin. Status:', response.status, 'Error:', responseText);
+        return { success: false, error: `Error HTTP ${response.status}: ${responseText}` };
+      }
+      
+      let data;
+      try {
+        data = JSON.parse(responseText);
+      } catch (parseError) {
+        console.warn('Error al parsear respuesta JSON:', parseError);
+        // Si no podemos parsear la respuesta pero el status es OK, asumimos éxito
+        if (response.ok) {
+          return { success: true, data: { message: 'Registro exitoso (sin datos JSON)' } };
+        } else {
+          return { success: false, error: `Error de formato: ${responseText}` };
+        }
+      }
+      
+      return { success: true, data };
+    } catch (fetchError) {
+      console.error('Error de red al registrar token de admin:', fetchError);
+      return { success: false, error: `Error de red: ${fetchError.message}` };
     }
-    
-    const data = await response.json();
-    console.log('Token de administrador registrado exitosamente:', data);
-    
-    return { success: true, data };
   } catch (error) {
-    console.error('Error registrando token de administrador:', error);
+    console.error('Error en registerAdminPushToken:', error);
     return { success: false, error: error.message };
   }
 };
 
-// Send a direct test notification - this bypasses all checks and directly sends a notification
-export const sendDirectTestNotification = async (title = 'Test Notification', body = 'This is a test notification') => {
+// Función para enviar notificaciones relacionadas con actividades
+export const sendActivityNotification = async (options) => {
   try {
-    // Attempt to send direct test notification
+    console.log('Enviando notificación de actividad:', options);
+    
+    // Verificar si el usuario tiene permiso para recibir notificaciones
     const { status } = await Notifications.getPermissionsAsync();
     if (status !== 'granted') {
-      try {
-        const { status: newStatus } = await Notifications.requestPermissionsAsync();
-        if (newStatus !== 'granted') {
-          return {
-            success: false,
-            error: 'Notification permission denied'
-          };
-        }
-      } catch (permissionError) {
-        return {
-          success: false,
-          error: `Permission error: ${permissionError.message}`
-        };
-      }
+      console.log('No hay permiso para enviar notificaciones');
+      return false;
     }
     
-    // Configure notification handler if needed
-    Notifications.setNotificationHandler({
-      handleNotification: async () => ({
-        shouldShowAlert: true,
-        shouldPlaySound: true,
-        shouldSetBadge: true,
-      }),
-    });
+    // Para usuarios administradores, enviamos notificaciones push en lugar de locales
+    const isAdmin = await isUserAdmin();
+    if (isAdmin) {
+      // Los administradores deberían recibir notificaciones push desde el backend
+      console.log('Usuario es admin, las notificaciones se enviarán desde el backend');
+      return true;
+    }
     
-    // Send the notification
-    const notificationId = await Notifications.scheduleNotificationAsync({
+    // Para usuarios regulares, intentamos mostrar una notificación
+    await Notifications.scheduleNotificationAsync({
       content: {
-        title,
-        body,
-        data: { directTest: true }
+        title: options.title || 'Notificación',
+        body: options.body || '',
+        data: options.data || {},
       },
-      trigger: null // Send immediately
+      trigger: null, // Mostrar inmediatamente
     });
     
-    return {
-      success: true,
-      notificationId
-    };
+    console.log('Notificación enviada correctamente');
+    return true;
   } catch (error) {
-    return {
-      success: false,
-      error: error.message
-    };
-  }
-};
-
-// Function to check if notifications are working properly
-export const diagnoseNotificationIssues = async () => {
-  const results = {
-    permissions: 'unknown',
-    handlerConfigured: false,
-    testNotification: 'not_attempted',
-    detailedError: null
-  };
-  
-  try {
-    // Check permissions
-    try {
-      const { status } = await Notifications.getPermissionsAsync();
-      results.permissions = status;
-    } catch (permissionError) {
-      results.permissions = 'error';
-      results.detailedError = `Permission error: ${permissionError.message}`;
-    }
-    
-    // Configure handler
-    try {
-      Notifications.setNotificationHandler({
-        handleNotification: async () => ({
-          shouldShowAlert: true,
-          shouldPlaySound: true,
-          shouldSetBadge: true,
-        }),
-      });
-      results.handlerConfigured = true;
-    } catch (handlerError) {
-      results.handlerConfigured = false;
-      results.detailedError = `Handler error: ${handlerError.message}`;
-    }
-    
-    // Try to send a test notification
-    if (results.permissions === 'granted') {
-      try {
-        const notificationId = await Notifications.scheduleNotificationAsync({
-          content: {
-            title: 'Diagnostic Test',
-            body: 'Testing if notifications are working properly',
-            data: { diagnostic: true }
-          },
-          trigger: null
-        });
-        results.testNotification = 'sent';
-      } catch (notificationError) {
-        results.testNotification = 'failed';
-        results.detailedError = `Notification error: ${notificationError.message}`;
-      }
-    }
-    
-    return results;
-  } catch (error) {
-    results.testNotification = 'exception';
-    results.detailedError = error.message;
-    return results;
+    console.error('Error al enviar notificación de actividad:', error);
+    return false;
   }
 };

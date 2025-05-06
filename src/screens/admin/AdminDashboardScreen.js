@@ -218,10 +218,10 @@ const AdminDashboardScreen = ({ navigation }) => {
       loadUserAvailability(true); // Modo silencioso para evitar indicadores de carga
     }, 15000); // 15 segundos
     
-    // Configurar intervalo para actualizar ubicaciones cada 30 segundos
+    // Configurar intervalo para actualizar ubicaciones cada 10 segundos
     locationsTimerRef.current = setInterval(() => {
       loadRealTimeLocations(true); // Modo silencioso
-    }, 30000); // 30 segundos
+    }, 10000); // 10 segundos
     
     // Limpiar intervalos al desmontar el componente
     return () => {

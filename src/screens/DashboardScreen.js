@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   View, 
   Text, 
@@ -40,11 +40,24 @@ const DashboardScreen = ({ navigation }) => {
   const [workStartTime, setWorkStartTime] = useState(null);
   const [workTime, setWorkTime] = useState('00:00:00');
   const [loadingAction, setLoadingAction] = useState(false);
+  
+  // Referencia para el intervalo de actualización de ubicación
+  const locationUpdateIntervalRef = useRef(null);
 
   // Load initial data
   useEffect(() => {
     loadDashboardData();
     checkWorkStatus();
+    
+    // Iniciar actualización de la ubicación cada 10 segundos
+    startLocationUpdates();
+    
+    // Limpiar el intervalo al desmontar el componente
+    return () => {
+      if (locationUpdateIntervalRef.current) {
+        clearInterval(locationUpdateIntervalRef.current);
+      }
+    };
   }, []);
 
   // Efecto para actualizar el contador de tiempo
@@ -111,6 +124,49 @@ const DashboardScreen = ({ navigation }) => {
         latitude: location.coords.latitude,
         longitude: location.coords.longitude
       });
+      
+      // Cada vez que cambia la ubicación, enviamos una actualización al servidor
+      sendLocationUpdate({
+        latitude: location.coords.latitude,
+        longitude: location.coords.longitude
+      });
+    }
+  };
+
+  // Función para iniciar las actualizaciones de ubicación al servidor
+  const startLocationUpdates = () => {
+    // Limpiar cualquier intervalo existente
+    if (locationUpdateIntervalRef.current) {
+      clearInterval(locationUpdateIntervalRef.current);
+    }
+    
+    // Crear un nuevo intervalo para enviar actualizaciones de ubicación cada 10 segundos
+    locationUpdateIntervalRef.current = setInterval(() => {
+      if (position) {
+        sendLocationUpdate(position);
+      }
+    }, 10000); // 10 segundos
+  };
+
+  // Función para enviar la actualización de ubicación al servidor
+  const sendLocationUpdate = async (coords) => {
+    try {
+      if (!coords || !coords.latitude || !coords.longitude) {
+        return; // No enviar si no hay coordenadas válidas
+      }
+      
+      const location = {
+        latitude: coords.latitude,
+        longitude: coords.longitude,
+        timestamp: new Date().toISOString(),
+        type: 'tracking' // Usar 'tracking' en lugar de 'real_time_update' para compatibilidad con el backend
+      };
+      
+      // Usar la función saveLocations para enviar la ubicación al servidor
+      await api.saveLocations([location]);
+      console.log('Ubicación enviada al servidor:', JSON.stringify(location));
+    } catch (error) {
+      console.error('Error al enviar ubicación al servidor:', error);
     }
   };
 
