@@ -210,13 +210,22 @@ exports.getAllActivities = async (req, res) => {
     const limit = parseInt(req.query.limit) || 20;
     const page = parseInt(req.query.page) || 1;
     const skip = (page - 1) * limit;
+    
+    // Definir tipos de actividad a excluir
+    const excludedTypes = ['location_check']; 
+    
+    // Construir filtro para excluir tipos no deseados
+    const filter = { type: { $nin: excludedTypes } };
+    
+    // Aplicar filtro de ordenación si existe
+    const sort = req.query.sort || { createdAt: -1 };
 
-    // Obtener el total de actividades para la paginación
-    const total = await Activity.countDocuments();
+    // Obtener el total de actividades para la paginación (excluyendo tipos no deseados)
+    const total = await Activity.countDocuments(filter);
 
     // Obtener actividades recientes de todos los usuarios con datos completos
-    const activities = await Activity.find()
-      .sort({ createdAt: -1 })
+    const activities = await Activity.find(filter)
+      .sort(sort)
       .skip(skip)
       .limit(limit)
       .populate('userId', 'username email')  // Incluir datos del usuario
