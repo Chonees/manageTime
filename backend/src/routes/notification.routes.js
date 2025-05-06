@@ -1,10 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const notificationController = require('../controllers/notification.controller');
-const auth = require('../middleware/auth.middleware');
+const { verifyToken } = require('../middleware/auth.middleware');
 
 // Rutas protegidas que requieren autenticación
-router.use(auth);
+router.use(verifyToken);
 
 // Ruta para registrar un token de notificaciones de administrador
 router.post('/admin/register-token', notificationController.registerAdminToken);
