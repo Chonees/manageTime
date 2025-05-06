@@ -1,18 +1,5 @@
-// Intentar importar expo-server-sdk de manera segura
-let Expo;
-try {
-  Expo = require('expo-server-sdk').Expo;
-} catch (error) {
-  console.warn('No se pudo cargar expo-server-sdk, las notificaciones push estarán deshabilitadas');
-  // Crear una implementación simulada
-  Expo = class MockExpo {
-    constructor() {}
-    
-    isExpoPushToken() { return false; }
-    chunkPushNotifications() { return []; }
-    sendPushNotificationsAsync() { return []; }
-  };
-}
+// Importar directamente el SDK de Expo Server
+const { Expo } = require('expo-server-sdk');
 
 const User = require('../models/user.model');
 const logger = require('./logger');
@@ -30,10 +17,25 @@ const expo = new Expo();
  */
 const sendPushNotifications = async (tokens, title, body, data = {}) => {
   try {
+    // Validar la instancia de Expo
+    if (!expo || typeof expo.isExpoPushToken !== 'function') {
+      logger.error('SDK de Expo no inicializado correctamente');
+      console.error('Expo SDK no inicializado, expo =', expo);
+      return { success: false, error: 'SDK de Expo no inicializado correctamente' };
+    }
+    
     // Filtrar tokens válidos
-    const validTokens = tokens.filter(token => 
-      expo.isExpoPushToken(token) || token.startsWith('ExponentPushToken[')
-    );
+    const validTokens = tokens.filter(token => {
+      // Verificación manual si la función isExpoPushToken falla
+      const isValid = 
+        (typeof expo.isExpoPushToken === 'function' && expo.isExpoPushToken(token)) || 
+        (typeof token === 'string' && token.startsWith('ExponentPushToken['));
+      
+      if (!isValid) {
+        console.log('Token inválido descartado:', token);
+      }
+      return isValid;
+    });
 
     if (validTokens.length === 0) {
       logger.warn('No hay tokens de push válidos para enviar notificaciones');
@@ -60,6 +62,11 @@ const sendPushNotifications = async (tokens, title, body, data = {}) => {
     }));
 
     // Dividir los mensajes en bloques según recomendaciones de Expo
+    if (typeof expo.chunkPushNotifications !== 'function') {
+      logger.error('Función chunkPushNotifications no disponible');
+      return { success: false, error: 'Función chunkPushNotifications no disponible' };
+    }
+    
     const chunks = expo.chunkPushNotifications(messages);
     
     // Enviar cada bloque de mensajes
@@ -67,6 +74,12 @@ const sendPushNotifications = async (tokens, title, body, data = {}) => {
     for (const chunk of chunks) {
       try {
         console.log('Enviando chunk de notificaciones a Expo:', JSON.stringify(chunk[0]));
+        
+        if (typeof expo.sendPushNotificationsAsync !== 'function') {
+          logger.error('Función sendPushNotificationsAsync no disponible');
+          throw new Error('Función sendPushNotificationsAsync no disponible');
+        }
+        
         const ticketChunk = await expo.sendPushNotificationsAsync(chunk);
         tickets.push(...ticketChunk);
         logger.debug(`Enviado bloque de ${chunk.length} notificaciones`);
