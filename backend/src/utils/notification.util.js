@@ -238,28 +238,43 @@ const notifyUser = async (userId, title, body, data = {}) => {
  */
 const notifyAdminActivity = async (activity) => {
   try {
-    const title = 'Nueva actividad';
+    // Obtener el nombre de usuario desde varias fuentes posibles
+    const username = activity.metadata?.username || activity.username || 'Usuario';
+    
+    // Personalizar título según el tipo de actividad
+    let title = 'Nueva actividad';
     let body = 'Se ha registrado una nueva actividad';
     
     // Personalizar mensaje según el tipo de actividad
     switch (activity.type) {
       case 'clock_in':
-        body = `${activity.username || 'Un usuario'} está ahora disponible`;
+      case 'started_working':
+        title = `${username} está disponible`;
+        body = `${username} ha cambiado su estado a disponible`;
         break;
       case 'clock_out':
-        body = `${activity.username || 'Un usuario'} ya no está disponible`;
+      case 'stopped_working':
+        title = `${username} no disponible`;
+        body = `${username} ha cambiado su estado a no disponible`;
         break;
       case 'task_complete':
-        body = `${activity.username || 'Un usuario'} ha completado una tarea: ${activity.metadata?.title || ''}`;
+        title = `Tarea completada`;
+        body = `${username} ha completado: ${activity.metadata?.title || 'una tarea'}`;
         break;
       case 'location_enter':
+        title = `Entrada a ubicación`;
+        body = `${username} ha entrado en: ${activity.metadata?.locationName || 'una ubicación'}`;
+        break;
       case 'location_exit':
-        body = `${activity.username || 'Un usuario'} ha ${activity.type === 'location_enter' ? 'entrado en' : 'salido de'} una ubicación asignada`;
+        title = `Salida de ubicación`;
+        body = `${username} ha salido de: ${activity.metadata?.locationName || 'una ubicación'}`;
         break;
       case 'task_activity':
-        body = `${activity.username || 'Un usuario'} marcó una tarea como completada`;
+        title = `Actividad en tarea`;
+        body = `${username} actualizó: ${activity.metadata?.title || 'una tarea'}`;
         break;
       default:
+        title = `Actividad: ${username}`;
         body = activity.message || body;
     }
     
@@ -269,12 +284,13 @@ const notifyAdminActivity = async (activity) => {
       type: activity.type,
       timestamp: new Date().toISOString(),
       userId: activity.userId,
+      username: username,
       critical: true,
       priority: 'high'
     };
     
     logger.info(`Enviando notificación de actividad "${activity.type}" a administradores`);
-    console.log(`Enviando notificación para actividad: ${activity.type}, mensaje: "${body}"`);
+    console.log(`Enviando notificación para actividad: ${activity.type}, de ${username}, mensaje: "${body}"`);
     
     // Enviar notificación a todos los administradores
     return await notifyByRole(title, body, notificationData, 'admin');

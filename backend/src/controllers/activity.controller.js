@@ -78,6 +78,9 @@ exports.createActivity = async (req, res) => {
           savedActivity.metadata = {};
         }
         
+        // Asegurar que el nombre de usuario esté en los metadatos
+        savedActivity.metadata.username = username;
+        
         // Asegurar que se genere un sonido y notificación aunque la app esté en segundo plano
         savedActivity.metadata.critical = true;
         savedActivity.metadata.push_priority = 'high';
