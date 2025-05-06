@@ -1,6 +1,7 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as api from '../services/api';
+import { registerForPushNotifications, registerAdminPushToken } from '../services/notification-service';
 
 // Crear el contexto de autenticación
 const AuthContext = createContext();
@@ -73,6 +74,22 @@ export const AuthProvider = ({ children }) => {
       
       console.log('Login exitoso, usuario:', result.user?.username);
       setUser(result.user);
+      
+      // Registrar para notificaciones push después del login exitoso
+      try {
+        console.log('Registrando notificaciones push para el usuario...');
+        const pushToken = await registerForPushNotifications();
+        
+        // Si es administrador, registrar específicamente para notificaciones de admin
+        if (result.user?.isAdmin) {
+          console.log('Usuario es administrador, registrando para notificaciones de admin');
+          await registerAdminPushToken(pushToken);
+        }
+      } catch (notificationError) {
+        console.error('Error al registrar notificaciones push:', notificationError);
+        // No interrumpimos el flujo de login aunque falle el registro de notificaciones
+      }
+      
       return { success: true, user: result.user };
     } catch (error) {
       console.error('Error inesperado al iniciar sesión:', error);

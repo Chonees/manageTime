@@ -446,6 +446,13 @@ const AdminDashboardScreen = ({ navigation }) => {
                   </View>
                 </TouchableOpacity>
 
+                <TouchableOpacity 
+                  style={[styles.actionButton, { backgroundColor: '#FF8C42' }]}
+                  onPress={() => navigation.navigate('NotificationTest')}
+                >
+                  <Text style={[styles.actionButtonText, { color: '#000' }]}>{t('testNotifications')}</Text>
+                </TouchableOpacity>
+
               </View>
             </View>
             

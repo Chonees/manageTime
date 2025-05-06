@@ -353,6 +353,140 @@ export const translations = {
     errorProcessingAudio: 'Error processing audio',
     errorRecognizingSpeech: 'Error recognizing speech',
     enterCode: 'Enter code',
+    pleaseEnterCode: 'Please enter the code',
+    incorrectCode: 'Incorrect code',
+    verify: 'Verify',
+    cancel: 'Cancel',
+    speakCode: 'Speak the code',
+    timeRemaining: 'Time remaining: {{time}}s',
+    
+    // Location tracking messages
+    startingLocationTracking: "Starting location tracking...",
+    locationPermissionDenied: "Location permission was denied",
+    gettingInitialLocation: "Getting initial location reading with highest accuracy...",
+    initialLocationReading: "Initial location reading obtained",
+    settingUpLocationTracking: "Setting up continuous location tracking...",
+    locationUpdateReceived: "Location update received",
+    locationCoordinates: "Location: ${lat}, ${lng} (±${accuracy}m)",
+    locationTrackingStarted: "Location tracking successfully started",
+    locationTrackingError: "Error starting location tracking: ${error}",
+    
+    // Radius check messages
+    radiusCheckDivider: "---------- RADIUS CHECK ----------",
+    checkingTaskRadius: "Checking if within task radius - Task ID: ${taskId}",
+    taskMissingCoordinates: "Task missing valid coordinates: ${location}",
+    taskPosition: "Task position: ${position}",
+    taskRadius: "Task radius: ${radius} meters",
+    userPosition: "User position: ${position}",
+    distanceToTask: "Distance to task: ${km} km / ${meters} meters",
+    withinTaskRadius: "WITHIN RADIUS",
+    outsideTaskRadius: "OUTSIDE RADIUS",
+    updatingRadiusState: "Updating within radius state from ${from} to ${to}",
+    
+    // Dashboard screen
+    noPendingTasks: "No pending tasks",
+    
+    // Map diagnostics
+    runDiagnostics: 'Run Map Diagnostics',
+    dashboard: {
+      welcome: 'Welcome',
+      user: 'User',
+      admin: 'Administrator',
+      employee: 'Employee',
+      tasks: 'My Tasks',
+      trackingHistory: 'Tracking History',
+    },
+    trackingHistory: 'Tracking History',
+    
+    // Login screen
+    hello: 'Hello.',
+    welcomeBack: 'Welcome back',
+    email: 'Email',
+    password: 'Password',
+    enterEmail: 'Enter email',
+    enterPassword: 'Enter password',
+    enterUsername: 'Choose a username',
+    confirmPassword: 'Confirm Password',
+    forgotPassword: 'Forgot password?',
+    signIn: 'Sign In',
+    signUp: 'Sign up',
+    or: 'OR CONTINUE WITH',
+    dontHaveAccount: "Don't have an account?",
+    pleaseEnterEmailAndPassword: 'Please enter email and password',
+    loginError: 'Login Error',
+    anUnexpectedErrorOccurred: 'An unexpected error occurred',
+    pleaseTryAgain: 'Please try again',
+    
+    // Voice assistant
+    voiceAssistant: "Voice Assistant",
+    typeSomething: "Type something...",
+    continue: "Continue",
+    voiceAssistantHelp: "This simulator lets you test the voice assistant. Type 'bitacora' to start a voice note.",
+    voiceCommandsHelp: "Voice commands available: 'bitacora' (starts recording), 'yes/no' (confirmation)",
+    voiceAssistantActive: "Voice assistant active and listening for 'bitacora'",
+    voiceAssistantError: "Could not activate voice assistant. Check microphone permissions.",
+    
+    // Tracking functionality
+    trackingActive: 'Tracking Active',
+    trackingInactive: 'Tracking Inactive',
+    startTracking: 'Start Tracking',
+    stopTracking: 'Stop Tracking',
+    locationsRecorded: 'locations recorded',
+    
+    // Verification prompt translations
+    listening: 'Listening...',
+    processing: 'Processing...',
+    voiceNotRecognized: 'Voice not recognized. Please enter the code manually.',
+    codeNotRecognized: 'Code not recognized. Please enter manually.',
+    noNumbersRecognized: 'No numbers recognized. Please enter manually.',
+    voiceProcessingError: 'Error processing voice. Please enter manually.',
+    enterCode: 'Enter code',
+    pleaseEnterCode: 'Please enter the code',
+    incorrectCode: 'Incorrect code',
+    verify: 'Verify',
+    cancel: 'Cancel',
+    speakCode: 'Speak the code',
+    timeRemaining: 'Time remaining: {{time}}s',
+    
+    // Keywords
+    keywordsToSay: "Keywords to say",
+    spokenKeywords: "Spoken keywords",
+    keywordDetected: "Keyword detected",
+    keywordsConfigured: "Keywords configured in task",
+    delete: 'Delete',
+    deleteLocation: 'Delete Location',
+    deleteLocationConfirmation: 'Are you sure you want to delete this location?',
+    errorDeletingLocation: 'Error deleting location. Please try again.',
+    errorSavingLocationToBackend: 'Error saving location to server. Please check your connection.',
+    saveLocationPrompt: 'Please enter a name for this location',
+    locationSaved: 'Location saved successfully to server',
+    savedLocations: 'Saved Locations',
+    selectSavedLocation: 'Select Saved Location',
+    loadingSavedLocations: 'Loading saved locations...',
+    noSavedLocations: 'No saved locations',
+    saveLocationHint: 'Add a location first to see it here',
+    assignedRadius: 'Assigned Radius:',
+    coordinates: 'Coordinates:',
+    handsFreeMode: 'Hands-free mode',
+    voiceKeywords: 'Voice keywords',
+    keywordPlaceholder: 'Enter keyword and press +',
+    addKeyword: 'Add keyword',
+    assignToUser: 'Assign to user',
+    save: 'Save',
+    cancel: 'Cancel',
+    saveLocation: 'Save location',
+    
+    // Saved locations selector
+    savedLocations: 'Saved Locations',
+    searchLocations: 'Search locations...',
+    noMatchingLocations: 'No locations match your search',
+    noSavedLocations: 'No saved locations found',
+    deleteLocation: 'Delete Location',
+    deleteLocationConfirmation: 'Are you sure you want to delete this location?',
+    errorDeletingLocation: 'Error deleting location',
+    coordinates: 'Coordinates',
+    assignedRadius: 'Radius',
+    
     errorProcessingVerification: 'Error processing verification',
     noPendingTasks: 'No pending tasks',
     locationPermissionDenied: 'Location permission was denied. You need to enable location permissions to track proximity to tasks.',
@@ -468,6 +602,10 @@ export const translations = {
     // Voice assistant
     voiceAssistant: "Voice Assistant",
     typeSomething: "Type something...",
+    
+    // Task details
+    created: "Created",
+    updated: "Updated",
     continue: "Continue",
     voiceAssistantHelp: "This simulator lets you test the voice assistant. Type 'bitacora' to start a voice note.",
     voiceCommandsHelp: "Voice commands available: 'bitacora' (starts recording), 'yes/no' (confirmation)",
@@ -496,29 +634,6 @@ export const translations = {
     speakCode: 'Speak the code',
     timeRemaining: 'Time remaining: {{time}}s',
     
-    // Location tracking messages
-    startingLocationTracking: "Starting location tracking...",
-    locationPermissionDenied: "Location permission was denied",
-    gettingInitialLocation: "Getting initial location reading with highest accuracy...",
-    initialLocationReading: "Initial location reading obtained",
-    settingUpLocationTracking: "Setting up continuous location tracking...",
-    locationUpdateReceived: "Location update received",
-    locationCoordinates: "Location: ${lat}, ${lng} (±${accuracy}m)",
-    locationTrackingStarted: "Location tracking successfully started",
-    locationTrackingError: "Error starting location tracking: ${error}",
-    
-    // Radius check messages
-    radiusCheckDivider: "---------- RADIUS CHECK ----------",
-    checkingTaskRadius: "Checking if within task radius - Task ID: ${taskId}",
-    taskMissingCoordinates: "Task missing valid coordinates: ${location}",
-    taskPosition: "Task position: ${position}",
-    taskRadius: "Task radius: ${radius} meters",
-    userPosition: "User position: ${position}",
-    distanceToTask: "Distance to task: ${km} km / ${meters} meters",
-    withinTaskRadius: "WITHIN RADIUS",
-    outsideTaskRadius: "OUTSIDE RADIUS",
-    updatingRadiusState: "Updating within radius state from ${from} to ${to}",
-    
     // Keywords
     keywordsToSay: "Keywords to say",
     spokenKeywords: "Spoken keywords",
@@ -546,6 +661,26 @@ export const translations = {
     save: 'Save',
     cancel: 'Cancel',
     saveLocation: 'Save location',
+    
+    // Saved locations selector
+    savedLocations: 'Saved Locations',
+    searchLocations: 'Search locations...',
+    noMatchingLocations: 'No locations match your search',
+    noSavedLocations: 'No saved locations found',
+    deleteLocation: 'Delete Location',
+    deleteLocationConfirmation: 'Are you sure you want to delete this location?',
+    errorDeletingLocation: 'Error deleting location',
+    coordinates: 'Coordinates',
+    assignedRadius: 'Radius',
+    
+    // Location search
+    searchLocation: 'Search location or address...',
+    noResults: 'No Results',
+    noLocationResults: 'No locations found matching your search',
+    errorSearchingLocation: 'Error searching for location',
+    selectedLocation: 'Selected Location',
+    unnamedLocation: 'Unnamed Location',
+    testNotifications: 'Test Notifications',
   },
   es: {
     login: 'Iniciar Sesión',
@@ -1052,7 +1187,7 @@ export const translations = {
     keywordsConfigured: "Palabras clave configuradas en la tarea",
     delete: 'Eliminar',
     deleteLocation: 'Eliminar Ubicación',
-    deleteLocationConfirmation: '¿Está seguro que desea eliminar esta ubicación?',
+    deleteLocationConfirmation: '¿Estás seguro que deseas eliminar esta ubicación?',
     errorDeletingLocation: 'Error al eliminar la ubicación. Por favor, inténtelo de nuevo.',
     errorSavingLocationToBackend: 'Error al guardar la ubicación en el servidor. Por favor, verifique su conexión.',
     saveLocationPrompt: 'Por favor, ingrese un nombre para esta ubicación',
@@ -1072,6 +1207,26 @@ export const translations = {
     save: 'Guardar',
     cancel: 'Cancelar',
     saveLocation: 'Guardar ubicación',
+    
+    // Saved locations selector
+    savedLocations: 'Ubicaciones Guardadas',
+    searchLocations: 'Buscar ubicaciones...',
+    noMatchingLocations: 'No se encontraron ubicaciones que coincidan con la búsqueda',
+    noSavedLocations: 'No hay ubicaciones guardadas',
+    deleteLocation: 'Eliminar Ubicación',
+    deleteLocationConfirmation: '¿Estás seguro que deseas eliminar esta ubicación?',
+    errorDeletingLocation: 'Error al eliminar la ubicación',
+    coordinates: 'Coordenadas',
+    assignedRadius: 'Radio',
+    
+    // Location search
+    searchLocation: 'Buscar ubicación o dirección...',
+    noResults: 'Sin Resultados',
+    noLocationResults: 'No se encontraron ubicaciones que coincidan con tu búsqueda',
+    errorSearchingLocation: 'Error al buscar la ubicación',
+    selectedLocation: 'Ubicación Seleccionada',
+    unnamedLocation: 'Ubicación Sin Nombre',
+    testNotifications: 'Probar Notificaciones',
   }
 };
 

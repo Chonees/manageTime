@@ -120,42 +120,59 @@ export const registerForPushNotifications = async () => {
     const { status: existingStatus } = await Notifications.getPermissionsAsync();
     let finalStatus = existingStatus;
     
-    // Si no tenemos permiso, solicitarlo
     if (existingStatus !== 'granted') {
-      console.log('Solicitando permisos de notificaciones...');
+      console.log('Solicitando permiso para notificaciones...');
       const { status } = await Notifications.requestPermissionsAsync();
       finalStatus = status;
     }
     
-    // Si después de solicitar aún no tenemos permiso, salir
+    // Si el permiso no fue concedido, salir
     if (finalStatus !== 'granted') {
-      console.log('¡Permiso de notificaciones denegado!');
+      console.warn('Permiso para notificaciones no concedido');
       return null;
     }
     
-    console.log('Permiso de notificaciones concedido. Obteniendo token...');
+    console.log('Permiso para notificaciones concedido, obteniendo token...');
     
-    // Obtener token del dispositivo
-    const tokenData = await Notifications.getExpoPushTokenAsync({
-      experienceId: '@lucasbranchini/manage-time',
-    });
-    
-    const token = tokenData.data;
-    console.log('Token de notificaciones obtenido:', token);
-    
-    // Guardar token localmente
-    await AsyncStorage.setItem('pushToken', token);
-    
-    // Enviar token al servidor
+    // Obtener el token - debemos tratar excepciones específicas
+    let token;
     try {
-      await sendPushTokenToServer(token);
-      console.log('Token enviado exitosamente al servidor');
-    } catch (error) {
-      console.error('Error al enviar token al servidor:', error);
-      // Seguir adelante aunque no se pueda enviar el token al servidor
+      // En Android 13+ a veces hay un error "Activity not registered" que podemos reintentar
+      const tokenData = await Notifications.getExpoPushTokenAsync({
+        projectId: undefined, // Usar el projectId configurado en app.json
+      }).catch(error => {
+        console.error('Error inicial obteniendo token:', error);
+        // Reintento tras un breve retraso
+        return new Promise(resolve => {
+          setTimeout(() => {
+            resolve(Notifications.getExpoPushTokenAsync({
+              projectId: undefined,
+            }));
+          }, 1000);
+        });
+      });
+      
+      token = tokenData.data;
+    } catch (tokenError) {
+      console.error('Error final obteniendo token:', tokenError);
+      return null;
     }
     
-    // Configurar notificaciones
+    if (!token) {
+      console.error('No se pudo obtener un token válido');
+      return null;
+    }
+    
+    console.log('Token de notificaciones obtenido:', token);
+    
+    // Guardarlo en AsyncStorage para uso futuro
+    try {
+      await AsyncStorage.setItem('pushToken', token);
+    } catch (storageError) {
+      console.warn('Error guardando token en AsyncStorage:', storageError);
+    }
+    
+    // Configuraciones especiales para Android
     if (Platform.OS === 'android') {
       Notifications.setNotificationChannelAsync('default', {
         name: 'default',
@@ -165,10 +182,28 @@ export const registerForPushNotifications = async () => {
       });
     }
     
-    // Configurar manejador para recibir notificaciones
-    const subscription = Notifications.addNotificationReceivedListener(notification => {
-      console.log('Notificación recibida:', notification);
-    });
+    // Enviar el token al servidor para todos los usuarios
+    try {
+      await sendPushTokenToServer(token);
+      console.log('Token enviado al servidor exitosamente');
+    } catch (serverError) {
+      console.error('Error enviando token al servidor:', serverError);
+    }
+    
+    // Adicionalmente, si es administrador, registrar el token para notificaciones de administrador
+    try {
+      const userInfoString = await AsyncStorage.getItem('user');
+      if (userInfoString) {
+        const userInfo = JSON.parse(userInfoString);
+        if (userInfo.isAdmin) {
+          console.log('Usuario es administrador, registrando token para notificaciones de admin');
+          const adminResult = await registerAdminPushToken(token);
+          console.log('Resultado de registro de token de admin:', adminResult);
+        }
+      }
+    } catch (adminTokenError) {
+      console.error('Error registrando token de administrador:', adminTokenError);
+    }
     
     return token;
   } catch (error) {
@@ -183,7 +218,7 @@ export const sendPushTokenToServer = async (pushToken) => {
     console.log('Enviando token al servidor:', pushToken);
     
     // Obtener token de autenticación
-    const authToken = await AsyncStorage.getItem('userToken');
+    const authToken = await AsyncStorage.getItem('token');
     if (!authToken) {
       console.error('No hay token de autenticación disponible');
       throw new Error('NO_AUTH_TOKEN');
@@ -191,7 +226,7 @@ export const sendPushTokenToServer = async (pushToken) => {
     
     // Obtener URL base de la API
     const apiUrl = getApiUrl();
-    const url = `${apiUrl}/users/push-token`;
+    const url = `${apiUrl}/api/users/push-token`;
     
     // Preparar la solicitud
     const response = await fetchWithRetry(url, {
@@ -217,6 +252,65 @@ export const sendPushTokenToServer = async (pushToken) => {
   } catch (error) {
     console.error('Error enviando token al servidor:', error);
     throw error;
+  }
+};
+
+// Registrar token de notificaciones para administradores
+export const registerAdminPushToken = async (pushToken) => {
+  try {
+    console.log('Registrando token de administrador para notificaciones:', pushToken);
+    
+    // Obtener token de autenticación
+    const authToken = await AsyncStorage.getItem('token');
+    if (!authToken) {
+      console.error('No hay token de autenticación disponible');
+      throw new Error('NO_AUTH_TOKEN');
+    }
+    
+    // Comprobar si el usuario es administrador
+    const userInfoString = await AsyncStorage.getItem('user');
+    if (!userInfoString) {
+      console.error('No hay información de usuario disponible');
+      throw new Error('NO_USER_INFO');
+    }
+    
+    const userInfo = JSON.parse(userInfoString);
+    if (!userInfo.isAdmin) {
+      console.log('El usuario no es administrador, no se registrará el token para notificaciones admin');
+      return { success: false, reason: 'NOT_ADMIN' };
+    }
+    
+    // Obtener URL base de la API
+    const apiUrl = getApiUrl();
+    const url = `${apiUrl}/api/notifications/admin/register-token`;
+    
+    // Preparar la solicitud
+    const response = await fetchWithRetry(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${authToken}`
+      },
+      body: JSON.stringify({ 
+        pushToken,
+        userId: userInfo._id || userInfo.id
+      })
+    });
+    
+    // Verificar respuesta
+    if (!response.ok) {
+      let errorText = await response.text();
+      console.error('Error registrando token de administrador:', errorText);
+      throw new Error(`Error en respuesta del servidor: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    console.log('Token de administrador registrado exitosamente:', data);
+    
+    return { success: true, data };
+  } catch (error) {
+    console.error('Error registrando token de administrador:', error);
+    return { success: false, error: error.message };
   }
 };
 

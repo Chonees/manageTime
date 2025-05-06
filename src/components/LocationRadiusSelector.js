@@ -11,7 +11,8 @@ import {
   SafeAreaView,
   Platform,
   StatusBar,
-  Alert
+  Alert,
+  Keyboard
 
 } from 'react-native';
 import Slider from '@react-native-community/slider';
@@ -51,6 +52,9 @@ const LocationRadiusSelector = ({
   const [locationName, setLocationName] = useState(initialLocationName);
   const [loading, setLoading] = useState(false);
   const [mapReady, setMapReady] = useState(false);
+  const [searchQuery, setSearchQuery] = useState(initialLocationName);
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchResults, setSearchResults] = useState([]);
   
   // Obtener la ubicación actual del dispositivo al abrir el selector
   useEffect(() => {
@@ -99,6 +103,7 @@ const LocationRadiusSelector = ({
           ].filter(Boolean).join(', ');
           
           setLocationName(locationText || t('currentLocation'));
+          setSearchQuery(locationText || t('currentLocation'));
         }
       } catch (error) {
         console.error(t('errorGettingLocationName'), error);
@@ -118,6 +123,34 @@ const LocationRadiusSelector = ({
       latitude,
       longitude
     }));
+    
+    // Actualizar el nombre de la ubicación basado en las nuevas coordenadas
+    updateLocationNameFromCoordinates(latitude, longitude);
+  };
+
+  // Actualizar nombre de ubicación basado en coordenadas
+  const updateLocationNameFromCoordinates = async (latitude, longitude) => {
+    try {
+      const [address] = await Location.reverseGeocodeAsync({
+        latitude,
+        longitude,
+      });
+      
+      if (address) {
+        const locationText = [
+          address.name,
+          address.street,
+          address.city, 
+          address.region, 
+          address.district
+        ].filter(Boolean).join(', ');
+        
+        setLocationName(locationText || t('selectedLocation'));
+        setSearchQuery(locationText || t('selectedLocation'));
+      }
+    } catch (error) {
+      console.error(t('errorGettingLocationName'), error);
+    }
   };
 
   // Colocar el marcador en el centro actual del mapa
@@ -131,10 +164,89 @@ const LocationRadiusSelector = ({
             latitude: camera.center.latitude,
             longitude: camera.center.longitude
           }));
+          
+          // Actualizar el nombre de la ubicación basado en las nuevas coordenadas
+          updateLocationNameFromCoordinates(camera.center.latitude, camera.center.longitude);
         }
       } catch (error) {
         console.error('Error al obtener el centro del mapa:', error);
       }
+    }
+  };
+
+  // Buscar ubicación por nombre o dirección
+  const searchLocation = async (query) => {
+    if (!query.trim()) return;
+    
+    setIsSearching(true);
+    try {
+      console.log(`Buscando ubicación: "${query}"`);
+      
+      // Cerrar el teclado
+      Keyboard.dismiss();
+      
+      // Buscar ubicación usando geocodificación de Location
+      const results = await Location.geocodeAsync(query);
+      
+      if (results && results.length > 0) {
+        console.log(`Se encontró la ubicación buscada: ${JSON.stringify(results[0])}`);
+        
+        // Actualizar la ubicación con la primera coincidencia
+        const { latitude, longitude } = results[0];
+        
+        // Actualizar estado
+        setLocation(prev => ({
+          ...prev,
+          latitude,
+          longitude,
+        }));
+        
+        // Mover el mapa a la ubicación encontrada
+        if (mapRef.current) {
+          mapRef.current.animateToRegion({
+            latitude,
+            longitude,
+            latitudeDelta: LATITUDE_DELTA / 2,  // Zoom un poco más cerca
+            longitudeDelta: LONGITUDE_DELTA / 2,
+          }, 1000);  // Animación de 1 segundo
+        }
+        
+        // Actualizar el nombre de la ubicación
+        updateLocationNameFromCoordinates(latitude, longitude);
+        
+        // Mostrar mensaje de éxito
+        console.log(`Mapa centrado en ubicación: ${latitude}, ${longitude}`);
+      } else {
+        // No se encontraron resultados
+        console.log('No se encontraron resultados para la búsqueda');
+        Alert.alert(
+          t('noResults'),
+          t('noLocationResults'),
+          [{ text: t('ok') }]
+        );
+      }
+    } catch (error) {
+      console.error('Error al buscar ubicación:', error);
+      Alert.alert(
+        t('error'),
+        t('errorSearchingLocation'),
+        [{ text: t('ok') }]
+      );
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  // Manejador para cambios en el campo de búsqueda
+  const handleSearchChange = (text) => {
+    setSearchQuery(text);
+    setLocationName(text);  // También actualizamos el nombre de la ubicación
+  };
+
+  // Manejador para enviar la búsqueda (al presionar enter o el botón de búsqueda)
+  const handleSearchSubmit = () => {
+    if (searchQuery.trim()) {
+      searchLocation(searchQuery);
     }
   };
 
@@ -277,6 +389,7 @@ const LocationRadiusSelector = ({
         
         // Update location name in the UI
         setLocationName(name);
+        setSearchQuery(name);
       } catch (apiError) {
         console.error('Error saving location to backend:', apiError);
         Alert.alert(
@@ -319,10 +432,34 @@ const LocationRadiusSelector = ({
           <Ionicons name="search" size={20} color="#fff3e5" style={styles.searchIcon} />
           <TextInput
             style={styles.searchInput}
-            placeholder={t('search')}
-            value={locationName}
-            onChangeText={setLocationName}
+            placeholder={t('searchLocation')}
+            value={searchQuery}
+            onChangeText={handleSearchChange}
+            onSubmitEditing={handleSearchSubmit}
+            returnKeyType="search"
           />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity 
+              style={styles.clearSearchButton} 
+              onPress={() => {
+                setSearchQuery('');
+                setLocationName('');
+              }}
+            >
+              <Ionicons name="close-circle" size={20} color="#fff3e5" />
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity 
+            style={styles.searchButton} 
+            onPress={handleSearchSubmit}
+            disabled={isSearching || !searchQuery.trim()}
+          >
+            {isSearching ? (
+              <ActivityIndicator size="small" color="#fff3e5" />
+            ) : (
+              <Ionicons name="navigate" size={20} color="#fff3e5" />
+            )}
+          </TouchableOpacity>
         </View>
 
         <View style={styles.mapContainer}>
@@ -357,9 +494,12 @@ const LocationRadiusSelector = ({
                     latitude: Number(latitude),
                     longitude: Number(longitude)
                   }));
+                  // Actualizar el nombre de la ubicación basado en las nuevas coordenadas
+                  updateLocationNameFromCoordinates(latitude, longitude);
                 }}
               >
-                {mapReady && validateCoordinates(location) && (
+                {/* Renderizar marcador y círculo solo si las coordenadas son válidas */}
+                {validateCoordinates(location) && (
                   <>
                     <Marker
                       coordinate={{
@@ -369,57 +509,63 @@ const LocationRadiusSelector = ({
                       draggable
                       onDragEnd={handleMarkerDragEnd}
                     />
-                    {validateCoordinates(location) && (
-                      <Circle
-                        center={{
-                          latitude: Number(location.latitude),
-                          longitude: Number(location.longitude)
-                        }}
-                        radius={getRadiusInMeters()}
-                        fillColor="rgba(75, 75, 75, 0.3)"
-                        strokeColor="#4b4b4b"
-                        strokeWidth={3}
-                      />
-                    )}
+                    <Circle
+                      center={{
+                        latitude: Number(location.latitude),
+                        longitude: Number(location.longitude)
+                      }}
+                      radius={getRadiusInMeters()}
+                      fillColor="rgba(45, 137, 239, 0.2)"
+                      strokeColor="rgba(45, 137, 239, 0.5)"
+                      strokeWidth={2}
+                    />
                   </>
                 )}
               </MapView>
             ) : (
-              // Renderizado para Android
+              // Renderizado para Android y otros
               <MapView
                 ref={mapRef}
-                style={styles.map}
                 provider={PROVIDER_GOOGLE}
+                style={styles.map}
+                initialRegion={{
+                  latitude: Number(location.latitude) || 0,
+                  longitude: Number(location.longitude) || 0,
+                  latitudeDelta: LATITUDE_DELTA,
+                  longitudeDelta: LONGITUDE_DELTA,
+                }}
                 onMapReady={() => setMapReady(true)}
                 onPress={(e) => {
                   const { latitude, longitude } = e.nativeEvent.coordinate;
                   setLocation(prev => ({
                     ...prev,
-                    latitude,
-                    longitude
+                    latitude: Number(latitude),
+                    longitude: Number(longitude)
                   }));
+                  // Actualizar el nombre de la ubicación basado en las nuevas coordenadas
+                  updateLocationNameFromCoordinates(latitude, longitude);
                 }}
-                {...mapConfig}
               >
-                {mapReady && (
+                {/* Renderizar marcador y círculo solo si las coordenadas son válidas */}
+                {validateCoordinates(location) && (
                   <>
                     <Marker
                       coordinate={{
-                        latitude: location.latitude,
-                        longitude: location.longitude
+                        latitude: Number(location.latitude),
+                        longitude: Number(location.longitude)
                       }}
                       draggable
                       onDragEnd={handleMarkerDragEnd}
                     />
                     <Circle
                       center={{
-                        latitude: location.latitude,
-                        longitude: location.longitude
+                        latitude: Number(location.latitude),
+                        longitude: Number(location.longitude)
                       }}
                       radius={getRadiusInMeters()}
-                      fillColor="rgba(75, 75, 75, 0.3)"
-                      strokeColor="#4b4b4b"
-                      strokeWidth={3}
+                      fillColor="rgba(45, 137, 239, 0.2)"
+                      strokeColor="rgba(45, 137, 239, 0.5)"
+                      strokeWidth={2}
                     />
                   </>
                 )}
@@ -428,55 +574,51 @@ const LocationRadiusSelector = ({
           )}
         </View>
 
+        <View style={styles.actionButtons}>
+          <TouchableOpacity 
+            style={styles.actionButton}
+            onPress={getCurrentLocation}
+          >
+            <Ionicons name="locate" size={24} color="#fff3e5" />
+            <Text style={styles.actionButtonText}>{t('myLocation')}</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={styles.actionButton}
+            onPress={placeMarkerAtCenter}
+          >
+            <Ionicons name="flag" size={24} color="#fff3e5" />
+            <Text style={styles.actionButtonText}>{t('placeHere')}</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={styles.actionButton}
+            onPress={saveLocation}
+          >
+            <Ionicons name="bookmark" size={24} color="#fff3e5" />
+            <Text style={styles.actionButtonText}>{t('saveLocation')}</Text>
+          </TouchableOpacity>
+        </View>
+
         <View style={styles.radiusContainer}>
           <Text style={styles.radiusTitle}>{t('customRadius')}</Text>
-          <Text style={styles.radiusSubtitle}>
-            {t('radiusDescription')}
-          </Text>
+          <Text style={styles.radiusDescription}>{t('radiusDescription')}</Text>
           
           <View style={styles.sliderContainer}>
+            <Text style={styles.radiusValue}>{formatDistance(radius)}</Text>
             <Slider
               style={styles.slider}
               minimumValue={0.1}
-              maximumValue={10}
+              maximumValue={5.0}
               step={0.1}
               value={radius}
               onValueChange={setRadius}
               minimumTrackTintColor="#fff3e5"
-              maximumTrackTintColor="rgba(255, 243, 229, 0.2)"
+              maximumTrackTintColor="#4a4a4a"
               thumbTintColor="#fff3e5"
             />
-            <Text style={styles.radiusValue}>{formatDistance(radius)}</Text>
           </View>
         </View>
-
-        <View style={styles.buttonContainer}>
-          <TouchableOpacity 
-            style={styles.mapActionButton}
-            onPress={placeMarkerAtCenter}
-          >
-            <Ionicons name="locate-outline" size={24} color="#fff3e5" />
-            <Text style={styles.mapActionButtonText}>{t('placeHere')}</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={styles.mapActionButton}
-            onPress={getCurrentLocation}
-          >
-            <Ionicons name="locate" size={24} color="#fff3e5" />
-            <Text style={styles.mapActionButtonText}>{t('myLocation')}</Text>
-          </TouchableOpacity>
-        </View>
-        
-        {/* Save Location Button */}
-        <TouchableOpacity 
-          style={[styles.saveLocationButton, { backgroundColor: '#fff3e5' }]}
-          onPress={saveLocation}
-        >
-          <Ionicons name="bookmark-outline" size={24} color="#000000" />
-          <Text style={[styles.saveLocationButtonText, { color: '#000000' }]}>{t('saveLocation') || 'Save Location'}</Text>
-        </TouchableOpacity>
-
       </SafeAreaView>
     </Modal>
   );
@@ -493,30 +635,21 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 15,
     paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 243, 229, 0.1)',
     backgroundColor: '#1c1c1c',
-  },
-  closeButton: {
-    padding: 5,
   },
   title: {
     fontSize: 18,
     fontWeight: 'bold',
     color: '#fff3e5',
   },
+  closeButton: {
+    padding: 5,
+  },
   saveButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 15,
     backgroundColor: '#fff3e5',
-    borderRadius: 15,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 0, 0, 0.1)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    paddingVertical: 5,
+    paddingHorizontal: 15,
+    borderRadius: 4,
   },
   saveButtonText: {
     color: '#000000',
@@ -525,51 +658,76 @@ const styles = StyleSheet.create({
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: '#1c1c1c',
     margin: 10,
     paddingHorizontal: 10,
-    backgroundColor: '#1c1c1c',
-    borderRadius: 15,
-    height: 40,
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: 'rgba(255, 243, 229, 0.1)',
+    borderColor: 'rgba(255, 243, 229, 0.3)',
   },
   searchIcon: {
-    marginRight: 10,
+    marginRight: 8,
   },
   searchInput: {
     flex: 1,
-    fontSize: 16,
     height: 40,
     color: '#fff3e5',
+    paddingVertical: 8,
+  },
+  clearSearchButton: {
+    padding: 5,
+  },
+  searchButton: {
+    marginLeft: 5,
+    backgroundColor: 'rgba(255, 243, 229, 0.2)',
+    padding: 5,
+    borderRadius: 15,
+    width: 30,
+    height: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   mapContainer: {
-    height: height * 0.4,
-    width: 'auto',
+    flex: 1,
+    marginHorizontal: 10,
+    borderRadius: 10,
     overflow: 'hidden',
-    borderRadius: 15,
-    margin: 15,
+    marginBottom: 10,
   },
   map: {
     ...StyleSheet.absoluteFillObject,
   },
   loadingContainer: {
-    height: '100%',
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#1c1c1c',
-    borderRadius: 15,
   },
   loadingText: {
     marginTop: 10,
     color: '#fff3e5',
   },
+  actionButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    paddingVertical: 10,
+  },
+  actionButton: {
+    alignItems: 'center',
+    backgroundColor: '#1c1c1c',
+    padding: 10,
+    borderRadius: 10,
+    width: width / 3.5,
+  },
+  actionButtonText: {
+    color: '#fff3e5',
+    fontSize: 12,
+    marginTop: 5,
+  },
   radiusContainer: {
-    padding: 15,
     backgroundColor: '#1c1c1c',
     margin: 10,
-    borderRadius: 15,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 243, 229, 0.1)',
+    borderRadius: 10,
+    padding: 15,
   },
   radiusTitle: {
     fontSize: 16,
@@ -577,65 +735,25 @@ const styles = StyleSheet.create({
     color: '#fff3e5',
     marginBottom: 5,
   },
-  radiusSubtitle: {
-    fontSize: 14,
-    color: 'rgba(255, 243, 229, 0.7)',
-    marginBottom: 15,
+  radiusDescription: {
+    fontSize: 12,
+    color: '#fff3e5',
+    opacity: 0.7,
+    marginBottom: 10,
   },
   sliderContainer: {
-    flexDirection: 'row',
+    flexDirection: 'column',
     alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  slider: {
-    flex: 1,
-    height: 40,
   },
   radiusValue: {
+    color: '#fff3e5',
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#fff3e5',
-    width: 60,
-    textAlign: 'right',
+    marginBottom: 5,
   },
-  buttonContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingHorizontal: 15,
-    marginBottom: 15,
-  },
-  mapActionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 15,
-    backgroundColor: '#1c1c1c',
-    borderRadius: 15,
-    flex: 0.48,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 243, 229, 0.2)',
-  },
-  mapActionButtonText: {
-    marginLeft: 10,
-    fontSize: 16,
-    color: '#fff3e5',
-  },
-  saveLocationButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#4A90E2',
-    borderRadius: 8,
-    paddingVertical: 12,
-    marginHorizontal: 15,
-    marginBottom: 15,
-  },
-  saveLocationButtonText: {
-    marginLeft: 10,
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#fff',
+  slider: {
+    width: '100%',
+    height: 40,
   },
 });
 

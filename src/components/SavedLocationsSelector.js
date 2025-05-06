@@ -9,7 +9,8 @@ import {
   ActivityIndicator,
   SafeAreaView,
   Platform,
-  Alert
+  Alert,
+  TextInput
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useLanguage } from '../context/LanguageContext';
@@ -33,6 +34,8 @@ const SavedLocationsSelector = ({ visible, onClose, onSelect }) => {
   const { t } = useLanguage();
   const [loading, setLoading] = useState(true);
   const [locations, setLocations] = useState([]);
+  const [filteredLocations, setFilteredLocations] = useState([]);
+  const [searchTerm, setSearchTerm] = useState('');
   const [error, setError] = useState(null);
   const [deletingLocationId, setDeletingLocationId] = useState(null);
 
@@ -40,8 +43,21 @@ const SavedLocationsSelector = ({ visible, onClose, onSelect }) => {
   useEffect(() => {
     if (visible) {
       loadSavedLocations();
+      setSearchTerm('');
     }
   }, [visible]);
+
+  // Filter locations when search term changes
+  useEffect(() => {
+    if (searchTerm.trim() === '') {
+      setFilteredLocations(locations);
+    } else {
+      const filtered = locations.filter(location => 
+        location.name && location.name.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+      setFilteredLocations(filtered);
+    }
+  }, [searchTerm, locations]);
 
   // Load saved locations from storage
   const loadSavedLocations = async () => {
@@ -49,15 +65,16 @@ const SavedLocationsSelector = ({ visible, onClose, onSelect }) => {
       setLoading(true);
       setError(null);
       
-      console.log('Loading saved locations from storage');
+      console.log(t('loadingSavedLocations'));
       
       // Use the API to get locations rather than directly from AsyncStorage
       const savedLocations = await apiLocations.getSavedLocations();
       setLocations(savedLocations);
+      setFilteredLocations(savedLocations);
       
     } catch (error) {
-      console.error('Error loading saved locations:', error);
-      setError(error.message || 'Error loading saved locations');
+      console.error(t('errorLoadingLocations'), error);
+      setError(error.message || t('errorLoadingLocations'));
     } finally {
       setLoading(false);
     }
@@ -65,22 +82,22 @@ const SavedLocationsSelector = ({ visible, onClose, onSelect }) => {
 
   // Handle location selection
   const handleSelectLocation = (location) => {
-    console.log('Selected location:', JSON.stringify(location, null, 2));
+    console.log(t('selectedLocation'), JSON.stringify(location, null, 2));
     
     try {
       // Validate location before passing it to the parent component
       if (!location || !location.location || !location.location.coordinates) {
-        throw new Error('Invalid location selected');
+        throw new Error(t('invalidLocationSelected'));
       }
       
       onSelect(location);
       onClose();
     } catch (error) {
-      console.error('Error selecting location:', error);
+      console.error(t('errorSelectingLocation'), error);
       Alert.alert(
-        'Error',
-        'Could not select this location. Please try another one.',
-        [{ text: 'OK' }]
+        t('error'),
+        t('errorSelectingLocation'),
+        [{ text: t('ok') }]
       );
     }
   };
@@ -110,13 +127,13 @@ const SavedLocationsSelector = ({ visible, onClose, onSelect }) => {
                 prevLocations.filter(location => location._id !== locationId)
               );
               
-              console.log(`Location ${locationId} deleted successfully`);
+              console.log(`${t('locationDeleted')} ${locationId}`);
             } catch (error) {
-              console.error('Error deleting location:', error);
+              console.error(t('errorDeletingLocation'), error);
               Alert.alert(
                 t('error'),
                 t('errorDeletingLocation'),
-                [{ text: 'OK' }]
+                [{ text: t('ok') }]
               );
             } finally {
               setDeletingLocationId(null);
@@ -160,7 +177,7 @@ const SavedLocationsSelector = ({ visible, onClose, onSelect }) => {
           disabled={isDeleting}
         >
           <View style={styles.locationInfo}>
-            <Text style={styles.locationName}>{item.name || 'Unnamed Location'}</Text>
+            <Text style={styles.locationName}>{item.name || t('unnamedLocation')}</Text>
             <Text style={styles.locationDetails}>
               {t('assignedRadius')} {(item.radius || 0).toFixed(1)} km
             </Text>
@@ -200,45 +217,55 @@ const SavedLocationsSelector = ({ visible, onClose, onSelect }) => {
     >
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
-          <TouchableOpacity
-            style={styles.closeButton}
-            onPress={onClose}
-          >
-            <Text style={{ color: '#fff3e5', fontSize: 24, fontWeight: 'bold' }}>×</Text>
-          </TouchableOpacity>
           <Text style={styles.title}>{t('savedLocations')}</Text>
-          <View style={styles.headerRight} />
+          <TouchableOpacity style={styles.closeButton} onPress={onClose}>
+            <Ionicons name="close" size={24} color="#fff3e5" />
+          </TouchableOpacity>
+        </View>
+
+        {/* Search Input */}
+        <View style={styles.searchContainer}>
+          <Ionicons name="search" size={20} color="#a8a8a8" style={styles.searchIcon} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder={t('searchLocations')}
+            placeholderTextColor="#a8a8a8"
+            value={searchTerm}
+            onChangeText={setSearchTerm}
+          />
+          {searchTerm.length > 0 && (
+            <TouchableOpacity style={styles.clearButton} onPress={() => setSearchTerm('')}>
+              <Ionicons name="close-circle" size={20} color="#a8a8a8" />
+            </TouchableOpacity>
+          )}
         </View>
 
         {loading ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color="#fff3e5" />
-            <Text style={styles.loadingText}>{t('loadingSavedLocations')}</Text>
+            <Text style={styles.loadingText}>{t('loadingLocations')}</Text>
           </View>
         ) : error ? (
           <View style={styles.errorContainer}>
-            <Ionicons name="alert-circle" size={40} color="#fff3e5" />
             <Text style={styles.errorText}>{error}</Text>
-            <TouchableOpacity
-              style={styles.retryButton}
-              onPress={loadSavedLocations}
-            >
+            <TouchableOpacity style={styles.retryButton} onPress={loadSavedLocations}>
               <Text style={styles.retryButtonText}>{t('retry')}</Text>
             </TouchableOpacity>
           </View>
-        ) : locations.length === 0 ? (
+        ) : filteredLocations.length === 0 ? (
           <View style={styles.emptyContainer}>
-            <Ionicons name="location" size={40} color="#fff3e5" />
-            <Text style={styles.emptyText}>{t('noSavedLocations')}</Text>
-            <Text style={styles.emptySubtext}>{t('saveLocationHint')}</Text>
+            {searchTerm.length > 0 ? (
+              <Text style={styles.emptyText}>{t('noMatchingLocations')}</Text>
+            ) : (
+              <Text style={styles.emptyText}>{t('noSavedLocations')}</Text>
+            )}
           </View>
         ) : (
           <FlatList
-            data={locations}
+            data={filteredLocations}
             renderItem={renderLocationItem}
             keyExtractor={keyExtractor}
             contentContainerStyle={styles.listContent}
-            ItemSeparatorComponent={() => <View style={styles.separator} />}
           />
         )}
       </SafeAreaView>
@@ -255,113 +282,120 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 15,
-    paddingVertical: 10,
+    padding: 15,
     backgroundColor: '#1c1c1c',
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 243, 229, 0.1)'
-  },
-  closeButton: {
-    padding: 5
   },
   title: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#fff3e5'
+    color: '#fff3e5',
   },
-  headerRight: {
-    width: 34
+  closeButton: {
+    padding: 5,
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    margin: 15,
+    marginTop: 10,
+    marginBottom: 15,
+    backgroundColor: '#1c1c1c',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 243, 229, 0.3)',
+  },
+  searchIcon: {
+    marginRight: 8,
+  },
+  searchInput: {
+    flex: 1,
+    paddingVertical: 10,
+    color: '#fff3e5',
+    fontSize: 16,
+  },
+  clearButton: {
+    padding: 5,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
-    alignItems: 'center'
+    alignItems: 'center',
   },
   loadingText: {
     marginTop: 10,
-    fontSize: 16,
-    color: '#fff3e5'
+    color: '#fff3e5',
   },
   errorContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20
+    padding: 20,
   },
   errorText: {
-    marginTop: 10,
-    fontSize: 16,
-    color: '#fff3e5',
-    textAlign: 'center'
+    color: '#ff5252',
+    textAlign: 'center',
+    marginBottom: 15,
   },
   retryButton: {
-    marginTop: 20,
-    paddingVertical: 10,
-    paddingHorizontal: 20,
     backgroundColor: '#fff3e5',
-    borderRadius: 10
+    paddingVertical: 8,
+    paddingHorizontal: 15,
+    borderRadius: 5,
   },
   retryButtonText: {
     color: '#000000',
-    fontWeight: 'bold'
+    fontWeight: 'bold',
   },
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20
+    padding: 20,
   },
   emptyText: {
-    marginTop: 10,
-    fontSize: 18,
-    fontWeight: 'bold',
     color: '#fff3e5',
-    textAlign: 'center'
-  },
-  emptySubtext: {
-    marginTop: 5,
-    fontSize: 14,
-    color: '#fff3e5',
-    textAlign: 'center'
+    textAlign: 'center',
+    opacity: 0.7,
   },
   listContent: {
-    padding: 15
+    padding: 10,
   },
   locationItemContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 15
+    marginBottom: 10,
+    backgroundColor: '#1c1c1c',
+    borderRadius: 10,
+    overflow: 'hidden',
   },
   locationItem: {
     flex: 1,
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#3a3a3a',
-    borderRadius: 10,
-    padding: 12
+    alignItems: 'center',
+    paddingVertical: 15,
+    paddingHorizontal: 15,
   },
   locationInfo: {
-    flex: 1
+    flex: 1,
   },
   locationName: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#fff3e5'
+    color: '#fff3e5',
+    marginBottom: 5,
   },
   locationDetails: {
-    marginTop: 5,
-    fontSize: 14,
-    color: '#fff3e5'
+    fontSize: 12,
+    color: '#fff3e5',
+    opacity: 0.7,
+    marginBottom: 2,
   },
   deleteButton: {
-    padding: 10,
-    marginLeft: 10
+    padding: 15,
+    backgroundColor: 'rgba(255, 82, 82, 0.2)',
   },
-  separator: {
-    height: 10,
-    backgroundColor: 'transparent'
-  }
 });
 
 export default SavedLocationsSelector;
