@@ -62,6 +62,19 @@ const taskSchema = new mongoose.Schema({
   },
   startedAt: {
     type: Date
+  },
+  timeLimit: {
+    type: Number,
+    min: 1,
+    default: null // Tiempo límite en minutos
+  },
+  timeLimitSet: {
+    type: Date,
+    default: null // Fecha en que se estableció el tiempo límite
+  },
+  timeExpired: {
+    type: Boolean,
+    default: false // Indica si la tarea ha expirado por tiempo
   }
 }, {
   timestamps: true,
