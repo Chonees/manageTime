@@ -43,6 +43,8 @@ const DashboardScreen = ({ navigation }) => {
   
   // Referencia para el intervalo de actualización de ubicación
   const locationUpdateIntervalRef = useRef(null);
+  // Referencia para el intervalo de actualización de tareas
+  const tasksUpdateIntervalRef = useRef(null);
 
   // Load initial data
   useEffect(() => {
@@ -52,10 +54,16 @@ const DashboardScreen = ({ navigation }) => {
     // Iniciar actualización de la ubicación cada 10 segundos
     startLocationUpdates();
     
-    // Limpiar el intervalo al desmontar el componente
+    // Iniciar actualización automática de tareas cada 15 segundos
+    startTasksAutoUpdate();
+    
+    // Limpiar los intervalos al desmontar el componente
     return () => {
       if (locationUpdateIntervalRef.current) {
         clearInterval(locationUpdateIntervalRef.current);
+      }
+      if (tasksUpdateIntervalRef.current) {
+        clearInterval(tasksUpdateIntervalRef.current);
       }
     };
   }, []);
@@ -102,34 +110,48 @@ const DashboardScreen = ({ navigation }) => {
     }
   };
 
-  // Function to load dashboard data
-  const loadDashboardData = async () => {
-    setLoading(true);
+  // Función para obtener las últimas tareas sin mostrar el indicador de carga
+  const fetchLatestTasks = async () => {
     try {
-      // Load pending tasks
+      console.log('📥 Solicitando tareas actualizadas del servidor...');
       const userTasks = await api.getUserTasks();
-      setTasks(userTasks.filter(task => !task.completed).slice(0, 3)); // Only show 3 pending tasks
+      console.log(`📋 Tareas recibidas del servidor: ${userTasks.length}`);
+      
+      // Filtrar tareas pendientes
+      const pendingTasks = userTasks.filter(task => !task.completed).slice(0, 3);
+      console.log(`📝 Tareas pendientes filtradas: ${pendingTasks.length}`);
+      
+      // Actualizar siempre para asegurar que los cambios se reflejen
+      console.log('🔄 Actualizando lista de tareas en pantalla');
+      setTasks(pendingTasks);
     } catch (error) {
-      console.error('Error loading dashboard data:', error);
-      setError(t('errorLoadingTasks'));
-    } finally {
-      setLoading(false);
+      console.error('❌ Error obteniendo tareas actualizadas:', error);
     }
   };
 
-  // Function to get current location
-  const handleLocationChange = (location) => {
-    if (location && location.coords) {
-      setPosition({
-        latitude: location.coords.latitude,
-        longitude: location.coords.longitude
-      });
+  // Function to load dashboard data
+  const loadDashboardData = async (showLoading = true) => {
+    if (showLoading) {
+      setLoading(true);
+    }
+    try {
+      console.log('🚀 Cargando datos iniciales del dashboard...');
+      // Load pending tasks
+      const userTasks = await api.getUserTasks();
       
-      // Cada vez que cambia la ubicación, enviamos una actualización al servidor
-      sendLocationUpdate({
-        latitude: location.coords.latitude,
-        longitude: location.coords.longitude
-      });
+      // Filtrar tareas pendientes
+      const pendingTasks = userTasks.filter(task => !task.completed).slice(0, 3);
+      setTasks(pendingTasks); // Only show 3 pending tasks
+      console.log(`📋 Dashboard cargado con ${pendingTasks.length} tareas pendientes`);
+    } catch (error) {
+      console.error('❌ Error cargando datos del dashboard:', error);
+      if (showLoading) {
+        setError(t('errorLoadingTasks'));
+      }
+    } finally {
+      if (showLoading) {
+        setLoading(false);
+      }
     }
   };
 
@@ -168,6 +190,21 @@ const DashboardScreen = ({ navigation }) => {
     } catch (error) {
       console.error('Error al enviar ubicación al servidor:', error);
     }
+  };
+
+  // Función para iniciar la actualización automática de tareas
+  const startTasksAutoUpdate = () => {
+    // Limpiar cualquier intervalo existente
+    if (tasksUpdateIntervalRef.current) {
+      clearInterval(tasksUpdateIntervalRef.current);
+    }
+    
+    // Crear un nuevo intervalo para actualizar las tareas cada 15 segundos
+    console.log('Configurando actualización automática de tareas cada 15 segundos');
+    tasksUpdateIntervalRef.current = setInterval(() => {
+      console.log('⏰ Ejecutando actualización automática de tareas...');
+      fetchLatestTasks();
+    }, 15000); // Reducido a 15 segundos para pruebas
   };
 
   // Función para iniciar trabajo
@@ -294,6 +331,22 @@ const DashboardScreen = ({ navigation }) => {
       // No need to navigate, AppNavigator will do it automatically
     } catch (error) {
       Alert.alert(t('error'), t('errorLoggingOut'));
+    }
+  };
+
+  // Función para obtener la ubicación actual
+  const handleLocationChange = (location) => {
+    if (location && location.coords) {
+      setPosition({
+        latitude: location.coords.latitude,
+        longitude: location.coords.longitude
+      });
+      
+      // Cada vez que cambia la ubicación, enviamos una actualización al servidor
+      sendLocationUpdate({
+        latitude: location.coords.latitude,
+        longitude: location.coords.longitude
+      });
     }
   };
 

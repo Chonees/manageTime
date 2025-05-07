@@ -192,12 +192,16 @@ export const loadLastCheckedTime = async () => {
 };
 
 // Send activity data to server for admin notifications
-const sendActivityToServer = async (activityData) => {
+export const sendActivityToServer = async (activityData) => {
   try {
     const token = await AsyncStorage.getItem('token');
     if (!token) return false;
     
-    const url = `${getApiUrl()}/api/notifications/admin`;
+    // Usar la ruta de actividades en lugar de la ruta de notificaciones que no existe
+    const url = `${getApiUrl()}/api/activities`;
+    
+    console.log('Enviando actividad al servidor usando la ruta:', url);
+    
     const response = await fetchWithRetry(url, {
       method: 'POST',
       headers: {
@@ -213,6 +217,7 @@ const sendActivityToServer = async (activityData) => {
       return false;
     }
     
+    console.log('Activity sent to server for push notification');
     return true;
   } catch (error) {
     console.error('Error in sendActivityToServer:', error);

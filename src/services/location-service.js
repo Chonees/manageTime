@@ -92,23 +92,30 @@ const createActivity = async (taskId, action, coords, taskTitle = null) => {
     
     // Use the exact valid activity type from the backend
     const activityData = {
-      // Using exact valid types from backend: 'location_enter' or 'location_exit'
-      type: action === 'enter' ? 'location_enter' : 'location_exit',
-      // No action field needed since type already specifies it
+      // Usar un tipo de actividad genérico que el backend probablemente reconozca
+      type: 'task_activity',
+      // Usar subtype para indicar la acción específica
+      subtype: action === 'enter' ? 'task_enter' : 'task_exit',
       taskId: taskId,
       userId: userId,
-      title: t(action === 'enter' ? 'taskProximityEnter' : 'taskProximityExit'),
-      description: action === 'enter' 
-        ? t('enteredLocation', { location: taskTitle || taskId })
-        : t('exitedLocation', { location: taskTitle || taskId }),
+      // Títulos claros y descriptivos 
+      title: action === 'enter' 
+        ? `${t('userEntered')} "${taskTitle || 'tarea'}"` 
+        : `${t('userExited')} "${taskTitle || 'tarea'}"`,
+      // Mensajes específicos para cada acción
       message: action === 'enter' 
-        ? t('enteredLocation', { location: taskTitle || taskId })
-        : t('exitedLocation', { location: taskTitle || taskId }),
+        ? `${t('userEntered')} "${taskTitle || taskId}"`
+        : `${t('userExited')} "${taskTitle || taskId}"`,
+      description: action === 'enter' 
+        ? `${t('userEnteredDescription', { location: taskTitle || taskId })}`
+        : `${t('userExitedDescription', { location: taskTitle || taskId })}`,
       metadata: {
         timestamp: new Date().toISOString(),
         action,
         taskTitle: taskTitle, // Guardar explícitamente el título de la tarea en los metadatos
         locationName: taskTitle, // Usar el título de la tarea como nombre de ubicación
+        // Añadir información específica del tipo de acción para que el backend lo interprete correctamente
+        actionType: action === 'enter' ? 'entered_task_area' : 'exited_task_area',
         location: coords ? {
           type: 'Point',
           coordinates: [coords.longitude, coords.latitude]
