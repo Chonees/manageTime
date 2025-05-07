@@ -177,7 +177,19 @@ exports.createTask = async (req, res) => {
 // Crear una tarea asignada a otro usuario (solo admin)
 exports.createAssignedTask = async (req, res) => {
   try {
-    const { title, description, userId, location, radius, locationName, handsFreeMode, status, keywords } = req.body;
+    const { 
+      title, 
+      description, 
+      userId, 
+      location, 
+      radius, 
+      locationName, 
+      handsFreeMode, 
+      status, 
+      keywords,
+      timeLimit,  
+      timeLimitSet  
+    } = req.body;
     
     console.log('Admin creando tarea asignada con datos:', req.body);
     
@@ -219,6 +231,15 @@ exports.createAssignedTask = async (req, res) => {
       }
       
       console.log(`Tarea con ubicación: ${location.coordinates}, radio: ${radius}km, lugar: ${locationName || 'Sin nombre'}`);
+    }
+    
+    // Añadir información de tiempo límite si se proporciona
+    if (timeLimit) {
+      // Asegurar que timeLimit es un número
+      taskData.timeLimit = typeof timeLimit === 'string' ? Number(timeLimit) : timeLimit;
+      // Si se proporciona timeLimitSet, usarlo, de lo contrario usar la fecha actual
+      taskData.timeLimitSet = timeLimitSet || new Date().toISOString();
+      console.log(`Tarea con tiempo límite: ${taskData.timeLimit} minutos, establecido en: ${taskData.timeLimitSet}`);
     }
     
     const task = new Task(taskData);
