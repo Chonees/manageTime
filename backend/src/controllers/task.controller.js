@@ -1,5 +1,6 @@
 const Task = require('../models/task.model');
 const Activity = require('../models/activity.model');
+const User = require('../models/user.model');
 
 /**
  * Función auxiliar para registrar actividades relacionadas con tareas
@@ -68,6 +69,19 @@ const registerTaskActivity = async (userId, taskId, type, taskData) => {
     return null;
   }
 };
+
+// Importar utilidad de notificación para enviar alertas a usuarios
+let notificationUtil;
+try {
+  notificationUtil = require('../utils/notification.util');
+} catch (error) {
+  console.warn('No se pudo cargar el módulo de notificaciones, las alertas push estarán deshabilitadas');
+  // Crear una implementación simulada
+  notificationUtil = {
+    notifyAdminActivity: () => Promise.resolve({ success: false, error: 'Módulo no disponible' }),
+    notifyUser: () => Promise.resolve({ success: false, error: 'Módulo no disponible' })
+  };
+}
 
 // Crear una nueva tarea
 exports.createTask = async (req, res) => {
@@ -255,6 +269,38 @@ exports.createAssignedTask = async (req, res) => {
     
     // Registrar actividad de creación de tarea
     await registerTaskActivity(req.user._id, task._id, 'task_create', populatedTask);
+    
+    // Enviar notificación push al usuario asignado
+    try {
+      const targetUser = await User.findById(userId);
+      if (targetUser) {
+        console.log(`Enviando notificación de nueva tarea a usuario ${targetUser.username}`);
+        
+        // Preparar los datos para la notificación
+        const notificationTitle = 'Nueva tarea asignada';
+        const notificationBody = `Se te ha asignado una nueva tarea: "${title}"`;
+        const notificationData = {
+          taskId: task._id.toString(),
+          type: 'new_task_assigned',
+          priority: 'high',
+          title: title,
+          locationName: locationName || 'Sin ubicación específica'
+        };
+        
+        // Enviar la notificación
+        const notificationResult = await notificationUtil.notifyUser(
+          userId, 
+          notificationTitle, 
+          notificationBody, 
+          notificationData
+        );
+        
+        console.log('Resultado de notificación:', notificationResult);
+      }
+    } catch (notificationError) {
+      console.error('Error enviando notificación de nueva tarea:', notificationError);
+      // No interrumpir el flujo por un error de notificación
+    }
     
     res.status(201).json(populatedTask);
   } catch (error) {
