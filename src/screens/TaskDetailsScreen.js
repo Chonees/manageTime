@@ -77,17 +77,27 @@ const TaskDetailsScreen = ({ route, navigation }) => {
       return;
     }
     
-    if (!task.timeLimit) {
-      console.log("No se puede iniciar el temporizador: la tarea no tiene límite de tiempo");
+    // Verificar si la tarea tiene tiempo límite (puede ser número o string)
+    const timeLimitValue = task.timeLimit ? 
+      (typeof task.timeLimit === 'string' ? Number(task.timeLimit) : task.timeLimit) : null;
+    
+    if (!timeLimitValue) {
+      console.log("No se encontró campo timeLimit en la tarea");
       return;
     }
     
     if (!task.timeLimitSet) {
-      console.log("No se puede iniciar el temporizador: no hay fecha de inicio del límite");
-      return;
+      console.log("No se encontró campo timeLimitSet en la tarea");
+      // Si no hay fecha establecida pero sí hay límite, establecer ahora
+      if (timeLimitValue) {
+        console.log("Estableciendo timeLimitSet a la fecha actual");
+        task.timeLimitSet = new Date().toISOString();
+      } else {
+        return;
+      }
     }
     
-    console.log(`Iniciando temporizador: Límite de ${task.timeLimit} minutos, establecido en ${task.timeLimitSet}`);
+    console.log(`Iniciando temporizador: Límite de ${timeLimitValue} minutos, establecido en ${task.timeLimitSet}`);
     
     // Limpiar cualquier temporizador existente
     if (timerIntervalRef.current) {
@@ -95,7 +105,7 @@ const TaskDetailsScreen = ({ route, navigation }) => {
     }
     
     // Calcular el tiempo restante en milisegundos
-    const timeLimitMs = task.timeLimit * 60 * 1000; // Convertir minutos a milisegundos
+    const timeLimitMs = timeLimitValue * 60 * 1000; // Convertir minutos a milisegundos
     const startTime = new Date(task.timeLimitSet).getTime();
     const endTime = startTime + timeLimitMs;
     const currentTime = new Date().getTime();
@@ -136,21 +146,17 @@ const TaskDetailsScreen = ({ route, navigation }) => {
       // Notificar al usuario que el tiempo se ha agotado
       Alert.alert(
         t('timeExpired') || 'Tiempo Agotado',
-        t('taskRemovedDueToTimeLimit') || 'Esta tarea ha sido retirada porque se acabó el tiempo asignado.',
+        t('taskRemovedDueToTimeLimit') || 'Esta tarea ha sido eliminada porque se acabó el tiempo asignado.',
         [{ text: t('ok') || 'OK' }]
       );
       
-      // Llamar a la API para retirar la tarea del usuario
-      await api.updateTask(taskId, { 
-        userId: null, // Retirar la asignación del usuario
-        status: 'expired', // Marcar como expirada
-        timeExpired: true // Flag para indicar que expiró por tiempo
-      });
+      // Eliminar la tarea directamente
+      await api.deleteTask(taskId);
       
       // Regresar a la pantalla anterior
       navigation.goBack();
     } catch (error) {
-      console.error('Error al retirar tarea por tiempo expirado:', error);
+      console.error('Error al eliminar tarea por tiempo expirado:', error);
     }
   };
   
@@ -429,68 +435,65 @@ const TaskDetailsScreen = ({ route, navigation }) => {
 
   const loadTaskDetails = async () => {
     setLoading(true);
-    setError(null);
     
     try {
-      // Cargar detalles de la tarea directamente desde la API sin usar caché
-      const apiUrl = await api.getApiUrl();
-      const token = await AsyncStorage.getItem('token');
+      // Intentar cargar los detalles de la tarea desde la API
+      console.log(`Intentando cargar tarea desde: ${api.baseUrl}/api/tasks/${taskId}`);
       
-      if (!token) {
-        throw new Error('No hay token de autenticación disponible');
-      }
+      const taskDetails = await api.getTaskById(taskId);
+      console.log('TASK DETAILS LOADED FROM API:', JSON.stringify(taskDetails, null, 2));
       
-      console.log(`Intentando cargar tarea desde: ${apiUrl}/api/tasks/${taskId}`);
-      
-      const response = await fetch(`${apiUrl}/api/tasks/${taskId}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        }
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Error al cargar la tarea: ${response.status}`);
-      }
-      
-      const taskDetails = await response.json();
-      console.log("TASK DETAILS LOADED FROM API:", JSON.stringify(taskDetails, null, 2));
-      
-      // Verificar explícitamente los campos de tiempo límite
-      if (taskDetails.timeLimit) {
-        console.log(`Tiempo límite encontrado: ${taskDetails.timeLimit} minutos`);
+      // Comprobación detallada de campos
+      if (!taskDetails.timeLimit) {
+        console.log('No se encontró campo timeLimit en la tarea');
       } else {
-        console.log("No se encontró campo timeLimit en la tarea");
+        console.log(`Campo timeLimit encontrado: ${taskDetails.timeLimit} minutos`);
       }
       
-      if (taskDetails.timeLimitSet) {
-        console.log(`Tiempo límite establecido en: ${taskDetails.timeLimitSet}`);
+      if (!taskDetails.timeLimitSet) {
+        console.log('No se encontró campo timeLimitSet en la tarea');
       } else {
-        console.log("No se encontró campo timeLimitSet en la tarea");
+        console.log(`Campo timeLimitSet encontrado: ${taskDetails.timeLimitSet}`);
       }
       
-      // Verificar la ubicación
-      if (taskDetails.location && taskDetails.location.coordinates) {
+      // Forzar la conversión de timeLimit a número si es string
+      if (taskDetails.timeLimit && typeof taskDetails.timeLimit === 'string') {
+        taskDetails.timeLimit = Number(taskDetails.timeLimit);
+        console.log('Campo timeLimit convertido a número:', taskDetails.timeLimit);
+      }
+      
+      // Si no hay timeLimitSet pero sí hay timeLimit, establecerlo ahora
+      if (taskDetails.timeLimit && !taskDetails.timeLimitSet) {
+        console.log('Estableciendo timeLimitSet ya que no estaba presente');
+        taskDetails.timeLimitSet = new Date().toISOString();
+      }
+      
+      // Verificar ubicación
+      if (taskDetails.location) {
         console.log(`Ubicación encontrada: ${JSON.stringify(taskDetails.location)}`);
       } else {
-        console.log("No se encontró ubicación válida en la tarea");
+        console.log('No se encontró ubicación en la tarea');
       }
       
       setTask(taskDetails);
       
-      // Check if task is already started
-      if (taskDetails.status === 'in-progress' || taskDetails.status === 'in_progress') {
-        setTaskStarted(true);
-      }
-      
-      // Si hay un límite de tiempo, iniciar el temporizador
-      if (taskDetails.timeLimit && taskDetails.timeLimitSet) {
-        startTaskTimer();
+      // Cargar ubicación - usamos userLocation en lugar de taskLocation
+      if (taskDetails.location && taskDetails.location.coordinates) {
+        const [longitude, latitude] = taskDetails.location.coordinates;
+        
+        if (latitude !== 0 && longitude !== 0) {
+          // Actualizar la ubicación inicial del usuario con la ubicación de la tarea
+          // Solo para fines de inicialización, se actualizará con la posición real del dispositivo
+          setUserLocation({
+            latitude,
+            longitude,
+            accuracy: 0, // Valor predeterminado
+          });
+        }
       }
     } catch (error) {
-      console.error('Error al cargar detalles de la tarea:', error);
-      setError(t('errorLoadingTaskDetails'));
+      console.error('Error cargando detalles de la tarea:', error);
+      setError(error.message || t('errorLoadingTask'));
     } finally {
       setLoading(false);
     }

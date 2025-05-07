@@ -358,7 +358,7 @@ const sendPushTokenToServer = async (pushToken) => {
 };
 
 // Registrar token de notificaciones para administradores
-const registerAdminPushToken = async (pushToken) => {
+export const registerAdminPushToken = async (pushToken) => {
   try {
     console.log('Iniciando registro de token admin para push token:', pushToken);
     
