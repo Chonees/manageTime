@@ -39,16 +39,21 @@ const TaskDetailsScreen = ({ route, navigation }) => {
   const [isSubmittingActivity, setIsSubmittingActivity] = useState(false);
   const [taskActivities, setTaskActivities] = useState([]);
   const [spokenKeywords, setSpokenKeywords] = useState([]); // Nuevo estado para palabras clave ya pronunciadas
+  const [remainingTime, setRemainingTime] = useState(null); // Estado para seguir el tiempo restante
+  const timerIntervalRef = React.useRef(null); // Referencia para el intervalo del timer
 
   useEffect(() => {
     loadTaskDetails();
 
     return () => {
       if (locationSubscription) {
-
         // En versiones recientes de Expo Location, la suscripción tiene un método remove
         locationSubscription.remove();
-
+      }
+      
+      // Limpiar el intervalo del temporizador cuando el componente se desmonte
+      if (timerIntervalRef.current) {
+        clearInterval(timerIntervalRef.current);
       }
     };
   }, [taskId]);
@@ -57,8 +62,109 @@ const TaskDetailsScreen = ({ route, navigation }) => {
   useEffect(() => {
     if (task) {
       startLocationTracking();
+      
+      // Iniciar el temporizador si la tarea tiene un límite de tiempo
+      if (task.timeLimit && task.timeLimitSet) {
+        startTaskTimer();
+      }
     }
   }, [task]);
+
+  // Función para iniciar el temporizador de la tarea
+  const startTaskTimer = () => {
+    if (!task) {
+      console.log("No se puede iniciar el temporizador: tarea no disponible");
+      return;
+    }
+    
+    if (!task.timeLimit) {
+      console.log("No se puede iniciar el temporizador: la tarea no tiene límite de tiempo");
+      return;
+    }
+    
+    if (!task.timeLimitSet) {
+      console.log("No se puede iniciar el temporizador: no hay fecha de inicio del límite");
+      return;
+    }
+    
+    console.log(`Iniciando temporizador: Límite de ${task.timeLimit} minutos, establecido en ${task.timeLimitSet}`);
+    
+    // Limpiar cualquier temporizador existente
+    if (timerIntervalRef.current) {
+      clearInterval(timerIntervalRef.current);
+    }
+    
+    // Calcular el tiempo restante en milisegundos
+    const timeLimitMs = task.timeLimit * 60 * 1000; // Convertir minutos a milisegundos
+    const startTime = new Date(task.timeLimitSet).getTime();
+    const endTime = startTime + timeLimitMs;
+    const currentTime = new Date().getTime();
+    
+    console.log(`Temporizador: Inicio ${new Date(startTime).toLocaleString()}, Fin ${new Date(endTime).toLocaleString()}, Ahora ${new Date(currentTime).toLocaleString()}`);
+    
+    // Si ya se pasó el tiempo límite, retirar la tarea inmediatamente
+    if (currentTime >= endTime) {
+      console.log("El tiempo ya expiró, retirando tarea...");
+      handleTimeExpired();
+      return;
+    }
+    
+    // Establecer el tiempo restante inicial
+    const initialRemainingTime = endTime - currentTime;
+    console.log(`Tiempo restante inicial: ${formatRemainingTime(initialRemainingTime)}`);
+    setRemainingTime(initialRemainingTime);
+    
+    // Actualizar el tiempo restante cada segundo
+    timerIntervalRef.current = setInterval(() => {
+      const now = new Date().getTime();
+      const timeLeft = endTime - now;
+      
+      if (timeLeft <= 0) {
+        // Tiempo agotado
+        clearInterval(timerIntervalRef.current);
+        setRemainingTime(0);
+        handleTimeExpired();
+      } else {
+        setRemainingTime(timeLeft);
+      }
+    }, 1000);
+  };
+  
+  // Función para manejar cuando el tiempo se agota
+  const handleTimeExpired = async () => {
+    try {
+      // Notificar al usuario que el tiempo se ha agotado
+      Alert.alert(
+        t('timeExpired') || 'Tiempo Agotado',
+        t('taskRemovedDueToTimeLimit') || 'Esta tarea ha sido retirada porque se acabó el tiempo asignado.',
+        [{ text: t('ok') || 'OK' }]
+      );
+      
+      // Llamar a la API para retirar la tarea del usuario
+      await api.updateTask(taskId, { 
+        userId: null, // Retirar la asignación del usuario
+        status: 'expired', // Marcar como expirada
+        timeExpired: true // Flag para indicar que expiró por tiempo
+      });
+      
+      // Regresar a la pantalla anterior
+      navigation.goBack();
+    } catch (error) {
+      console.error('Error al retirar tarea por tiempo expirado:', error);
+    }
+  };
+  
+  // Función para formatear el tiempo restante en formato hh:mm:ss
+  const formatRemainingTime = (ms) => {
+    if (ms === null) return '';
+    
+    const totalSeconds = Math.floor(ms / 1000);
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+  };
 
   const startLocationTracking = async () => {
     try {
@@ -323,79 +429,68 @@ const TaskDetailsScreen = ({ route, navigation }) => {
 
   const loadTaskDetails = async () => {
     setLoading(true);
+    setError(null);
+    
     try {
-      // Try to load task details from API
-      const taskDetails = await api.getTaskById(taskId);
+      // Cargar detalles de la tarea directamente desde la API sin usar caché
+      const apiUrl = await api.getApiUrl();
+      const token = await AsyncStorage.getItem('token');
+      
+      if (!token) {
+        throw new Error('No hay token de autenticación disponible');
+      }
+      
+      console.log(`Intentando cargar tarea desde: ${apiUrl}/api/tasks/${taskId}`);
+      
+      const response = await fetch(`${apiUrl}/api/tasks/${taskId}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Error al cargar la tarea: ${response.status}`);
+      }
+      
+      const taskDetails = await response.json();
+      console.log("TASK DETAILS LOADED FROM API:", JSON.stringify(taskDetails, null, 2));
+      
+      // Verificar explícitamente los campos de tiempo límite
+      if (taskDetails.timeLimit) {
+        console.log(`Tiempo límite encontrado: ${taskDetails.timeLimit} minutos`);
+      } else {
+        console.log("No se encontró campo timeLimit en la tarea");
+      }
+      
+      if (taskDetails.timeLimitSet) {
+        console.log(`Tiempo límite establecido en: ${taskDetails.timeLimitSet}`);
+      } else {
+        console.log("No se encontró campo timeLimitSet en la tarea");
+      }
+      
+      // Verificar la ubicación
+      if (taskDetails.location && taskDetails.location.coordinates) {
+        console.log(`Ubicación encontrada: ${JSON.stringify(taskDetails.location)}`);
+      } else {
+        console.log("No se encontró ubicación válida en la tarea");
+      }
+      
       setTask(taskDetails);
       
       // Check if task is already started
-      if (taskDetails.status === 'in-progress') {
+      if (taskDetails.status === 'in-progress' || taskDetails.status === 'in_progress') {
         setTaskStarted(true);
       }
       
-      // If task has a userId, fetch user details
-      if (taskDetails.userId) {
-        try {
-          // Extract userId string if it's an object
-          const userIdString = typeof taskDetails.userId === 'object' && taskDetails.userId._id 
-            ? taskDetails.userId._id 
-            : taskDetails.userId;
-          
-          console.log(`Extracted userId: ${userIdString}`);
-          const user = await api.getUserById(userIdString);
-          setAssignedUser(user);
-        } catch (userError) {
-          console.error('Error loading assigned user:', userError);
-        }
+      // Si hay un límite de tiempo, iniciar el temporizador
+      if (taskDetails.timeLimit && taskDetails.timeLimitSet) {
+        startTaskTimer();
       }
     } catch (error) {
-      console.error('Error loading task details:', error);
-      
-      // Try to get task from the tasks list as fallback
-      try {
-        console.log('Attempting to fetch task from task list...');
-        let tasksList;
-        
-        if (user?.isAdmin) {
-          tasksList = await api.getTasks();
-        } else {
-          tasksList = await api.getUserTasks();
-        }
-        
-        const foundTask = tasksList.find(t => t._id === taskId);
-        if (foundTask) {
-          console.log('Found task in task list:', foundTask);
-          setTask(foundTask);
-          
-          // Check if task is already started
-          if (foundTask.status === 'in-progress') {
-            setTaskStarted(true);
-          }
-          
-          // Try to get user info if we have userId
-          if (foundTask.userId) {
-            try {
-              // Extract userId string if it's an object
-              const userIdString = typeof foundTask.userId === 'object' && foundTask.userId._id 
-                ? foundTask.userId._id 
-                : foundTask.userId;
-              
-              console.log(`Extracted userId: ${userIdString}`);
-              const userData = await api.getUserById(userIdString);
-              setAssignedUser(userData);
-            } catch (userError) {
-              console.error('Error loading assigned user from fallback:', userError);
-            }
-          }
-        } else {
-          setError(t('errorLoadingTaskDetails'));
-          Alert.alert(t('error'), t('taskNotFound'));
-        }
-      } catch (fallbackError) {
-        console.error('Fallback error:', fallbackError);
-        setError(t('errorLoadingTaskDetails'));
-        Alert.alert(t('error'), t('errorLoadingTaskDetails'));
-      }
+      console.error('Error al cargar detalles de la tarea:', error);
+      setError(t('errorLoadingTaskDetails'));
     } finally {
       setLoading(false);
     }
@@ -685,210 +780,258 @@ const TaskDetailsScreen = ({ route, navigation }) => {
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor="#1c1c1c" />
-      <ScrollView style={styles.container}>
-      <View style={styles.header}>
-        <View style={styles.taskStatusContainer}>
-          <TouchableOpacity
-            style={[
-              styles.completeButton,
-              task.completed && styles.completedButton
-            ]}
-            onPress={toggleComplete}
-          >
-            <Text style={styles.completeButtonText}>
-              {task.completed ? '✓' : '○'}
-            </Text>
-          </TouchableOpacity>
-          <Text style={styles.taskStatus}>
-            {task.completed ? t('completed') : t('pending')}
-          </Text>
-        </View>
-        
-        <TouchableOpacity 
-          style={styles.deleteButton}
-          onPress={handleDeleteTask}
-        >
-          <Ionicons name="trash-outline" size={24} color="#e74c3c" />
+      
+      <View style={styles.headerMain}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+          <Ionicons name="arrow-back" size={24} color="#fff3e5" />
         </TouchableOpacity>
+        <Text style={styles.headerTitle}>{task ? task.title : t('taskDetails')}</Text>
+        <View style={styles.headerRightPlaceholder}></View>
       </View>
       
-      <View style={styles.titleContainer}>
-        <Text style={styles.title}>{task.title || t('noTitle')}</Text>
-      </View>
-      
-      <View style={styles.infoContainer}>
-        {/* Descripción */}
-        <View style={styles.infoSection}>
-          <Text style={styles.infoLabel}>{t('description')}:</Text>
-          <Text style={styles.description}>{task.description || t('noDescription')}</Text>
-        </View>
-        
-        {/* Fechas en una sola fila */}
-        <View style={styles.datesContainer}>
-          <View style={styles.dateSection}>
-            <Text style={styles.infoLabel}>{t('created')}:</Text>
-            <Text style={styles.dateValue}>
-              {task.createdAt ? new Date(task.createdAt).toLocaleString() : t('unknown')}
-            </Text>
-          </View>
-          
-          <View style={styles.dateSection}>
-            <Text style={styles.infoLabel}>{t('updated')}:</Text>
-            <Text style={styles.dateValue}>
-              {task.updatedAt ? new Date(task.updatedAt).toLocaleString() : t('unknown')}
-            </Text>
-          </View>
-        </View>
-        
-        {(user?.isAdmin || task.userId === user?._id) && (
-          <View style={styles.infoSection}>
-            <Text style={styles.infoLabel}>{t('assignedTo')}:</Text>
-            <Text style={styles.value}>
-              {assignedUser ? assignedUser.username : 
-               (typeof task.userId === 'object' && task.userId.username) ? task.userId.username : 
-               t('noUserAssigned')}
-            </Text>
-          </View>
-        )}
-      </View>
-      
-      {hasLocation && (
-        <View style={styles.mapContainer}>
-          <Text style={styles.mapLabel}>{t('taskLocation')}:</Text>
-          <MapView
-            style={styles.map}
-            initialRegion={{
-              latitude: task.location.coordinates[1],
-              longitude: task.location.coordinates[0],
-              latitudeDelta: 0.02,
-              longitudeDelta: 0.02,
-            }}
-          >
-            <Marker
-              coordinate={{
-                latitude: task.location.coordinates[1],
-                longitude: task.location.coordinates[0],
-              }}
-              title={task.title}
-            />
-            {task.radius && (
-              <Circle
-                center={{
-                  latitude: task.location.coordinates[1],
-                  longitude: task.location.coordinates[0],
-                }}
-                radius={task.radius * 1000} // Convert km to meters for map display
-                strokeWidth={1}
-                strokeColor={'#4b4b4b'}
-                fillColor={'rgba(75, 75, 75, 0.3)'}
-              />
-            )}
-            {userLocation && (
-              <Marker
-                coordinate={{
-                  latitude: userLocation.latitude,
-                  longitude: userLocation.longitude,
-                }}
-                title={t('yourLocation')}
-                pinColor="#4CAF50"
-              />
-            )}
-          </MapView>
-          <Text style={styles.locationName}>
-            {task.locationName || `${task.location.coordinates[1]}, ${task.location.coordinates[0]}`}
+      {/* Timer display section prominently positioned */}
+      {task && task.timeLimit > 0 && remainingTime !== null && (
+        <View style={[
+          styles.timerContainer, 
+          remainingTime < 300000 ? styles.timerWarning : null  // Rojo cuando quedan menos de 5 minutos
+        ]}>
+          <Ionicons name="timer-outline" size={24} color={remainingTime < 300000 ? "#FF5252" : "#fff3e5"} />
+          <Text style={[
+            styles.timerText, 
+            remainingTime < 300000 ? styles.timerTextWarning : null
+          ]}>
+            {formatRemainingTime(remainingTime)}
           </Text>
-          {task.radius && (
-            <Text style={styles.radius}>
-              {t('radius')}: {task.radius} km
-            </Text>
-          )}
-          {isWithinRadius ? (
-            <Text style={styles.withinRadius}>{t('withinTaskRadius')}</Text>
-          ) : (
-            <Text style={styles.outsideRadius}>{t('outsideTaskRadius')}</Text>
-          )}
-          
-          {/* Botón de iniciar/finalizar tarea integrado en el contenedor de mapa */}
-          <View style={styles.mapActionButtonContainer}>
-            {!taskStarted ? (
-              <TouchableOpacity 
-                style={[
-                  styles.startButton,
-                  !isWithinRadius && styles.disabledButton
-                ]}
-                disabled={!isWithinRadius || task.completed}
-                onPress={handleStartTask}
-              >
-                <Ionicons name="play" size={20} color="#fff" style={styles.buttonIcon} />
-                <Text style={styles.startButtonText}>{t('startTask')}</Text>
-              </TouchableOpacity>
-            ) : (
-              <TouchableOpacity 
-                style={styles.endButton}
-                onPress={handleEndTask}
-              >
-                <Ionicons name="stop" size={20} color="#fff" style={styles.buttonIcon} />
-                <Text style={styles.endButtonText}>{t('endTask')}</Text>
-              </TouchableOpacity>
-            )}
-          </View>
+          <Text style={styles.timerLabel}>
+            {remainingTime < 300000 
+              ? (t('timeRunningOut') || '¡Tiempo agotándose!') 
+              : (t('timeRemaining') || 'Tiempo restante')}
+          </Text>
         </View>
       )}
       
-      <View style={styles.activityContainer}>
-        <TextInput
-          style={styles.activityInput}
-          value={activityInput}
-          onChangeText={setActivityInput}
-          placeholder={t('enterActivity')}
-          placeholderTextColor="rgba(255, 243, 229, 0.5)"
-          color="#fff3e5"
-        />
-        <TouchableOpacity 
-          style={styles.submitActivityButton}
-          onPress={submitActivity}
-          disabled={isSubmittingActivity}
-        >
-          <Text style={styles.submitActivityButtonText}>{t('submitActivity')}</Text>
-        </TouchableOpacity>
-      </View>
-      
-      {taskStarted && <VoiceListener isTaskActive={taskStarted} taskData={task} onKeywordDetected={handleKeywordDetected} />}
-      
-      {/* Nuevo componente para mostrar palabras clave */}
-      <View style={styles.keywordsContainer}>
-        <Text style={styles.keywordsLabel}>{t('keywordsToSay')}</Text>
-        <View style={styles.keywordsList}>
-          {getTaskKeywords().map((keyword, index) => {
-            // Verificar si la palabra clave ya ha sido pronunciada (normalizando para comparación)
-            const isSpoken = spokenKeywords.some(
-              spoken => spoken.toLowerCase().trim() === keyword.toLowerCase().trim()
-            );
-            
-            return (
-              <View key={index} style={styles.keywordWrapper}>
-                <Text 
-                  style={[
-                    styles.keyword, 
-                    isSpoken && styles.spokenKeyword
-                  ]}
-                >
-                  {keyword}
-                </Text>
-                {isSpoken && (
-                  <Ionicons 
-                    name="checkmark-circle" 
-                    size={16} 
-                    color="#4CAF50" 
-                    style={styles.keywordCheckmark} 
-                  />
-                )}
-              </View>
-            );
-          })}
+      <ScrollView style={styles.container}>
+        {/* Timer display section only if task has a time limit */}
+        {/* {task && task.timeLimit && remainingTime !== null && (
+          <View style={styles.timerContainer}>
+            <Ionicons name="timer-outline" size={24} color={remainingTime > 300000 ? '#fff3e5' : '#FF6B6B'} />
+            <Text style={[
+              styles.timerText, 
+              remainingTime <= 300000 ? styles.timerWarning : {}
+            ]}>
+              {formatRemainingTime(remainingTime)}
+            </Text>
+            {remainingTime <= 300000 && (
+              <Text style={styles.timerWarningText}>
+                {t('timeRunningOut') || '¡Tiempo agotándose!'}
+              </Text>
+            )}
+          </View>
+        )} */}
+        
+        <View style={styles.header}>
+          <View style={styles.taskStatusContainer}>
+            <TouchableOpacity
+              style={[
+                styles.completeButton,
+                task.completed && styles.completedButton
+              ]}
+              onPress={toggleComplete}
+            >
+              <Text style={styles.completeButtonText}>
+                {task.completed ? '✓' : '○'}
+              </Text>
+            </TouchableOpacity>
+            <Text style={styles.taskStatus}>
+              {task.completed ? t('completed') : t('pending')}
+            </Text>
+          </View>
+          
+          <TouchableOpacity 
+            style={styles.deleteButton}
+            onPress={handleDeleteTask}
+          >
+            <Ionicons name="trash-outline" size={24} color="#e74c3c" />
+          </TouchableOpacity>
         </View>
-      </View>
-    </ScrollView>
+        
+        <View style={styles.titleContainer}>
+          <Text style={styles.title}>{task.title || t('noTitle')}</Text>
+        </View>
+        
+        <View style={styles.infoContainer}>
+          {/* Descripción */}
+          <View style={styles.infoSection}>
+            <Text style={styles.infoLabel}>{t('description')}:</Text>
+            <Text style={styles.description}>{task.description || t('noDescription')}</Text>
+          </View>
+          
+          {/* Fechas en una sola fila */}
+          <View style={styles.datesContainer}>
+            <View style={styles.dateSection}>
+              <Text style={styles.infoLabel}>{t('created')}:</Text>
+              <Text style={styles.dateValue}>
+                {task.createdAt ? new Date(task.createdAt).toLocaleString() : t('unknown')}
+              </Text>
+            </View>
+            
+            <View style={styles.dateSection}>
+              <Text style={styles.infoLabel}>{t('updated')}:</Text>
+              <Text style={styles.dateValue}>
+                {task.updatedAt ? new Date(task.updatedAt).toLocaleString() : t('unknown')}
+              </Text>
+            </View>
+          </View>
+          
+          {(user?.isAdmin || task.userId === user?._id) && (
+            <View style={styles.infoSection}>
+              <Text style={styles.infoLabel}>{t('assignedTo')}:</Text>
+              <Text style={styles.value}>
+                {assignedUser ? assignedUser.username : 
+                 (typeof task.userId === 'object' && task.userId.username) ? task.userId.username : 
+                 t('noUserAssigned')}
+              </Text>
+            </View>
+          )}
+        </View>
+        
+        {hasLocation && (
+          <View style={styles.mapContainer}>
+            <Text style={styles.mapLabel}>{t('taskLocation')}:</Text>
+            <MapView
+              style={styles.map}
+              initialRegion={{
+                latitude: task.location.coordinates[1],
+                longitude: task.location.coordinates[0],
+                latitudeDelta: 0.02,
+                longitudeDelta: 0.02,
+              }}
+            >
+              <Marker
+                coordinate={{
+                  latitude: task.location.coordinates[1],
+                  longitude: task.location.coordinates[0],
+                }}
+                title={task.title}
+              />
+              {task.radius && (
+                <Circle
+                  center={{
+                    latitude: task.location.coordinates[1],
+                    longitude: task.location.coordinates[0],
+                  }}
+                  radius={task.radius * 1000} // Convert km to meters for map display
+                  strokeWidth={1}
+                  strokeColor={'#4b4b4b'}
+                  fillColor={'rgba(75, 75, 75, 0.3)'}
+                />
+              )}
+              {userLocation && (
+                <Marker
+                  coordinate={{
+                    latitude: userLocation.latitude,
+                    longitude: userLocation.longitude,
+                  }}
+                  title={t('yourLocation')}
+                  pinColor="#4CAF50"
+                />
+              )}
+            </MapView>
+            <Text style={styles.locationName}>
+              {task.locationName || `${task.location.coordinates[1]}, ${task.location.coordinates[0]}`}
+            </Text>
+            {task.radius && (
+              <Text style={styles.radius}>
+                {t('radius')}: {task.radius} km
+              </Text>
+            )}
+            {isWithinRadius ? (
+              <Text style={styles.withinRadius}>{t('withinTaskRadius')}</Text>
+            ) : (
+              <Text style={styles.outsideRadius}>{t('outsideTaskRadius')}</Text>
+            )}
+            
+            {/* Botón de iniciar/finalizar tarea integrado en el contenedor de mapa */}
+            <View style={styles.mapActionButtonContainer}>
+              {!taskStarted ? (
+                <TouchableOpacity 
+                  style={[
+                    styles.startButton,
+                    !isWithinRadius && styles.disabledButton
+                  ]}
+                  disabled={!isWithinRadius || task.completed}
+                  onPress={handleStartTask}
+                >
+                  <Ionicons name="play" size={20} color="#fff" style={styles.buttonIcon} />
+                  <Text style={styles.startButtonText}>{t('startTask')}</Text>
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity 
+                  style={styles.endButton}
+                  onPress={handleEndTask}
+                >
+                  <Ionicons name="stop" size={20} color="#fff" style={styles.buttonIcon} />
+                  <Text style={styles.endButtonText}>{t('endTask')}</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+        )}
+        
+        <View style={styles.activityContainer}>
+          <TextInput
+            style={styles.activityInput}
+            value={activityInput}
+            onChangeText={setActivityInput}
+            placeholder={t('enterActivity')}
+            placeholderTextColor="rgba(255, 243, 229, 0.5)"
+            color="#fff3e5"
+          />
+          <TouchableOpacity 
+            style={styles.submitActivityButton}
+            onPress={submitActivity}
+            disabled={isSubmittingActivity}
+          >
+            <Text style={styles.submitActivityButtonText}>{t('submitActivity')}</Text>
+          </TouchableOpacity>
+        </View>
+        
+        {taskStarted && <VoiceListener isTaskActive={taskStarted} taskData={task} onKeywordDetected={handleKeywordDetected} />}
+        
+        {/* Nuevo componente para mostrar palabras clave */}
+        <View style={styles.keywordsContainer}>
+          <Text style={styles.keywordsLabel}>{t('keywordsToSay')}</Text>
+          <View style={styles.keywordsList}>
+            {getTaskKeywords().map((keyword, index) => {
+              // Verificar si la palabra clave ya ha sido pronunciada (normalizando para comparación)
+              const isSpoken = spokenKeywords.some(
+                spoken => spoken.toLowerCase().trim() === keyword.toLowerCase().trim()
+              );
+              
+              return (
+                <View key={index} style={styles.keywordWrapper}>
+                  <Text 
+                    style={[
+                      styles.keyword, 
+                      isSpoken && styles.spokenKeyword
+                    ]}
+                  >
+                    {keyword}
+                  </Text>
+                  {isSpoken && (
+                    <Ionicons 
+                      name="checkmark-circle" 
+                      size={16} 
+                      color="#4CAF50" 
+                      style={styles.keywordCheckmark} 
+                    />
+                  )}
+                </View>
+              );
+            })}
+          </View>
+        </View>
+      </ScrollView>
     </SafeAreaView>
   );
 };
@@ -908,6 +1051,51 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 20,
     backgroundColor: '#2e2e2e',
+  },
+  headerMain: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 15,
+    paddingVertical: 15,
+    backgroundColor: '#2e2e2e',
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#fff3e5',
+    flex: 1,
+    textAlign: 'center',
+  },
+  timerContainer: {
+    marginBottom: 15,
+    padding: 15,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    borderRadius: 10,
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#FF8C00',
+  },
+  timerWarning: {
+    backgroundColor: 'rgba(255, 59, 48, 0.15)',
+    borderColor: '#FF3B30',
+  },
+  timerText: {
+    color: '#fff3e5',
+    fontSize: 32,
+    fontWeight: 'bold',
+    letterSpacing: 2,
+    marginVertical: 5,
+  },
+  timerTextWarning: {
+    color: '#FF5252',
+  },
+  timerLabel: {
+    color: '#ccc',
+    fontSize: 14,
+    textAlign: 'center',
   },
   header: {
     flexDirection: 'row',
@@ -1201,6 +1389,29 @@ const styles = StyleSheet.create({
 
     color: 'rgba(255, 243, 229, 0.7)',
 
+  },
+  timerContainer: {
+    backgroundColor: '#363636',
+    padding: 15,
+    marginBottom: 15,
+    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  timerText: {
+    color: '#fff3e5',
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginLeft: 10,
+  },
+  timerWarning: {
+    color: '#FF6B6B',
+  },
+  timerWarningText: {
+    color: '#FF6B6B',
+    fontSize: 14,
+    marginLeft: 10,
   },
 });
 
