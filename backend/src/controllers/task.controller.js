@@ -706,3 +706,53 @@ exports.addSimpleVoiceNote = async (req, res) => {
     });
   }
 };
+
+/**
+ * Obtiene una tarea por su ID
+ * @param {Object} req - Objeto de solicitud
+ * @param {Object} res - Objeto de respuesta
+ */
+exports.getTaskById = async (req, res) => {
+  try {
+    const taskId = req.params.id;
+    
+    if (!taskId) {
+      return res.status(400).json({ 
+        success: false,
+        message: 'ID de tarea no proporcionado' 
+      });
+    }
+    
+    console.log(`Buscando tarea con ID: ${taskId}`);
+    
+    // Buscar la tarea y popular los datos del usuario
+    const task = await Task.findById(taskId).populate('userId', 'username email _id');
+    
+    if (!task) {
+      return res.status(404).json({ 
+        success: false,
+        message: 'Tarea no encontrada' 
+      });
+    }
+    
+    // Verificar si el usuario tiene acceso a esta tarea
+    // Los administradores pueden ver cualquier tarea
+    if (!req.user.isAdmin && task.userId && task.userId._id && task.userId._id.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ 
+        success: false,
+        message: 'No tienes permiso para ver esta tarea' 
+      });
+    }
+    
+    console.log(`Tarea encontrada: ${task.title}`);
+    
+    return res.status(200).json(task);
+  } catch (error) {
+    console.error('Error al obtener tarea por ID:', error);
+    return res.status(500).json({ 
+      success: false,
+      message: 'Error al obtener la tarea',
+      error: error.message
+    });
+  }
+};
