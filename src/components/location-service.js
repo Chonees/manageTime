@@ -1,6 +1,8 @@
 import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
-import { getUserTasks, saveActivity } from './api';
+import { getUserTasks, saveActivity, getApiUrl } from '../services/api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { registerForPushNotifications } from '../services/notification-service';
 
 // Estado para manejar las tareas que actualmente estamos dentro de su radio
 let tasksInRange = {};
@@ -23,7 +25,7 @@ const toRad = (value) => {
   return value * Math.PI / 180;
 };
 
-// Configurar las notificaciones
+// Configurar las notificaciones solo para obtener permisos necesarios para push notifications
 export const configureNotifications = async () => {
   const { status } = await Notifications.requestPermissionsAsync();
   if (status !== 'granted') {
@@ -42,18 +44,51 @@ export const configureNotifications = async () => {
   return true;
 };
 
-// Enviar una notificación
-const sendNotification = async (title, body) => {
+// Enviar una notificación como push notification a través del servidor
+const sendNotification = async (title, body, data = {}) => {
   try {
-    await Notifications.scheduleNotificationAsync({
-      content: {
+    console.log('Enviando notificación push a través del servidor:', title, body);
+    
+    // Obtener token de push
+    const pushToken = await registerForPushNotifications();
+    if (!pushToken) {
+      console.error('No se pudo obtener token de push para enviar notificación');
+      return false;
+    }
+    
+    // Obtener token de autenticación
+    const token = await AsyncStorage.getItem('token');
+    if (!token) {
+      console.error('No hay token de autenticación para enviar notificación al servidor');
+      return false;
+    }
+    
+    // Enviar al servidor para notificación push
+    const url = `${getApiUrl()}/api/notifications/user`;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({
         title,
         body,
-      },
-      trigger: null, // Inmediatamente
+        data: { ...data, timestamp: new Date().toISOString() },
+        pushToken
+      })
     });
+    
+    if (!response.ok) {
+      console.error('Error al enviar notificación push al servidor:', response.status);
+      return false;
+    }
+    
+    console.log('Notificación push enviada exitosamente al servidor');
+    return true;
   } catch (error) {
-    console.error('Error al enviar notificación:', error);
+    console.error('Error al enviar notificación push:', error);
+    return false;
   }
 };
 

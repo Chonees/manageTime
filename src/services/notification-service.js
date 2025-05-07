@@ -440,25 +440,30 @@ export const sendActivityNotification = async (options) => {
       return false;
     }
     
-    // Para usuarios administradores, enviamos notificaciones push en lugar de locales
-    const isAdmin = await isUserAdmin();
-    if (isAdmin) {
-      // Los administradores deberían recibir notificaciones push desde el backend
-      console.log('Usuario es admin, las notificaciones se enviarán desde el backend');
-      return true;
+    // Para todos los usuarios, enviamos la actividad al servidor para generar notificaciones push
+    // en lugar de crear notificaciones locales
+    console.log('Enviando actividad al servidor para notificaciones push');
+    
+    // Obtener el token del usuario
+    const pushToken = await registerForPushNotifications();
+    if (!pushToken) {
+      console.log('No se pudo obtener token de push, no se puede enviar notificación');
+      return false;
     }
     
-    // Para usuarios regulares, intentamos mostrar una notificación
-    await Notifications.scheduleNotificationAsync({
-      content: {
-        title: options.title || 'Notificación',
-        body: options.body || '',
-        data: options.data || {},
-      },
-      trigger: null, // Mostrar inmediatamente
+    // Obtener información del usuario
+    const userInfoString = await AsyncStorage.getItem('userInfo');
+    const userInfo = userInfoString ? JSON.parse(userInfoString) : {};
+    
+    // Enviar la actividad al servidor con el token de push
+    await sendActivityToServer({
+      ...options,
+      pushToken,
+      userId: userInfo.id,
+      username: userInfo.username
     });
     
-    console.log('Notificación enviada correctamente');
+    console.log('Datos de actividad enviados al servidor para notificación push');
     return true;
   } catch (error) {
     console.error('Error al enviar notificación de actividad:', error);

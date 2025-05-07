@@ -31,50 +31,12 @@ const App = () => {
       try {
         console.log('Configuring notifications...');
         
-        // Set notification handler first
-        Notifications.setNotificationHandler({
-          handleNotification: async () => {
-            console.log('Handling a notification');
-            return {
-              shouldShowAlert: true,
-              shouldPlaySound: true,
-              shouldSetBadge: true,
-            };
-          },
-        });
-
         // Registrar para notificaciones push - Este paso envía el token al servidor
         const pushToken = await registerForPushNotifications();
         console.log('Push notification registration complete with token:', pushToken);
-
-        // Request permission
-        const { status: existingStatus } = await Notifications.getPermissionsAsync();
-        let finalStatus = existingStatus;
         
-        if (existingStatus !== 'granted') {
-          console.log('Requesting notification permissions...');
-          const { status } = await Notifications.requestPermissionsAsync();
-          finalStatus = status;
-        }
-        
-        if (finalStatus !== 'granted') {
-          console.log('Notification permission not granted');
-          return;
-        }
-        
-        console.log('Notification permission granted');
-        
-        // Guaranteed test notification after a delay to ensure everything is initialized
-        setTimeout(async () => {
-          try {
-            console.log('Sending guaranteed test notification...');
-            // Ya no usamos notificaciones locales, solo registramos que se configuró correctamente
-            console.log('Notificaciones configuradas correctamente');
-            setNotificationsConfigured(true);
-          } catch (error) {
-            console.error('Error setting up notifications:', error);
-          }
-        }, 3000); // 3 second delay
+        // Marcamos como configurado
+        setNotificationsConfigured(true);
         
         // Check if user is admin
         try {
@@ -110,8 +72,6 @@ const App = () => {
         } catch (error) {
           console.error('Error checking admin status for notifications:', error);
         }
-        
-        setNotificationsConfigured(true);
       } catch (error) {
         console.error('Error configuring notifications:', error);
       }

@@ -4,6 +4,7 @@
 import { Platform } from 'react-native';
 import { getApiBaseUrl, getFetchOptions, getTimeout, getPlatformConfig } from './platform-config';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { registerForPushNotifications } from './notification-service';
 
 export const API_URL = getApiBaseUrl();
 
@@ -1142,44 +1143,30 @@ export const saveActivity = async (activityData) => {
     
     // Send notification to admin users
     try {
-      // Get all admin users and send them notifications
-      // This is a more reliable approach than checking if current user is admin
-      // Import Notifications directly to avoid circular dependencies
-      const Notifications = require('expo-notifications');
-      
-      // First check if the current user is an admin
-      const userInfoString = await AsyncStorage.getItem('userInfo');
-      if (userInfoString) {
-        const userInfo = JSON.parse(userInfoString);
-        const isCurrentUserAdmin = userInfo.isAdmin === true;
-        
-        if (isCurrentUserAdmin) {
-          // Prepare notification content
-          const title = getActivityTitle(activityData.type);
-          const username = activityData.username || userInfo.name || 'User';
-          const message = getActivityMessage(activityData);
-          
-          // Send immediate notification
-          try {
-            await Notifications.scheduleNotificationAsync({
-              content: {
-                title: title,
-                body: `${username}: ${message}`,
-                data: { 
-                  activityId: responseData._id || responseData.id,
-                  type: activityData.type
-                }
-              },
-              trigger: null // Show immediately
-            });
-          } catch (notifError) {
-            // Manejo silencioso de errores
-          }
-        } else {
-          // Manejo silencioso de errores
-        }
+      // Get the push token
+      const pushToken = await registerForPushNotifications();
+      if (pushToken) {
+        // Send to server for push notification
+        const notificationUrl = `${getApiUrl()}/api/notifications/admin/activity`;
+        await fetchWithRetry(notificationUrl, {
+          method: 'POST',
+          headers: {
+            ...await getAuthHeader(),
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            activityId: responseData._id || responseData.id,
+            title: getActivityTitle(activityData.type),
+            body: `${activityData.username || 'User'}: ${getActivityMessage(activityData)}`,
+            type: activityData.type,
+            pushToken
+          })
+        });
+        console.log('Activity sent to server for push notification');
+      } else {
+        console.log('No push token available for notification');
       }
-    } catch (error) {
+    } catch (notifError) {
       // Manejo silencioso de errores
     }
     
