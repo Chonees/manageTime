@@ -9,7 +9,8 @@ import {
   Alert,
   TextInput,
   StatusBar,
-  SafeAreaView
+  SafeAreaView,
+  Modal
 } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
@@ -40,6 +41,8 @@ const TaskDetailsScreen = ({ route, navigation }) => {
   const [taskActivities, setTaskActivities] = useState([]);
   const [spokenKeywords, setSpokenKeywords] = useState([]); // Nuevo estado para palabras clave ya pronunciadas
   const [remainingTime, setRemainingTime] = useState(null); // Estado para seguir el tiempo restante
+  const [showAcceptanceModal, setShowAcceptanceModal] = useState(false); // Estado para controlar la visualización del modal
+  const [processingResponse, setProcessingResponse] = useState(false); // Estado para controlar el proceso de aceptación/rechazo
   const timerIntervalRef = React.useRef(null); // Referencia para el intervalo del timer
 
   useEffect(() => {
@@ -56,90 +59,109 @@ const TaskDetailsScreen = ({ route, navigation }) => {
         clearInterval(timerIntervalRef.current);
       }
     };
-  }, [taskId]);
+  }, []);
+
+  // Efecto para mostrar modal de aceptación cuando la tarea está en estado pendiente de aceptación
+  useEffect(() => {
+    if (task && task.acceptanceStatus === 'pending' && !showAcceptanceModal) {
+      setShowAcceptanceModal(true);
+    }
+  }, [task]);
+
+  // Función para manejar la aceptación o rechazo de la tarea
+  const handleTaskResponse = async (response) => {
+    try {
+      setProcessingResponse(true);
+      
+      console.log(`Procesando respuesta: ${response} para tarea ${taskId}`);
+      const result = await api.respondToTask(taskId, response);
+      
+      if (response === 'accept') {
+        // Actualizamos la tarea localmente con la respuesta del servidor
+        if (result.task) {
+          setTask(result.task);
+          // Iniciamos el timer si hay un límite de tiempo
+          if (result.task.timeLimit) {
+            startTimer(result.task);
+          }
+        }
+        
+        Alert.alert(
+          t('taskAccepted'),
+          t('taskAcceptedMessage'),
+          [{ text: t('ok') }]
+        );
+      } else {
+        // Si la tarea fue rechazada, volvemos a la pantalla anterior
+        Alert.alert(
+          t('taskRejected'),
+          t('taskRejectedMessage'),
+          [{ 
+            text: t('ok'),
+            onPress: () => navigation.goBack()
+          }]
+        );
+      }
+      
+      // Ocultamos el modal
+      setShowAcceptanceModal(false);
+    } catch (error) {
+      console.error('Error al responder a la tarea:', error);
+      
+      let errorMessage = t('errorRespondingToTask');
+      if (error.message && error.message.includes('ya ha sido aceptada')) {
+        errorMessage = t('taskAlreadyResponded');
+      }
+      
+      Alert.alert(
+        t('error'),
+        errorMessage,
+        [{ text: t('ok'), onPress: () => setShowAcceptanceModal(false) }]
+      );
+    } finally {
+      setProcessingResponse(false);
+    }
+  };
 
   // Start location tracking when task data is loaded
   useEffect(() => {
     if (task) {
       startLocationTracking();
-      
-      // Iniciar el temporizador si la tarea tiene un límite de tiempo
-      if (task.timeLimit && task.timeLimitSet) {
-        startTaskTimer();
-      }
     }
   }, [task]);
 
   // Función para iniciar el temporizador de la tarea
-  const startTaskTimer = () => {
-    if (!task) {
-      console.log("No se puede iniciar el temporizador: tarea no disponible");
-      return;
-    }
-    
-    // Verificar si la tarea tiene tiempo límite (puede ser número o string)
-    const timeLimitValue = task.timeLimit ? 
-      (typeof task.timeLimit === 'string' ? Number(task.timeLimit) : task.timeLimit) : null;
-    
-    if (!timeLimitValue) {
-      console.log("No se encontró campo timeLimit en la tarea");
-      return;
-    }
-    
-    if (!task.timeLimitSet) {
-      console.log("No se encontró campo timeLimitSet en la tarea");
-      // Si no hay fecha establecida pero sí hay límite, establecer ahora
-      if (timeLimitValue) {
-        console.log("Estableciendo timeLimitSet a la fecha actual");
-        task.timeLimitSet = new Date().toISOString();
-      } else {
-        return;
-      }
-    }
-    
-    console.log(`Iniciando temporizador: Límite de ${timeLimitValue} minutos, establecido en ${task.timeLimitSet}`);
-    
-    // Limpiar cualquier temporizador existente
+  const startTimer = (taskData) => {
+    // Si ya hay un timer activo, limpiarlo primero
     if (timerIntervalRef.current) {
       clearInterval(timerIntervalRef.current);
     }
     
-    // Calcular el tiempo restante en milisegundos
-    const timeLimitMs = timeLimitValue * 60 * 1000; // Convertir minutos a milisegundos
-    const startTime = new Date(task.timeLimitSet).getTime();
-    const endTime = startTime + timeLimitMs;
-    const currentTime = new Date().getTime();
-    
-    console.log(`Temporizador: Inicio ${new Date(startTime).toLocaleString()}, Fin ${new Date(endTime).toLocaleString()}, Ahora ${new Date(currentTime).toLocaleString()}`);
-    
-    // Si ya se pasó el tiempo límite, retirar la tarea inmediatamente
-    if (currentTime >= endTime) {
-      console.log("El tiempo ya expiró, retirando tarea...");
-      handleTimeExpired();
+    // Verificar que haya un tiempo límite establecido
+    if (!taskData.timeLimit) {
+      console.log('La tarea no tiene límite de tiempo establecido');
       return;
     }
     
-    // Establecer el tiempo restante inicial
-    const initialRemainingTime = endTime - currentTime;
-    console.log(`Tiempo restante inicial: ${formatRemainingTime(initialRemainingTime)}`);
-    setRemainingTime(initialRemainingTime);
+    // Usar timeLimitSet si existe, de lo contrario usar la fecha actual
+    const startTime = taskData.timeLimitSet ? new Date(taskData.timeLimitSet) : new Date();
+    const timeLimitMs = taskData.timeLimit * 60 * 1000; // Convertir minutos a milisegundos
     
-    // Actualizar el tiempo restante cada segundo
+    console.log(`Iniciando timer con límite de ${taskData.timeLimit} minutos desde ${startTime}`);
+    
+    // Calcular tiempo restante inicial
+    updateRemainingTime(startTime, timeLimitMs);
+    
+    // Crear intervalo para actualizar el tiempo restante cada segundo
     timerIntervalRef.current = setInterval(() => {
-      const now = new Date().getTime();
-      const timeLeft = endTime - now;
-      
-      if (timeLeft <= 0) {
-        // Tiempo agotado
+      if (!updateRemainingTime(startTime, timeLimitMs)) {
+        // Si updateRemainingTime devuelve false, el tiempo ha expirado
         clearInterval(timerIntervalRef.current);
-        setRemainingTime(0);
         handleTimeExpired();
-      } else {
-        setRemainingTime(timeLeft);
       }
     }, 1000);
   };
-  
+
   // Función para manejar cuando el tiempo se agota
   const handleTimeExpired = async () => {
     try {
@@ -159,7 +181,7 @@ const TaskDetailsScreen = ({ route, navigation }) => {
       console.error('Error al eliminar tarea por tiempo expirado:', error);
     }
   };
-  
+
   // Función para formatear el tiempo restante en formato hh:mm:ss
   const formatRemainingTime = (ms) => {
     if (ms === null) return '';
@@ -172,30 +194,33 @@ const TaskDetailsScreen = ({ route, navigation }) => {
     return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
   };
 
+  // Función para actualizar el tiempo restante
+  const updateRemainingTime = (startTime, timeLimitMs) => {
+    const currentTime = new Date().getTime();
+    const timeLeft = startTime.getTime() + timeLimitMs - currentTime;
+    
+    if (timeLeft <= 0) {
+      return false;
+    }
+    
+    setRemainingTime(timeLeft);
+    return true;
+  };
+
   const startLocationTracking = async () => {
     try {
-      // Verify task has location data before starting tracking
-      if (!task?.location?.coordinates || task.location.coordinates.length !== 2) {
-        console.error('Cannot start location tracking: Task is missing valid coordinates');
-        Alert.alert(
-          t('error'),
-          t('taskMissingLocation'),
-          [{ text: t('ok') }]
-        );
-        return;
+      // Verificar que la tarea tiene datos de ubicación antes de iniciar el seguimiento
+      if (!task || !task.location || !task.location.coordinates || 
+          task.location.coordinates.length !== 2 || 
+          (task.location.coordinates[0] === 0 && task.location.coordinates[1] === 0)) {
+        console.log('No se puede iniciar el seguimiento de ubicación: La tarea no tiene coordenadas válidas');
+        return; // Retornamos sin mostrar error, ya que no es necesario para todas las tareas
       }
-      
-      console.log(t('startingLocationTracking'));
-      
-      // Request permissions first
+
       const { status } = await Location.requestForegroundPermissionsAsync();
+      
       if (status !== 'granted') {
-        console.error(t('locationPermissionDenied'));
-        Alert.alert(
-          t('error'),
-          t('locationPermissionDenied'),
-          [{ text: t('ok') }]
-        );
+        Alert.alert(t('permissionDenied'), t('locationPermissionRequired'));
         return;
       }
       
@@ -434,66 +459,43 @@ const TaskDetailsScreen = ({ route, navigation }) => {
   };
 
   const loadTaskDetails = async () => {
-    setLoading(true);
-    
     try {
-      // Intentar cargar los detalles de la tarea desde la API
-      console.log(`Intentando cargar tarea desde: ${api.baseUrl}/api/tasks/${taskId}`);
+      setLoading(true);
+      setError(null);
       
-      const taskDetails = await api.getTaskById(taskId);
-      console.log('TASK DETAILS LOADED FROM API:', JSON.stringify(taskDetails, null, 2));
+      console.log(`Cargando detalles de tarea ${taskId}`);
+      const taskData = await api.getTaskById(taskId);
+      setTask(taskData);
       
-      // Comprobación detallada de campos
-      if (!taskDetails.timeLimit) {
-        console.log('No se encontró campo timeLimit en la tarea');
-      } else {
-        console.log(`Campo timeLimit encontrado: ${taskDetails.timeLimit} minutos`);
+      // Si la tarea ya está aceptada y tiene límite de tiempo, iniciamos el timer
+      if (taskData.acceptanceStatus === 'accepted' && taskData.timeLimit) {
+        startTimer(taskData);
       }
       
-      if (!taskDetails.timeLimitSet) {
-        console.log('No se encontró campo timeLimitSet en la tarea');
-      } else {
-        console.log(`Campo timeLimitSet encontrado: ${taskDetails.timeLimitSet}`);
-      }
-      
-      // Forzar la conversión de timeLimit a número si es string
-      if (taskDetails.timeLimit && typeof taskDetails.timeLimit === 'string') {
-        taskDetails.timeLimit = Number(taskDetails.timeLimit);
-        console.log('Campo timeLimit convertido a número:', taskDetails.timeLimit);
-      }
-      
-      // Si no hay timeLimitSet pero sí hay timeLimit, establecerlo ahora
-      if (taskDetails.timeLimit && !taskDetails.timeLimitSet) {
-        console.log('Estableciendo timeLimitSet ya que no estaba presente');
-        taskDetails.timeLimitSet = new Date().toISOString();
-      }
-      
-      // Verificar ubicación
-      if (taskDetails.location) {
-        console.log(`Ubicación encontrada: ${JSON.stringify(taskDetails.location)}`);
-      } else {
-        console.log('No se encontró ubicación en la tarea');
-      }
-      
-      setTask(taskDetails);
-      
-      // Cargar ubicación - usamos userLocation en lugar de taskLocation
-      if (taskDetails.location && taskDetails.location.coordinates) {
-        const [longitude, latitude] = taskDetails.location.coordinates;
-        
-        if (latitude !== 0 && longitude !== 0) {
-          // Actualizar la ubicación inicial del usuario con la ubicación de la tarea
-          // Solo para fines de inicialización, se actualizará con la posición real del dispositivo
-          setUserLocation({
-            latitude,
-            longitude,
-            accuracy: 0, // Valor predeterminado
-          });
+      // Cargar datos del usuario asignado si es diferente al usuario actual
+      if (taskData.userId && taskData.userId !== user._id) {
+        try {
+          const userData = await api.getUserById(taskData.userId);
+          setAssignedUser(userData);
+        } catch (userError) {
+          console.error('Error al cargar datos del usuario asignado:', userError);
         }
       }
+      
+      // Cargar actividades de la tarea
+      try {
+        const activities = await api.getTaskActivities(taskId);
+        setTaskActivities(activities);
+      } catch (activitiesError) {
+        console.error('Error al cargar actividades de la tarea:', activitiesError);
+      }
+      
+      // Iniciar seguimiento de ubicación
+      startLocationTracking();
+      
     } catch (error) {
-      console.error('Error cargando detalles de la tarea:', error);
-      setError(error.message || t('errorLoadingTask'));
+      console.error('Error al cargar detalles de la tarea:', error);
+      setError(t('errorLoadingTaskDetails'));
     } finally {
       setLoading(false);
     }
@@ -739,6 +741,67 @@ const TaskDetailsScreen = ({ route, navigation }) => {
     return [];
   };
 
+  const renderAcceptanceModal = () => {
+    if (!task || !showAcceptanceModal) return null;
+    
+    return (
+      <Modal
+        visible={showAcceptanceModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => {}}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>{t('newTaskAssigned')}</Text>
+            
+            <Text style={styles.modalTaskTitle}>{task.title}</Text>
+            
+            {task.description ? (
+              <Text style={styles.modalTaskDescription}>{task.description}</Text>
+            ) : null}
+            
+            {task.timeLimit ? (
+              <Text style={styles.modalInfo}>
+                {t('timeLimitInfo')}: {task.timeLimit} {t('minutes')}
+              </Text>
+            ) : null}
+            
+            {task.locationName ? (
+              <Text style={styles.modalInfo}>
+                {t('location')}: {task.locationName}
+              </Text>
+            ) : null}
+            
+            <Text style={styles.modalQuestion}>{t('acceptTaskQuestion')}</Text>
+            
+            <View style={styles.modalButtonsContainer}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.rejectButton]}
+                onPress={() => handleTaskResponse('reject')}
+                disabled={processingResponse}
+              >
+                <Text style={styles.modalButtonText}>{t('reject')}</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[styles.modalButton, styles.acceptButton]}
+                onPress={() => handleTaskResponse('accept')}
+                disabled={processingResponse}
+              >
+                <Text style={styles.modalButtonText}>{t('accept')}</Text>
+              </TouchableOpacity>
+            </View>
+            
+            {processingResponse && (
+              <ActivityIndicator style={styles.modalLoader} size="small" color="#007AFF" />
+            )}
+          </View>
+        </View>
+      </Modal>
+    );
+  };
+
   if (loading) {
     return (
       <View style={styles.centerContainer}>
@@ -783,6 +846,9 @@ const TaskDetailsScreen = ({ route, navigation }) => {
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor="#1c1c1c" />
+      
+      {/* Modal de aceptación de tarea */}
+      {renderAcceptanceModal()}
       
       <View style={styles.headerMain}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
@@ -1416,6 +1482,94 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginLeft: 10,
   },
+  // Estilos para el modal de aceptación
+  modalContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.7)'
+  },
+  modalContent: {
+    backgroundColor: '#2e2e2e',
+    borderRadius: 20,
+    padding: 25,
+    width: '90%',
+    alignItems: 'center',
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    borderWidth: 1,
+    borderColor: '#fff3e5'
+  },
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    marginBottom: 15,
+    textAlign: 'center',
+    color: '#fff3e5'
+  },
+  modalTaskTitle: {
+    fontSize: 20,
+    fontWeight: '500',
+    marginBottom: 15,
+    textAlign: 'center',
+    color: '#fff3e5'
+  },
+  modalTaskDescription: {
+    fontSize: 16,
+    marginBottom: 20,
+    textAlign: 'center',
+    color: '#cccccc'
+  },
+  modalInfo: {
+    fontSize: 16,
+    marginBottom: 8,
+    color: '#ffffff',
+    textAlign: 'center'
+  },
+  modalQuestion: {
+    fontSize: 18,
+    marginTop: 20,
+    marginBottom: 25,
+    textAlign: 'center',
+    fontWeight: '500',
+    color: '#fff3e5'
+  },
+  modalButtonsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
+    marginTop: 10
+  },
+  modalButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 10,
+    minWidth: 130,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5
+  },
+  acceptButton: {
+    backgroundColor: '#1b7a4d'
+  },
+  rejectButton: {
+    backgroundColor: '#b23b3b'
+  },
+  modalButtonText: {
+    color: '#fff3e5',
+    fontWeight: 'bold',
+    fontSize: 16
+  },
+  modalLoader: {
+    marginTop: 20,
+    marginBottom: 10
+  }
 });
 
 export default TaskDetailsScreen;
