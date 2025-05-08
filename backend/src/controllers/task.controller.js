@@ -45,6 +45,20 @@ const registerTaskActivity = async (userId, taskId, type, taskData) => {
           deletedAt: new Date().toISOString()
         };
         break;
+      case 'task_rejected':
+        message = `Tarea "${taskData.title}" rechazada`;
+        metadata = { 
+          title: taskData.title,
+          rejectedAt: new Date().toISOString()
+        };
+        break;
+      case 'task_accepted':
+        message = `Tarea "${taskData.title}" aceptada`;
+        metadata = { 
+          title: taskData.title,
+          acceptedAt: new Date().toISOString()
+        };
+        break;
       default:
         message = `Acción realizada en tarea "${taskData.title}"`;
     }
@@ -917,24 +931,76 @@ exports.respondToTask = async (req, res) => {
       // Registrar actividad
       await registerTaskActivity(userId, taskId, 'task_accepted', task);
       
+      // Obtener datos del usuario para la notificación
+      const userInfo = await User.findById(userId);
+      
+      // Crear datos para la notificación
+      const activityData = {
+        type: 'task_accepted',
+        message: `${userInfo.username} ha aceptado la tarea "${task.title}"`,
+        userId: userId,
+        username: userInfo.username,
+        metadata: {
+          taskId: taskId.toString(),
+          taskTitle: task.title,
+          actionType: 'task_accepted',
+          timestamp: new Date().toISOString()
+        }
+      };
+      
+      // Notificar al administrador sobre la aceptación
+      try {
+        // Importar utilidad de notificación
+        const notificationUtil = require('../utils/notification.util');
+        await notificationUtil.notifyAdminActivity(activityData);
+        console.log(`Notificación enviada al administrador sobre tarea aceptada: ${taskId}`);
+      } catch (notificationError) {
+        console.error('Error al enviar notificación de aceptación al administrador:', notificationError);
+      }
+      
       res.status(200).json({ 
         message: 'Tarea aceptada correctamente',
         task 
       });
     } 
     else if (response === 'reject') {
-      // Actualizar la tarea como rechazada
-      task.acceptanceStatus = 'rejected';
-      task.status = 'rejected';
-      
-      await task.save();
-      
-      // Registrar actividad
+      // Registrar actividad de rechazo antes de eliminar la tarea
       await registerTaskActivity(userId, taskId, 'task_rejected', task);
       
+      // Obtener datos del administrador y tarea para la notificación
+      const adminInfo = await User.findOne({ isAdmin: true });
+      const userInfo = await User.findById(userId);
+      
+      // Eliminar la tarea completamente
+      await Task.deleteOne({ _id: taskId });
+      
+      // Crear datos para la notificación
+      const activityData = {
+        type: 'task_rejected',
+        message: `${userInfo.username} ha rechazado la tarea "${task.title}"`,
+        userId: userId,
+        username: userInfo.username,
+        metadata: {
+          taskId: taskId.toString(),
+          taskTitle: task.title,
+          actionType: 'task_rejected',
+          timestamp: new Date().toISOString()
+        }
+      };
+      
+      // Notificar al administrador sobre el rechazo
+      try {
+        // Importar utilidad de notificación
+        const notificationUtil = require('../utils/notification.util');
+        await notificationUtil.notifyAdminActivity(activityData);
+        console.log(`Notificación enviada al administrador sobre tarea rechazada: ${taskId}`);
+      } catch (notificationError) {
+        console.error('Error al enviar notificación de rechazo al administrador:', notificationError);
+      }
+      
       res.status(200).json({ 
-        message: 'Tarea rechazada correctamente',
-        task 
+        message: 'Tarea rechazada y eliminada correctamente',
+        success: true
       });
     } 
     else {

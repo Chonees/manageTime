@@ -261,6 +261,14 @@ const notifyAdminActivity = async (activity) => {
         title = `Tarea completada`;
         body = `${username} ha completado: ${activity.metadata?.title || 'una tarea'}`;
         break;
+      case 'task_accepted':
+        title = `Tarea aceptada`;
+        body = `${username} ha aceptado: ${activity.metadata?.taskTitle || activity.metadata?.title || 'una tarea'}`;
+        break;
+      case 'task_rejected':
+        title = `Tarea rechazada`;
+        body = `${username} ha rechazado: ${activity.metadata?.taskTitle || activity.metadata?.title || 'una tarea'}`;
+        break;
       case 'location_enter':
         title = `Entrada a ubicación`;
         body = `${username} ha entrado en: ${activity.metadata?.locationName || 'una ubicación'}`;
