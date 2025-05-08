@@ -13,7 +13,8 @@ import {
   StatusBar,
   SafeAreaView,
   Dimensions,
-  Platform
+  Platform,
+  Pressable
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
@@ -48,6 +49,10 @@ const TaskScreen = ({ navigation }) => {
   const [handsFreeMode, setHandsFreeMode] = useState(false);
   const [taskKeywords, setTaskKeywords] = useState([]);
   const [currentKeyword, setCurrentKeyword] = useState('');
+  const [taskTimeLimit, setTaskTimeLimit] = useState(''); // Mantenemos este estado para compatibilidad
+  const [isTimePickerVisible, setTimePickerVisible] = useState(false); // Estado para controlar la visibilidad del selector personalizado
+  const [selectedHours, setSelectedHours] = useState(0); // Horas seleccionadas
+  const [selectedMinutes, setSelectedMinutes] = useState(30); // Minutos seleccionados (default 30 min)
 
   // Function to handle pull-to-refresh
   const onRefresh = async () => {
@@ -145,42 +150,123 @@ const TaskScreen = ({ navigation }) => {
     loadTasks();
   }, []);
 
+  // Función para mostrar el selector de tiempo
+  const showTimePicker = () => {
+    setTimePickerVisible(true);
+  };
+
+  // Función para ocultar el selector de tiempo
+  const hideTimePicker = () => {
+    setTimePickerVisible(false);
+  };
+
+  // Función para aumentar horas
+  const incrementHours = () => {
+    setSelectedHours(prev => (prev < 23) ? prev + 1 : 0);
+  };
+
+  // Función para disminuir horas
+  const decrementHours = () => {
+    setSelectedHours(prev => (prev > 0) ? prev - 1 : 23);
+  };
+
+  // Función para aumentar minutos
+  const incrementMinutes = () => {
+    setSelectedMinutes(prev => (prev < 55) ? prev + 5 : 0);
+  };
+
+  // Función para disminuir minutos
+  const decrementMinutes = () => {
+    setSelectedMinutes(prev => (prev > 0) ? prev - 5 : 55);
+  };
+
+  // Función para confirmar la selección
+  const confirmTimeSelection = () => {
+    // Calculamos el total de minutos para usar en la creación de la tarea
+    const totalMinutes = (selectedHours * 60) + selectedMinutes;
+    setTaskTimeLimit(totalMinutes.toString());
+    hideTimePicker();
+  };
+
+  // Función para formatear el tiempo seleccionado para mostrarlo
+  const formatSelectedTime = () => {
+    if (selectedHours === 0 && selectedMinutes === 0) {
+      return t('selectTimeLimit') || "Seleccionar tiempo límite";
+    }
+    
+    let result = '';
+    
+    if (selectedHours > 0) {
+      result += `${selectedHours} ${selectedHours === 1 ? (t('hour') || 'hora') : (t('hours') || 'horas')}`;
+    }
+    
+    if (selectedMinutes > 0) {
+      if (result.length > 0) result += ' ';
+      result += `${selectedMinutes} ${selectedMinutes === 1 ? (t('minute') || 'minuto') : (t('minutes') || 'minutos')}`;
+    }
+    
+    return result;
+  };
+
   // Añadir nueva tarea
   const addTask = async () => {
     // Verificar que el usuario sea administrador
     if (!user?.isAdmin) {
-      Alert.alert(t('error'), t('unauthorizedAction'));
+      Alert.alert(t('error'), t('adminPermissionRequired'));
       return;
     }
-
+    
+    // Validación
     if (!newTaskTitle.trim()) {
-      Alert.alert(t('error'), t('taskTitleRequired'));
+      Alert.alert(t('validationError'), t('titleRequired'));
       return;
     }
-
-    try {
-      console.log(t('creatingTask'));
-      
-      const taskData = { 
-        title: newTaskTitle,
-        description: newTaskDescription,
-        completed: false,
-        handsFreeMode: handsFreeMode,  // Añadir opción de manos libres
-        status: handsFreeMode ? 'in_progress' : 'pending',  // Si es manos libres, establecer como in_progress
-        keywords: handsFreeMode ? taskKeywords.join(',') : null
+    
+    // Si no hay usuario seleccionado, puede quedarse como null
+    // pero mostramos advertencia
+    if (!selectedUserId) {
+      console.log(t('noUserSelected'));
+      // Dejar que avance sin usuario asignado
+    }
+    
+    // Construir la estructura de ubicación para la tarea si hay ubicación seleccionada
+    let locationData = null;
+    if (taskLocation && taskLocation.coordinates) {
+      // Si taskLocation ya tiene el formato correcto (type y coordinates)
+      locationData = taskLocation;
+    } else if (taskLocation && taskLocation.latitude && taskLocation.longitude) {
+      // Si taskLocation tiene formato de coordenadas planas
+      locationData = {
+        type: 'Point',
+        coordinates: [taskLocation.longitude, taskLocation.latitude]
       };
-      
-      // Añadir información de ubicación si está configurada
-      if (taskLocation) {
-        taskData.location = taskLocation;
-        taskData.radius = taskRadius;
-        taskData.locationName = taskLocationName;
-        console.log(t('addingLocation', { 
-          coordinates: taskLocation.coordinates, 
-          radius: taskRadius,
-          place: taskLocationName || t('noPlaceName')
-        }));
-      }
+    }
+    
+    // Preparar el objeto de tarea con todos los datos necesarios
+    const taskData = {
+      title: newTaskTitle.trim(),
+      description: newTaskDescription.trim(),
+      userId: selectedUserId, // Puede ser null
+      location: locationData, // Asignar la ubicación correctamente formateada
+      handsFreeMode: handsFreeMode,
+      keywords: taskKeywords.length > 0 ? taskKeywords : undefined,
+      radius: parseFloat(taskRadius) || 1.0,
+      locationName: taskLocationName || ''
+    };
+    
+    // Añadir tiempo límite si está establecido
+    if (taskTimeLimit && Number(taskTimeLimit) > 0) {
+      taskData.timeLimit = Number(taskTimeLimit);
+      taskData.timeLimitSet = new Date().toISOString(); // Establecer la fecha actual como inicio del límite
+    }
+    
+    // DEBUG: Mostrar qué datos se envían al backend
+    console.log('DATOS DE TAREA A ENVIAR:', JSON.stringify(taskData, null, 2));
+    console.log('timeLimit específicamente:', taskTimeLimit, typeof taskTimeLimit);
+    console.log('location específicamente:', JSON.stringify(locationData, null, 2));
+    
+    try {
+      console.log(t('creatingTask'), taskData);
       
       let result;
       
@@ -188,20 +274,20 @@ const TaskScreen = ({ navigation }) => {
       if (user?.isAdmin && selectedUserId) {
         // Make sure userId is a string
         const userIdString = String(selectedUserId);
-        console.log(t('adminAssigningTask', { userId: userIdString }));
+        console.log(t('adminAssigningTask'));
         
         // Include userId as string in taskData
         taskData.userId = userIdString;
-        
-        // Usar la nueva función específica para asignar tareas
-        result = await api.assignTask(taskData);
-        console.log(t('serverResponseAssignment'), JSON.stringify(result));
-      } else {
-        // Caso normal: crear tarea para el usuario actual
-        console.log(t('creatingTaskForCurrentUser'));
-        result = await api.saveTask(taskData);
-        console.log(t('serverResponseNormal'), JSON.stringify(result));
-      }
+      
+      // Usar la nueva función específica para asignar tareas
+      result = await api.assignTask(taskData);
+      console.log(t('serverResponseAssignment'), JSON.stringify(result));
+    } else {
+      // Caso normal: crear tarea para el usuario actual
+      console.log(t('creatingTaskForCurrentUser'));
+      result = await api.saveTask(taskData);
+      console.log(t('serverResponseNormal'), JSON.stringify(result));
+    }
       
       // Verificamos que result.task existe antes de añadirlo
       if (result && result.task) {
@@ -213,11 +299,13 @@ const TaskScreen = ({ navigation }) => {
         let taskUserId = null;
         
         if (result.task.userId) {
+          // If userId is an object (populated), extract _id and username
           if (typeof result.task.userId === 'object') {
             taskUserId = result.task.userId._id;
             taskUsername = result.task.userId.username;
             console.log(t('newTaskHasUsername', { username: taskUsername }));
           } else {
+            // If userId is just an ID, keep it as is
             taskUserId = result.task.userId;
             
             // Try to find the username in our local users list
@@ -234,7 +322,7 @@ const TaskScreen = ({ navigation }) => {
         // Create a properly formatted task object with username info
         const newTaskObject = {
           ...result.task,
-          _username: taskUsername,
+          _username: taskUsername, // Store username directly in task for easy access
           userId: taskUserId || result.task.userId
         };
         
@@ -267,6 +355,7 @@ const TaskScreen = ({ navigation }) => {
         setHandsFreeMode(false); // Restablecer el modo manos libres
         setTaskKeywords([]); // Restablecer palabras clave
         setCurrentKeyword(''); // Limpiar el campo de entrada actual
+        setTaskTimeLimit(''); // Limpiar el campo de tiempo límite
         setShowAddForm(false);
         
         console.log(t('taskAddedSuccessfully'));
@@ -582,6 +671,24 @@ const TaskScreen = ({ navigation }) => {
           placeholderTextColor="#a8a8a8"
         />
         
+        {/* Campo para tiempo límite (solo para administradores) */}
+        {user?.isAdmin && (
+          <View style={styles.timeLimitContainer}>
+            <Ionicons name="timer-outline" size={20} color="#fff3e5" style={styles.timeLimitIcon} />
+            <TouchableOpacity 
+              style={styles.timePicker} 
+              onPress={showTimePicker}
+            >
+              <Text style={styles.timePickerText}>
+                {formatSelectedTime()}
+              </Text>
+              <Ionicons name="chevron-down" size={20} color="#fff3e5" />
+            </TouchableOpacity>
+            
+            {renderCustomTimePicker()}
+          </View>
+        )}
+        
         {/* Botón para abrir selector de ubicación y radio */}
         <View style={styles.locationButtonsContainer}>
           <TouchableOpacity 
@@ -704,6 +811,7 @@ const TaskScreen = ({ navigation }) => {
               setHandsFreeMode(false); // Restablecer el modo manos libres
               setTaskKeywords([]); // Restablecer palabras clave
               setCurrentKeyword(''); // Limpiar el campo de entrada actual
+              setTaskTimeLimit(''); // Limpiar el campo de tiempo límite
             }}
           >
             <Text style={styles.cancelButtonText}>{t('cancel')}</Text>
@@ -737,6 +845,63 @@ const TaskScreen = ({ navigation }) => {
           onSelect={handleSelectSavedLocation}
         />
       </View>
+    );
+  };
+
+  // Renderizar el selector de tiempo personalizado
+  const renderCustomTimePicker = () => {
+    return (
+      <Modal
+        visible={isTimePickerVisible}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={hideTimePicker}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.timePickerContainer}>
+            <Text style={styles.timePickerTitle}>{t('selectTimeLimit') || "Seleccionar tiempo límite"}</Text>
+            
+            <View style={styles.timePickerControls}>
+              {/* Selector de horas */}
+              <View style={styles.timePickerColumn}>
+                <Text style={styles.timePickerLabel}>{t('hours') || "Horas"}</Text>
+                <TouchableOpacity style={styles.timeButton} onPress={incrementHours}>
+                  <Ionicons name="chevron-up" size={24} color="#fff3e5" />
+                </TouchableOpacity>
+                <Text style={styles.timeValue}>{selectedHours.toString().padStart(2, '0')}</Text>
+                <TouchableOpacity style={styles.timeButton} onPress={decrementHours}>
+                  <Ionicons name="chevron-down" size={24} color="#fff3e5" />
+                </TouchableOpacity>
+              </View>
+              
+              {/* Separador */}
+              <Text style={styles.timeSeparator}>:</Text>
+              
+              {/* Selector de minutos */}
+              <View style={styles.timePickerColumn}>
+                <Text style={styles.timePickerLabel}>{t('minutes') || "Minutos"}</Text>
+                <TouchableOpacity style={styles.timeButton} onPress={incrementMinutes}>
+                  <Ionicons name="chevron-up" size={24} color="#fff3e5" />
+                </TouchableOpacity>
+                <Text style={styles.timeValue}>{selectedMinutes.toString().padStart(2, '0')}</Text>
+                <TouchableOpacity style={styles.timeButton} onPress={decrementMinutes}>
+                  <Ionicons name="chevron-down" size={24} color="#fff3e5" />
+                </TouchableOpacity>
+              </View>
+            </View>
+            
+            <View style={styles.timePickerActions}>
+              <TouchableOpacity style={styles.timePickerCancel} onPress={hideTimePicker}>
+                <Text style={styles.timePickerCancelText}>{t('cancel') || "Cancelar"}</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity style={styles.timePickerConfirm} onPress={confirmTimeSelection}>
+                <Text style={styles.timePickerConfirmText}>{t('confirm') || "Confirmar"}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     );
   };
 
@@ -1294,6 +1459,103 @@ const styles = StyleSheet.create({
   removeKeywordButtonText: {
     color: '#fff',
     fontSize: 12,
+    fontWeight: 'bold',
+  },
+  timeLimitContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  timeLimitIcon: {
+    marginRight: 10,
+  },
+  timePicker: {
+    flex: 1,
+    height: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 15,
+    backgroundColor: 'rgba(255, 243, 229, 0.1)',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#fff3e5',
+  },
+  timePickerText: {
+    color: '#fff3e5',
+    fontSize: 16,
+  },
+  // Estilos para el selector de tiempo personalizado
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  timePickerContainer: {
+    width: '80%',
+    backgroundColor: '#2e2e2e',
+    borderRadius: 10,
+    padding: 20,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#555',
+  },
+  timePickerTitle: {
+    color: '#fff3e5',
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  timePickerControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+  },
+  timePickerColumn: {
+    alignItems: 'center',
+    width: 80,
+  },
+  timePickerLabel: {
+    color: '#ccc',
+    fontSize: 14,
+    marginBottom: 5,
+  },
+  timeButton: {
+    padding: 10,
+  },
+  timeValue: {
+    color: '#fff3e5',
+    fontSize: 30,
+    fontWeight: 'bold',
+    marginVertical: 5,
+  },
+  timeSeparator: {
+    color: '#fff3e5',
+    fontSize: 30,
+    marginHorizontal: 10,
+  },
+  timePickerActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
+    marginTop: 10,
+  },
+  timePickerCancel: {
+    padding: 10,
+  },
+  timePickerCancelText: {
+    color: '#FF6B6B',
+    fontSize: 16,
+  },
+  timePickerConfirm: {
+    padding: 10,
+  },
+  timePickerConfirmText: {
+    color: '#fff3e5',
+    fontSize: 16,
     fontWeight: 'bold',
   },
 });

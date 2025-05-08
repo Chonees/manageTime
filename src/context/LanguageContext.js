@@ -71,6 +71,12 @@ export const translations = {
     taskUpdate: 'Task Updated',
     taskDelete: 'Task Deleted',
     
+    // Task location notifications
+    userEntered: 'User entered',
+    userExited: 'User exited',
+    userEnteredDescription: 'User has entered the area of {{location}}',
+    userExitedDescription: 'User has left the area of {{location}}',
+    
     // User related
     unknownUser: 'Unknown User',
     unknownTask: 'Unknown Task',
@@ -750,6 +756,12 @@ export const translations = {
     taskCreate: 'Tarea Creada',
     taskUpdate: 'Tarea Actualizada',
     taskDelete: 'Tarea Eliminada',
+    
+    // Task location notifications
+    userEntered: 'Usuario entró a',
+    userExited: 'Usuario salió de',
+    userEnteredDescription: 'El usuario ha entrado al área de {{location}}',
+    userExitedDescription: 'El usuario ha salido del área de {{location}}',
     
     // User related
     unknownUser: 'Usuario Desconocido',

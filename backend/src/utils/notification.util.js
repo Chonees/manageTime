@@ -270,8 +270,21 @@ const notifyAdminActivity = async (activity) => {
         body = `${username} ha salido de: ${activity.metadata?.locationName || 'una ubicación'}`;
         break;
       case 'task_activity':
-        title = `Actividad en tarea`;
-        body = `${username} actualizó: ${activity.metadata?.title || 'una tarea'}`;
+        // Verificar si tiene subtipo para personalizar más el mensaje
+        if (activity.subtype === 'location_enter' || activity.subtype === 'task_enter' || 
+            activity.metadata?.actionType === 'entered_task_area') {
+          title = `Entrada a tarea`;
+          body = `${username} entró a: ${activity.metadata?.taskTitle || activity.metadata?.title || 'una tarea'}`;
+        } 
+        else if (activity.subtype === 'location_exit' || activity.subtype === 'task_exit' ||
+                activity.metadata?.actionType === 'exited_task_area') {
+          title = `Salida de tarea`;
+          body = `${username} salió de: ${activity.metadata?.taskTitle || activity.metadata?.title || 'una tarea'}`;
+        }
+        else {
+          title = `Actividad en tarea`;
+          body = `${username} actualizó: ${activity.metadata?.title || 'una tarea'}`;
+        }
         break;
       default:
         title = `Actividad: ${username}`;

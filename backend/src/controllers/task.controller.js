@@ -1,5 +1,6 @@
 const Task = require('../models/task.model');
 const Activity = require('../models/activity.model');
+const User = require('../models/user.model');
 
 /**
  * Función auxiliar para registrar actividades relacionadas con tareas
@@ -69,12 +70,25 @@ const registerTaskActivity = async (userId, taskId, type, taskData) => {
   }
 };
 
+// Importar utilidad de notificación para enviar alertas a usuarios
+let notificationUtil;
+try {
+  notificationUtil = require('../utils/notification.util');
+} catch (error) {
+  console.warn('No se pudo cargar el módulo de notificaciones, las alertas push estarán deshabilitadas');
+  // Crear una implementación simulada
+  notificationUtil = {
+    notifyAdminActivity: () => Promise.resolve({ success: false, error: 'Módulo no disponible' }),
+    notifyUser: () => Promise.resolve({ success: false, error: 'Módulo no disponible' })
+  };
+}
+
 // Crear una nueva tarea
 exports.createTask = async (req, res) => {
   try {
-    const { title, description, userId, location, radius, locationName, handsFreeMode, status, keywords } = req.body;
+    const { title, description, userId, timeLimit, location, radius, locationName, handsFreeMode, status, keywords } = req.body;
     
-    console.log('Datos recibidos para crear tarea:', req.body);
+    console.log('Datos completos recibidos para crear tarea:', JSON.stringify(req.body, null, 2));
     
     if (!title) {
       return res.status(400).json({ message: 'El título de la tarea es requerido' });
@@ -102,24 +116,56 @@ exports.createTask = async (req, res) => {
       keywords: keywords || '' // Guardar las palabras clave específicas para activación por voz
     };
     
+    // Añadir tiempo límite si se proporciona
+    if (timeLimit && !isNaN(Number(timeLimit)) && Number(timeLimit) > 0) {
+      console.log(`Configurando tiempo límite: ${timeLimit} minutos`);
+      taskData.timeLimit = Number(timeLimit);
+      taskData.timeLimitSet = new Date().toISOString();
+      console.log(`Fecha de inicio del límite: ${taskData.timeLimitSet}`);
+    }
+    
     // Añadir información de ubicación si se proporciona
-    if (location && location.coordinates && location.coordinates.length === 2) {
-      taskData.location = {
+    if (location) {
+      console.log('Datos de ubicación recibidos:', JSON.stringify(location));
+      
+      // Manejar diferentes formatos posibles de ubicación
+      let locationObject = {
         type: 'Point',
-        coordinates: location.coordinates
+        coordinates: [0, 0] // Valores por defecto
       };
+      
+      // Caso 1: location es un objeto con coordinates como array
+      if (location.coordinates && Array.isArray(location.coordinates) && location.coordinates.length === 2) {
+        console.log('Formato 1: location con coordinates como array');
+        locationObject.coordinates = location.coordinates;
+      }
+      // Caso 2: location es un objeto con latitude y longitude
+      else if (location.latitude !== undefined && location.longitude !== undefined) {
+        console.log('Formato 2: location con latitude y longitude');
+        locationObject.coordinates = [location.longitude, location.latitude];
+      }
+      // Caso 3: location es un array de [longitude, latitude]
+      else if (Array.isArray(location) && location.length === 2) {
+        console.log('Formato 3: location como array');
+        locationObject.coordinates = location;
+      }
+      
+      console.log(`Guardando ubicación: ${JSON.stringify(locationObject.coordinates)}`);
+      taskData.location = locationObject;
       
       // Añadir radio y nombre de ubicación si se proporcionan
       if (radius) {
-        taskData.radius = radius;
+        taskData.radius = Number(radius);
       }
       
       if (locationName) {
         taskData.locationName = locationName;
       }
       
-      console.log(`Tarea con ubicación: ${location.coordinates}, radio: ${radius}km, lugar: ${locationName || 'Sin nombre'}`);
+      console.log(`Tarea con ubicación: ${JSON.stringify(locationObject.coordinates)}, radio: ${radius}km, lugar: ${locationName || 'Sin nombre'}`);
     }
+    
+    console.log('Datos completos a guardar en la tarea:', JSON.stringify(taskData, null, 2));
     
     const task = new Task(taskData);
     
@@ -129,8 +175,8 @@ exports.createTask = async (req, res) => {
     // Obtener la tarea con el usuario populado para devolver datos completos
     const populatedTask = await Task.findById(task._id).populate('userId', 'username email');
     
-    console.log(`Tarea creada: ${task._id}, asignada a usuario: ${assignedUserId}`);
-    console.log('Datos de la tarea creada:', JSON.stringify(populatedTask));
+    console.log(`Tarea creada con ID: ${task._id}`);
+    console.log('Datos de la tarea guardada:', JSON.stringify(populatedTask, null, 2));
     
     // Registrar actividad de creación de tarea
     await registerTaskActivity(req.user._id, task._id, 'task_create', populatedTask);
@@ -138,14 +184,26 @@ exports.createTask = async (req, res) => {
     res.status(201).json(populatedTask);
   } catch (error) {
     console.error('Error al crear tarea:', error);
-    res.status(500).json({ message: 'Error al crear tarea' });
+    res.status(500).json({ message: 'Error al crear tarea', error: error.message });
   }
 };
 
 // Crear una tarea asignada a otro usuario (solo admin)
 exports.createAssignedTask = async (req, res) => {
   try {
-    const { title, description, userId, location, radius, locationName, handsFreeMode, status, keywords } = req.body;
+    const { 
+      title, 
+      description, 
+      userId, 
+      location, 
+      radius, 
+      locationName, 
+      handsFreeMode, 
+      status, 
+      keywords,
+      timeLimit,  
+      timeLimitSet  
+    } = req.body;
     
     console.log('Admin creando tarea asignada con datos:', req.body);
     
@@ -189,6 +247,15 @@ exports.createAssignedTask = async (req, res) => {
       console.log(`Tarea con ubicación: ${location.coordinates}, radio: ${radius}km, lugar: ${locationName || 'Sin nombre'}`);
     }
     
+    // Añadir información de tiempo límite si se proporciona
+    if (timeLimit) {
+      // Asegurar que timeLimit es un número
+      taskData.timeLimit = typeof timeLimit === 'string' ? Number(timeLimit) : timeLimit;
+      // Si se proporciona timeLimitSet, usarlo, de lo contrario usar la fecha actual
+      taskData.timeLimitSet = timeLimitSet || new Date().toISOString();
+      console.log(`Tarea con tiempo límite: ${taskData.timeLimit} minutos, establecido en: ${taskData.timeLimitSet}`);
+    }
+    
     const task = new Task(taskData);
     
     // Guardar en la base de datos
@@ -202,6 +269,38 @@ exports.createAssignedTask = async (req, res) => {
     
     // Registrar actividad de creación de tarea
     await registerTaskActivity(req.user._id, task._id, 'task_create', populatedTask);
+    
+    // Enviar notificación push al usuario asignado
+    try {
+      const targetUser = await User.findById(userId);
+      if (targetUser) {
+        console.log(`Enviando notificación de nueva tarea a usuario ${targetUser.username}`);
+        
+        // Preparar los datos para la notificación
+        const notificationTitle = 'Nueva tarea asignada';
+        const notificationBody = `Se te ha asignado una nueva tarea: "${title}"`;
+        const notificationData = {
+          taskId: task._id.toString(),
+          type: 'new_task_assigned',
+          priority: 'high',
+          title: title,
+          locationName: locationName || 'Sin ubicación específica'
+        };
+        
+        // Enviar la notificación
+        const notificationResult = await notificationUtil.notifyUser(
+          userId, 
+          notificationTitle, 
+          notificationBody, 
+          notificationData
+        );
+        
+        console.log('Resultado de notificación:', notificationResult);
+      }
+    } catch (notificationError) {
+      console.error('Error enviando notificación de nueva tarea:', notificationError);
+      // No interrumpir el flujo por un error de notificación
+    }
     
     res.status(201).json(populatedTask);
   } catch (error) {
@@ -702,6 +801,76 @@ exports.addSimpleVoiceNote = async (req, res) => {
     res.status(500).json({ 
       success: false,
       message: 'Error al guardar la nota de voz',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Obtiene una tarea por su ID
+ * @param {Object} req - Objeto de solicitud
+ * @param {Object} res - Objeto de respuesta
+ */
+exports.getTaskById = async (req, res) => {
+  try {
+    const taskId = req.params.id;
+    
+    if (!taskId) {
+      return res.status(400).json({ 
+        success: false,
+        message: 'ID de tarea no proporcionado' 
+      });
+    }
+    
+    console.log(`Buscando tarea con ID: ${taskId}`);
+    
+    // Buscar la tarea y popular los datos del usuario
+    const task = await Task.findById(taskId).populate('userId', 'username email');
+    
+    if (!task) {
+      return res.status(404).json({ 
+        success: false,
+        message: 'Tarea no encontrada' 
+      });
+    }
+    
+    // Verificar si el usuario tiene acceso a esta tarea
+    // Los administradores pueden ver cualquier tarea
+    if (!req.user.isAdmin && task.userId && task.userId._id && task.userId._id.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ 
+        success: false,
+        message: 'No tienes permiso para ver esta tarea' 
+      });
+    }
+    
+    console.log(`Tarea encontrada: ${task.title}`);
+    console.log('Datos de la tarea (incluye timeLimit):', JSON.stringify(task, null, 2));
+    
+    // Verificar si la tarea tiene tiempo límite
+    if (task.timeLimit) {
+      console.log(`Tiempo límite: ${task.timeLimit} minutos, establecido en: ${task.timeLimitSet}`);
+      
+      // Si tiene un límite pero no tiene fecha de inicio, establecerla ahora
+      if (!task.timeLimitSet) {
+        task.timeLimitSet = new Date().toISOString();
+        await task.save();
+        console.log(`Se estableció la fecha de inicio del límite: ${task.timeLimitSet}`);
+      }
+    }
+    
+    // Verificar si la tarea tiene ubicación
+    if (task.location && task.location.coordinates) {
+      console.log(`Ubicación: [${task.location.coordinates}], Radio: ${task.radius}km`);
+    } else {
+      console.log('La tarea no tiene ubicación definida');
+    }
+    
+    return res.status(200).json(task);
+  } catch (error) {
+    console.error('Error al obtener tarea por ID:', error);
+    return res.status(500).json({ 
+      success: false,
+      message: 'Error al obtener la tarea',
       error: error.message
     });
   }
