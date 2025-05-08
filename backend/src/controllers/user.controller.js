@@ -27,6 +27,25 @@ exports.getUserById = async (req, res) => {
   }
 };
 
+// Obtener el usuario actual (basado en el token)
+exports.getCurrentUser = async (req, res) => {
+  try {
+    // El middleware verifyToken ya ha adjuntado el id del usuario a req.user
+    const userId = req.user.id;
+    
+    const user = await User.findById(userId).select('-password');
+    
+    if (!user) {
+      return res.status(404).json({ message: 'Usuario no encontrado' });
+    }
+    
+    res.status(200).json(user);
+  } catch (error) {
+    console.error('Error al obtener usuario actual:', error);
+    res.status(500).json({ message: 'Error al obtener usuario actual' });
+  }
+};
+
 // Actualizar un usuario
 exports.updateUser = async (req, res) => {
   try {

@@ -13,6 +13,7 @@ router.delete('/:id', isAdmin, userController.deleteUser);
 router.post('/reset-all-to-inactive', isAdmin, userController.resetAllUsersToInactive);
 
 // Rutas para usuarios autenticados
+router.get('/me', userController.getCurrentUser);
 router.get('/:id', userController.getUserById);
 router.put('/:id', userController.updateUser);
 router.put('/:id/change-password', userController.changePassword);
