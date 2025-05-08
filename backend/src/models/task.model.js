@@ -17,8 +17,8 @@ const taskSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['pending', 'in_progress', 'in-progress', 'completed', 'paused'],
-    default: 'pending'
+    enum: ['pending', 'pending_acceptance', 'in_progress', 'in-progress', 'completed', 'paused', 'rejected'],
+    default: 'pending_acceptance'
   },
   userId: {
     type: mongoose.Schema.Types.ObjectId,
@@ -75,6 +75,15 @@ const taskSchema = new mongoose.Schema({
   timeExpired: {
     type: Boolean,
     default: false // Indica si la tarea ha expirado por tiempo
+  },
+  acceptedAt: {
+    type: Date,
+    default: null // Fecha en que el usuario aceptó la tarea
+  },
+  acceptanceStatus: {
+    type: String,
+    enum: ['pending', 'accepted', 'rejected'],
+    default: 'pending'
   }
 }, {
   timestamps: true,

@@ -875,3 +875,73 @@ exports.getTaskById = async (req, res) => {
     });
   }
 };
+
+/**
+ * Permite a un usuario aceptar o rechazar una tarea asignada
+ * @param {Object} req - Objeto de solicitud
+ * @param {Object} res - Objeto de respuesta
+ */
+exports.respondToTask = async (req, res) => {
+  try {
+    const taskId = req.params.id;
+    const { response } = req.body; // 'accept' o 'reject'
+    const userId = req.user.id;
+
+    console.log(`Usuario ${req.user.username} respondiendo a tarea ${taskId} con: ${response}`);
+
+    // Verificar que la tarea existe y pertenece al usuario
+    const task = await Task.findOne({ _id: taskId, userId });
+    
+    if (!task) {
+      return res.status(404).json({ message: 'Tarea no encontrada o no autorizada' });
+    }
+    
+    // Verificar que la tarea está pendiente de aceptación
+    if (task.acceptanceStatus !== 'pending') {
+      return res.status(400).json({ message: 'Esta tarea ya ha sido aceptada o rechazada' });
+    }
+    
+    if (response === 'accept') {
+      // Actualizar la tarea como aceptada
+      task.acceptanceStatus = 'accepted';
+      task.acceptedAt = new Date();
+      task.status = 'in_progress';
+      
+      // Si tiene tiempo límite, establecer ahora como el inicio del contador
+      if (task.timeLimit) {
+        task.timeLimitSet = new Date();
+      }
+      
+      await task.save();
+      
+      // Registrar actividad
+      await registerTaskActivity(userId, taskId, 'task_accepted', task);
+      
+      res.status(200).json({ 
+        message: 'Tarea aceptada correctamente',
+        task 
+      });
+    } 
+    else if (response === 'reject') {
+      // Actualizar la tarea como rechazada
+      task.acceptanceStatus = 'rejected';
+      task.status = 'rejected';
+      
+      await task.save();
+      
+      // Registrar actividad
+      await registerTaskActivity(userId, taskId, 'task_rejected', task);
+      
+      res.status(200).json({ 
+        message: 'Tarea rechazada correctamente',
+        task 
+      });
+    } 
+    else {
+      return res.status(400).json({ message: 'Respuesta inválida. Use "accept" o "reject"' });
+    }
+  } catch (error) {
+    console.error('Error al responder a la tarea:', error);
+    res.status(500).json({ message: 'Error al procesar la respuesta', error: error.message });
+  }
+};

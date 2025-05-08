@@ -11,6 +11,7 @@ router.get('/my-tasks', (req, res) => taskController.getMyTasks(req, res));
 router.get('/nearby', (req, res) => taskController.getNearbyTasks(req, res));
 router.get('/active', (req, res) => taskController.getActiveTask(req, res)); // Obtener tarea activa (manos libres)
 router.post('/note', (req, res) => taskController.addTaskNote(req, res)); // Añadir notas de voz
+router.post('/:id/respond', (req, res) => taskController.respondToTask(req, res)); // Aceptar o rechazar una tarea
 router.get('/:id', (req, res) => taskController.getTaskById(req, res)); // Obtener una tarea específica
 router.put('/:id', (req, res) => taskController.updateTask(req, res)); // Actualizar una tarea (si es el propietario)
 router.delete('/:id', (req, res) => taskController.deleteTask(req, res)); // Eliminar una tarea (si es el propietario)
