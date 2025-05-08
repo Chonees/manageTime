@@ -910,9 +910,23 @@ exports.respondToTask = async (req, res) => {
       return res.status(404).json({ message: 'Tarea no encontrada o no autorizada' });
     }
     
-    // Verificar que la tarea está pendiente de aceptación
-    if (task.acceptanceStatus !== 'pending') {
-      return res.status(400).json({ message: 'Esta tarea ya ha sido aceptada o rechazada' });
+    // Modificamos la validación para permitir volver a rechazar o aceptar en caso de problemas
+    // Solo verificamos si ya fue aceptada y se intenta rechazar, o viceversa
+    if ((task.acceptanceStatus === 'accepted' && response === 'reject') || 
+        (task.acceptanceStatus === 'rejected' && response === 'accept')) {
+      return res.status(400).json({ 
+        message: 'No se puede cambiar la respuesta una vez establecida' 
+      });
+    }
+    
+    // Si la tarea tiene el mismo estado que se solicita, simplemente confirmamos éxito
+    if ((task.acceptanceStatus === 'accepted' && response === 'accept') || 
+        (task.acceptanceStatus === 'rejected' && response === 'reject')) {
+      return res.status(200).json({ 
+        message: `Tarea ya ${response === 'accept' ? 'aceptada' : 'rechazada'} previamente`,
+        task,
+        success: true 
+      });
     }
     
     if (response === 'accept') {
@@ -928,8 +942,20 @@ exports.respondToTask = async (req, res) => {
       
       await task.save();
       
-      // Registrar actividad
-      await registerTaskActivity(userId, taskId, 'task_accepted', task);
+      // Registrar actividad - creamos una actividad separada en la colección de actividades
+      const activity = new Activity({
+        type: 'task_accepted',
+        userId: userId,
+        taskId: taskId,
+        message: `Tarea "${task.title}" aceptada`,
+        metadata: {
+          title: task.title,
+          acceptedAt: new Date().toISOString()
+        }
+      });
+      
+      await activity.save();
+      console.log(`Actividad de aceptación registrada con ID: ${activity._id}`);
       
       // Obtener datos del usuario para la notificación
       const userInfo = await User.findById(userId);
@@ -965,14 +991,27 @@ exports.respondToTask = async (req, res) => {
     } 
     else if (response === 'reject') {
       // Registrar actividad de rechazo antes de eliminar la tarea
-      await registerTaskActivity(userId, taskId, 'task_rejected', task);
+      const activity = new Activity({
+        type: 'task_rejected',
+        userId: userId,
+        taskId: taskId,
+        message: `Tarea "${task.title}" rechazada`,
+        metadata: {
+          title: task.title,
+          rejectedAt: new Date().toISOString()
+        }
+      });
       
-      // Obtener datos del administrador y tarea para la notificación
-      const adminInfo = await User.findOne({ isAdmin: true });
+      await activity.save();
+      console.log(`Actividad de rechazo registrada con ID: ${activity._id}`);
+      
+      // Obtener datos del usuario para la notificación
       const userInfo = await User.findById(userId);
       
-      // Eliminar la tarea completamente
-      await Task.deleteOne({ _id: taskId });
+      // Marcar la tarea como rechazada antes de eliminarla, por si hay algún error
+      task.acceptanceStatus = 'rejected';
+      task.status = 'rejected';
+      await task.save();
       
       // Crear datos para la notificación
       const activityData = {
@@ -997,6 +1036,10 @@ exports.respondToTask = async (req, res) => {
       } catch (notificationError) {
         console.error('Error al enviar notificación de rechazo al administrador:', notificationError);
       }
+      
+      // Eliminar la tarea completamente
+      await Task.deleteOne({ _id: taskId });
+      console.log(`Tarea ${taskId} eliminada después de ser rechazada`);
       
       res.status(200).json({ 
         message: 'Tarea rechazada y eliminada correctamente',
