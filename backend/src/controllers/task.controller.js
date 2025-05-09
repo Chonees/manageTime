@@ -6,7 +6,7 @@ const User = require('../models/user.model');
  * Función auxiliar para registrar actividades relacionadas con tareas
  * @param {Object} userId - ID del usuario que realiza la acción
  * @param {Object} taskId - ID de la tarea relacionada
- * @param {string} type - Tipo de actividad (task_create, task_update, task_complete, task_delete)
+ * @param {string} type - Tipo de actividad (task_create, task_update, task_complete, task_delete, task_accept, task_reject)
  * @param {Object} taskData - Datos de la tarea para construir el mensaje
  */
 const registerTaskActivity = async (userId, taskId, type, taskData) => {
@@ -43,6 +43,20 @@ const registerTaskActivity = async (userId, taskId, type, taskData) => {
         metadata = { 
           title: taskData.title,
           deletedAt: new Date().toISOString()
+        };
+        break;
+      case 'task_accept':
+        message = `Tarea "${taskData.title}" aceptada`;
+        metadata = { 
+          title: taskData.title,
+          acceptedAt: new Date().toISOString()
+        };
+        break;
+      case 'task_reject':
+        message = `Tarea "${taskData.title}" rechazada`;
+        metadata = { 
+          title: taskData.title,
+          rejectedAt: new Date().toISOString()
         };
         break;
       default:
@@ -414,7 +428,33 @@ exports.updateTask = async (req, res) => {
     if (description !== undefined) task.description = description;
     if (completed !== undefined) task.completed = completed;
     if (handsFreeMode !== undefined) task.handsFreeMode = handsFreeMode === true; // Asegurar que se guarde como booleano
-    if (status !== undefined) task.status = status;
+    
+    // Manejar cambios de estado
+    if (status !== undefined) {
+      const oldStatus = task.status;
+      task.status = status;
+      
+      // Registrar timestamps para cambios de estado específicos
+      if (status === 'in-progress' || status === 'in_progress') {
+        task.acceptedAt = new Date();
+      } else if (status === 'rejected') {
+        task.rejected = true;
+        task.rejectedAt = new Date();
+      }
+    }
+    
+    // Manejar campos específicos de aceptación/rechazo
+    if (req.body.acceptedAt !== undefined) {
+      task.acceptedAt = new Date(req.body.acceptedAt);
+    }
+    
+    if (req.body.rejected !== undefined) {
+      task.rejected = req.body.rejected;
+    }
+    
+    if (req.body.rejectedAt !== undefined) {
+      task.rejectedAt = new Date(req.body.rejectedAt);
+    }
     
     // Actualizar información de ubicación si se proporciona
     if (location && location.coordinates && location.coordinates.length === 2) {
@@ -456,6 +496,22 @@ exports.updateTask = async (req, res) => {
         await registerTaskActivity(req.user._id, task._id, 'task_update', {
           ...populatedTask.toObject(),
           changes: { completed: false }
+        });
+      }
+    } else if (status !== undefined) {
+      // Registrar actividades específicas para cambios de estado
+      if (status === 'in-progress' || status === 'in_progress') {
+        console.log(`Registrando tarea aceptada: ${task._id}`);
+        await registerTaskActivity(req.user._id, task._id, 'task_accept', populatedTask);
+      } else if (status === 'rejected') {
+        console.log(`Registrando tarea rechazada: ${task._id}`);
+        await registerTaskActivity(req.user._id, task._id, 'task_reject', populatedTask);
+      } else {
+        // Para cualquier otro cambio de estado, registrar como actualización normal
+        console.log(`Registrando cambio de estado de tarea: ${task._id} a ${status}`);
+        await registerTaskActivity(req.user._id, task._id, 'task_update', {
+          ...populatedTask.toObject(),
+          changes: { status }
         });
       }
     } else {
