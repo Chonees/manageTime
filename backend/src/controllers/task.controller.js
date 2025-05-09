@@ -134,7 +134,8 @@ exports.createTask = async (req, res) => {
     if (timeLimit && !isNaN(Number(timeLimit)) && Number(timeLimit) > 0) {
       console.log(`Configurando tiempo límite: ${timeLimit} minutos`);
       taskData.timeLimit = Number(timeLimit);
-      taskData.timeLimitSet = new Date().toISOString();
+      // No configurar timeLimitSet al crear la tarea - esto se configurará cuando el usuario inicie la tarea
+      // taskData.timeLimitSet = new Date().toISOString();
       console.log(`Fecha de inicio del límite: ${taskData.timeLimitSet}`);
     }
     
@@ -439,6 +440,11 @@ exports.updateTask = async (req, res) => {
         task.acceptedAt = new Date();
       } else if (status === 'accepted') {
         task.acceptedAt = new Date();
+        // Si la tarea tiene límite de tiempo, comenzar a contar desde que se acepta
+        if (task.timeLimit && !task.timeLimitSet) {
+          task.timeLimitSet = new Date();
+          console.log(`Iniciando temporizador para tarea ${task._id} al ser aceptada: ${task.timeLimitSet}`);
+        }
       } else if (status === 'rejected') {
         task.rejected = true;
         task.rejectedAt = new Date();
