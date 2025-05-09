@@ -916,12 +916,12 @@ exports.getTaskById = async (req, res) => {
     if (task.timeLimit) {
       console.log(`Tiempo límite: ${task.timeLimit} minutos, establecido en: ${task.timeLimitSet}`);
       
-      // Si tiene un límite pero no tiene fecha de inicio, establecerla ahora
-      if (!task.timeLimitSet) {
-        task.timeLimitSet = new Date().toISOString();
-        await task.save();
-        console.log(`Se estableció la fecha de inicio del límite: ${task.timeLimitSet}`);
-      }
+      // NO establecer automáticamente timeLimitSet aquí - solo se debe establecer cuando el usuario acepta la tarea
+      // if (!task.timeLimitSet) {
+      //   task.timeLimitSet = new Date().toISOString();
+      //   await task.save();
+      //   console.log(`Se estableció la fecha de inicio del límite: ${task.timeLimitSet}`);
+      // }
     }
     
     // Verificar si la tarea tiene ubicación
