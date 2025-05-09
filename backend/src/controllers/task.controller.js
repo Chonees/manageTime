@@ -437,6 +437,8 @@ exports.updateTask = async (req, res) => {
       // Registrar timestamps para cambios de estado específicos
       if (status === 'in-progress' || status === 'in_progress') {
         task.acceptedAt = new Date();
+      } else if (status === 'accepted') {
+        task.acceptedAt = new Date();
       } else if (status === 'rejected') {
         task.rejected = true;
         task.rejectedAt = new Date();
@@ -501,6 +503,9 @@ exports.updateTask = async (req, res) => {
     } else if (status !== undefined) {
       // Registrar actividades específicas para cambios de estado
       if (status === 'in-progress' || status === 'in_progress') {
+        console.log(`Registrando tarea aceptada: ${task._id}`);
+        await registerTaskActivity(req.user._id, task._id, 'task_accept', populatedTask);
+      } else if (status === 'accepted') {
         console.log(`Registrando tarea aceptada: ${task._id}`);
         await registerTaskActivity(req.user._id, task._id, 'task_accept', populatedTask);
       } else if (status === 'rejected') {

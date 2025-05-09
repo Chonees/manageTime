@@ -19,6 +19,7 @@ import MapView, { Marker, Circle } from 'react-native-maps';
 import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import VoiceListener from '../components/VoiceListener'; // Importar el componente de escucha de voz
+import TaskConfirmationModal from '../components/TaskConfirmationModal'; // Importar modal de confirmación
 
 const TaskDetailsScreen = ({ route, navigation }) => {
   const { taskId } = route.params;
@@ -40,6 +41,9 @@ const TaskDetailsScreen = ({ route, navigation }) => {
   const [taskActivities, setTaskActivities] = useState([]);
   const [spokenKeywords, setSpokenKeywords] = useState([]); // Nuevo estado para palabras clave ya pronunciadas
   const [remainingTime, setRemainingTime] = useState(null); // Estado para seguir el tiempo restante
+  const [showTaskConfirmation, setShowTaskConfirmation] = useState(false); // Estado para mostrar el modal de confirmación
+  const [confirmationLoading, setConfirmationLoading] = useState(false); // Estado para indicar carga durante la confirmación
+  const [hasShownConfirmation, setHasShownConfirmation] = useState(false); // Estado para controlar si ya se mostró la confirmación
   const timerIntervalRef = React.useRef(null); // Referencia para el intervalo del timer
 
   useEffect(() => {
@@ -69,6 +73,26 @@ const TaskDetailsScreen = ({ route, navigation }) => {
       }
     }
   }, [task]);
+
+  // Efecto para mostrar automáticamente el modal de confirmación
+  useEffect(() => {
+    // Mostrar automáticamente el modal de confirmación para usuarios normales
+    // cuando se carga una tarea que no está en progreso ni completada
+    if (
+      task && 
+      !user.isAdmin && 
+      !hasShownConfirmation && 
+      task.status === 'pending' && 
+      !task.completed
+    ) {
+      // Pequeño delay para asegurar que la interfaz ya está renderizada
+      const timer = setTimeout(() => {
+        setShowTaskConfirmation(true);
+      }, 500);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [task, user, hasShownConfirmation]);
 
   // Función para iniciar el temporizador de la tarea
   const startTaskTimer = () => {
@@ -521,15 +545,38 @@ const TaskDetailsScreen = ({ route, navigation }) => {
       return;
     }
 
+    // Verificar si el usuario ya ha tomado una decisión
+    if (!user.isAdmin && !hasShownConfirmation && !showTaskConfirmation) {
+      setShowTaskConfirmation(true);
+      return;
+    }
+
     try {
+      if (!user.isAdmin && showTaskConfirmation) {
+        setConfirmationLoading(true);
+      }
+      
       // Update task status to in-progress
-      const updatedTask = await api.updateTask(taskId, { status: 'in-progress' });
+      const updatedTask = await api.updateTask(taskId, { 
+        status: 'in-progress',
+        acceptedAt: new Date().toISOString() 
+      });
+      
+      // La actividad se registra automáticamente en el backend
+      
       setTask(updatedTask);
       setTaskStarted(true);
+      setHasShownConfirmation(true);
+      
+      if (showTaskConfirmation) {
+        setShowTaskConfirmation(false);
+        setConfirmationLoading(false);
+      }
 
       Alert.alert(t('success'), t('taskStarted'));
     } catch (error) {
       console.error('Error starting task:', error);
+      setConfirmationLoading(false);
       Alert.alert(t('error'), t('errorStartingTask'));
     }
   };
@@ -737,6 +784,41 @@ const TaskDetailsScreen = ({ route, navigation }) => {
     }
     
     return [];
+  };
+
+  // Función para manejar el rechazo de tarea
+  const handleRejectTask = async () => {
+    try {
+      setConfirmationLoading(true);
+      
+      // Actualizar el estado de la tarea a "rejected"
+      const updatedTask = await api.updateTask(taskId, { 
+        status: 'rejected',
+        rejected: true,
+        rejectedAt: new Date().toISOString() 
+      });
+      
+      // La actividad se registra automáticamente en el backend
+      
+      // Actualizar estado local
+      setTask(updatedTask);
+      setHasShownConfirmation(true);
+      
+      // Cerrar modal y mostrar confirmación
+      setShowTaskConfirmation(false);
+      setConfirmationLoading(false);
+      
+      // Notificar al usuario
+      Alert.alert(
+        t('taskRejected') || 'Tarea rechazada',
+        t('taskRejectedMessage') || 'Has rechazado esta tarea y ha sido inhabilitada.',
+        [{ text: t('ok') || 'OK', onPress: () => navigation.goBack() }]
+      );
+    } catch (error) {
+      console.error('Error rechazando tarea:', error);
+      setConfirmationLoading(false);
+      Alert.alert(t('error') || 'Error', t('errorRejectingTask') || 'Error al rechazar la tarea');
+    }
   };
 
   if (loading) {
@@ -1035,6 +1117,18 @@ const TaskDetailsScreen = ({ route, navigation }) => {
           </View>
         </View>
       </ScrollView>
+      
+      {/* Agregar el modal de confirmación de tarea al final del componente */}
+      {!user.isAdmin && !hasShownConfirmation && (
+        <TaskConfirmationModal
+          visible={showTaskConfirmation}
+          task={task}
+          onAccept={handleStartTask}
+          onReject={handleRejectTask}
+          onClose={() => setShowTaskConfirmation(false)}
+          isLoading={confirmationLoading}
+        />
+      )}
     </SafeAreaView>
   );
 };
