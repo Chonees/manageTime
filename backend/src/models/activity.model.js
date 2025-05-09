@@ -33,7 +33,11 @@ const ActivitySchema = new Schema({
       'location_exit',
       'task_create',
       'task_update',
-      'task_complete'
+      'task_complete',
+      'task_delete',
+      'task_assign',
+      'task_accept',
+      'task_reject'
     ]
   },
   
