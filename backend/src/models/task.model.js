@@ -66,7 +66,7 @@ const taskSchema = new mongoose.Schema({
   timeLimit: {
     type: Number,
     min: 1,
-    default: null // Tiempo límite en minutos
+    default: 0 // Tiempo límite en minutos
   },
   timeLimitSet: {
     type: Date,

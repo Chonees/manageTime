@@ -442,7 +442,7 @@ exports.updateTask = async (req, res) => {
         // Si la tarea tiene límite de tiempo, comenzar a contar desde que se acepta
         if (task.timeLimit && !task.timeLimitSet) {
           task.timeLimitSet = new Date();
-          console.log(`Iniciando temporizador para tarea ${task._id} al ser aceptada: ${task.timeLimitSet}`);
+          console.log(`⏱️ Iniciando temporizador para tarea ${task._id} al ser aceptada: ${task.timeLimitSet}`);
         }
       } else if (status === 'rejected') {
         task.rejected = true;
