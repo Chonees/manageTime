@@ -266,9 +266,8 @@ exports.createAssignedTask = async (req, res) => {
     if (timeLimit) {
       // Asegurar que timeLimit es un número
       taskData.timeLimit = typeof timeLimit === 'string' ? Number(timeLimit) : timeLimit;
-      // Si se proporciona timeLimitSet, usarlo, de lo contrario usar la fecha actual
-      taskData.timeLimitSet = timeLimitSet || new Date().toISOString();
-      console.log(`Tarea con tiempo límite: ${taskData.timeLimit} minutos, establecido en: ${taskData.timeLimitSet}`);
+      // NO establecer timeLimitSet aquí - esto se configurará cuando el usuario acepte la tarea
+      console.log(`Tarea con tiempo límite: ${taskData.timeLimit} minutos`);
     }
     
     const task = new Task(taskData);
