@@ -1082,7 +1082,7 @@ export const saveActivity = async (activityData) => {
     const validTypes = [
       'task_create', 'task_update', 'task_complete', 'task_delete',
       'task_assign', 'location_enter', 'location_exit',
-      'task_activity'
+      'task_activity', 'task_accept', 'task_reject'
     ];
     
     if (!validTypes.includes(dataToSend.type)) {

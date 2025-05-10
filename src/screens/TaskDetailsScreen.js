@@ -62,14 +62,30 @@ const TaskDetailsScreen = ({ route, navigation }) => {
     };
   }, [taskId]);
 
-  // Start location tracking when task data is loaded
+  // Efecto para iniciar el temporizador solo cuando la tarea está aceptada o en progreso
   useEffect(() => {
     if (task) {
       startLocationTracking();
       
-      // Iniciar el temporizador si la tarea tiene un límite de tiempo
-      if (task.timeLimit && task.timeLimitSet) {
-        startTaskTimer();
+      // Mostrar el temporizador si la tarea tiene límite de tiempo
+      if (task.timeLimit) {
+        // Si la tarea está aceptada o en progreso y tiene timeLimitSet, iniciar el timer
+        if ((task.status === 'accepted' || task.status === 'in-progress' || task.status === 'in_progress') && 
+             task.timeLimitSet) {
+          console.log(`Iniciando temporizador para tarea ${task._id} con estado ${task.status}`);
+          startTaskTimer();
+          
+          // Si la tarea está en progreso, establecer taskStarted en true
+          if ((task.status === 'in-progress' || task.status === 'in_progress') && !taskStarted) {
+            setTaskStarted(true);
+          }
+        } 
+        // Si solo tiene timeLimit pero aún no está aceptada o no tiene timeLimitSet, mostrar el timer estático
+        else {
+          // Mostrar el tiempo completo (sin contar)
+          const timeLimitMs = task.timeLimit * 60 * 1000; // Convertir minutos a milisegundos
+          setRemainingTime(timeLimitMs);
+        }
       }
     }
   }, [task]);
@@ -94,6 +110,30 @@ const TaskDetailsScreen = ({ route, navigation }) => {
     }
   }, [task, user, hasShownConfirmation]);
 
+  // Efecto para comprobar si esta tarea ya ha sido confirmada anteriormente
+  useEffect(() => {
+    // Función para verificar si esta tarea ya ha sido confirmada
+    const checkTaskConfirmation = async () => {
+      try {
+        if (taskId) {
+          // Obtener la lista de tareas confirmadas de AsyncStorage
+          const confirmedTasksString = await AsyncStorage.getItem('confirmedTasks');
+          const confirmedTasks = confirmedTasksString ? JSON.parse(confirmedTasksString) : [];
+          
+          // Verificar si esta tarea está en la lista
+          if (confirmedTasks.includes(taskId)) {
+            console.log(`Tarea ${taskId} ya fue confirmada anteriormente`);
+            setHasShownConfirmation(true);
+          }
+        }
+      } catch (error) {
+        console.error('Error verificando estado de confirmación de tarea:', error);
+      }
+    };
+    
+    checkTaskConfirmation();
+  }, [taskId]);
+
   // Función para iniciar el temporizador de la tarea
   const startTaskTimer = () => {
     if (!task) {
@@ -110,15 +150,10 @@ const TaskDetailsScreen = ({ route, navigation }) => {
       return;
     }
     
+    // Verificar si hay una fecha de inicio del temporizador
     if (!task.timeLimitSet) {
-      console.log("No se encontró campo timeLimitSet en la tarea");
-      // Si no hay fecha establecida pero sí hay límite, establecer ahora
-      if (timeLimitValue) {
-        console.log("Estableciendo timeLimitSet a la fecha actual");
-        task.timeLimitSet = new Date().toISOString();
-      } else {
-        return;
-      }
+      console.log("No se encontró fecha de inicio del temporizador");
+      return;
     }
     
     console.log(`Iniciando temporizador: Límite de ${timeLimitValue} minutos, establecido en ${task.timeLimitSet}`);
@@ -556,10 +591,13 @@ const TaskDetailsScreen = ({ route, navigation }) => {
         setConfirmationLoading(true);
       }
       
+      // Establecer la fecha de inicio del temporizador
+      const now = new Date().toISOString();
+      
       // Update task status to in-progress
       const updatedTask = await api.updateTask(taskId, { 
         status: 'in-progress',
-        acceptedAt: new Date().toISOString() 
+        timeLimitSet: now  // Establecer explícitamente la fecha de inicio del temporizador
       });
       
       // La actividad se registra automáticamente en el backend
@@ -573,6 +611,9 @@ const TaskDetailsScreen = ({ route, navigation }) => {
         setConfirmationLoading(false);
       }
 
+      // Iniciar manualmente el temporizador
+      startTaskTimer();
+      
       Alert.alert(t('success'), t('taskStarted'));
     } catch (error) {
       console.error('Error starting task:', error);
@@ -759,7 +800,9 @@ const TaskDetailsScreen = ({ route, navigation }) => {
     
     setSpokenKeywords(prev => {
       // Verificar si ya existe considerando mayúsculas/minúsculas
-      const alreadyExists = prev.some(k => k.toLowerCase().trim() === normalizedKeyword);
+      const alreadyExists = prev.some(
+        spoken => spoken.toLowerCase().trim() === normalizedKeyword
+      );
       
       if (!alreadyExists) {
         console.log(`Añadiendo palabra clave nueva: "${keyword}"`);
@@ -791,33 +834,90 @@ const TaskDetailsScreen = ({ route, navigation }) => {
     try {
       setConfirmationLoading(true);
       
-      // Actualizar el estado de la tarea a "rejected"
+      // Cerrar el modal primero
+      setShowTaskConfirmation(false);
+      
+      // Marcar que ya se mostró la confirmación para que no vuelva a aparecer
+      setHasShownConfirmation(true);
+      
+      // Guardar permanentemente que esta tarea ya ha sido confirmada
+      await saveTaskAsConfirmed();
+      
+      // Notificar al usuario
+      Alert.alert(
+        t('taskRejected') || 'Tarea rechazada',
+        t('taskRejectedMessage') || 'Esta tarea ha sido eliminada porque la rechazaste.',
+        [{ text: t('ok') || 'OK' }]
+      );
+      
+      // Eliminar la tarea directamente (igual que cuando el tiempo se agota)
+      await api.deleteTask(taskId);
+      
+      // Regresar a la pantalla anterior
+      navigation.goBack();
+      
+      setConfirmationLoading(false);
+    } catch (error) {
+      console.error('Error rechazando tarea:', error);
+      setConfirmationLoading(false);
+      Alert.alert(t('error') || 'Error', t('errorRejectingTask') || 'Error al rechazar la tarea');
+    }
+  };
+
+  // Nueva función para aceptar tarea sin iniciarla
+  const handleAcceptTask = async () => {
+    try {
+      setConfirmationLoading(true);
+      
+      // Actualizar el estado de la tarea a "accepted" (no "in-progress")
       const updatedTask = await api.updateTask(taskId, { 
-        status: 'rejected',
-        rejected: true,
-        rejectedAt: new Date().toISOString() 
+        status: 'accepted',
+        acceptedAt: new Date().toISOString()
       });
       
       // La actividad se registra automáticamente en el backend
       
-      // Actualizar estado local
+      // Actualizar estado local pero asegurarse de NO iniciar la tarea
       setTask(updatedTask);
+      
+      // Marcar que ya se mostró la confirmación para que no vuelva a aparecer
       setHasShownConfirmation(true);
       
-      // Cerrar modal y mostrar confirmación
+      // Guardar permanentemente que esta tarea ya ha sido confirmada
+      await saveTaskAsConfirmed();
+      
+      // Cerrar modal
       setShowTaskConfirmation(false);
       setConfirmationLoading(false);
       
       // Notificar al usuario
       Alert.alert(
-        t('taskRejected') || 'Tarea rechazada',
-        t('taskRejectedMessage') || 'Has rechazado esta tarea y ha sido inhabilitada.',
-        [{ text: t('ok') || 'OK', onPress: () => navigation.goBack() }]
+        t('taskAccepted') || 'Tarea aceptada',
+        t('taskAcceptedMessage') || 'Has aceptado esta tarea. Puedes iniciarla cuando estés listo.'
       );
     } catch (error) {
-      console.error('Error rechazando tarea:', error);
+      console.error('Error aceptando tarea:', error);
       setConfirmationLoading(false);
-      Alert.alert(t('error') || 'Error', t('errorRejectingTask') || 'Error al rechazar la tarea');
+      Alert.alert(t('error') || 'Error', t('errorAcceptingTask') || 'Error al aceptar la tarea');
+    }
+  };
+
+  // Función para guardar que la tarea ha sido confirmada
+  const saveTaskAsConfirmed = async () => {
+    try {
+      // Obtener lista actual de tareas confirmadas
+      const confirmedTasksString = await AsyncStorage.getItem('confirmedTasks');
+      const confirmedTasks = confirmedTasksString ? JSON.parse(confirmedTasksString) : [];
+      
+      // Añadir esta tarea si no está ya incluida
+      if (!confirmedTasks.includes(taskId)) {
+        confirmedTasks.push(taskId);
+        // Guardar la lista actualizada
+        await AsyncStorage.setItem('confirmedTasks', JSON.stringify(confirmedTasks));
+        console.log(`Tarea ${taskId} marcada como confirmada permanentemente`);
+      }
+    } catch (error) {
+      console.error('Error guardando estado de confirmación:', error);
     }
   };
 
@@ -1123,8 +1223,8 @@ const TaskDetailsScreen = ({ route, navigation }) => {
         <TaskConfirmationModal
           visible={showTaskConfirmation}
           task={task}
-          onAccept={handleStartTask}
           onReject={handleRejectTask}
+          onAcceptWithoutStart={handleAcceptTask} // Solo usamos la función para aceptar sin iniciar
           onClose={() => setShowTaskConfirmation(false)}
           isLoading={confirmationLoading}
         />

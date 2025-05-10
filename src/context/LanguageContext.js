@@ -63,6 +63,18 @@ export const translations = {
     activityTypes: 'Activity Types',
     activity: 'Activity',
     
+    // Task confirmation modal
+    confirmTask: 'Confirm Task',
+    taskConfirmationQuestion: 'Do you want to accept this task?',
+    accept: 'Accept',
+    reject: 'Reject',
+    timeLimit: 'Time limit',
+    minutes: 'minutes',
+    taskRejected: 'Task Rejected',
+    taskRejectedMessage: 'You have rejected this task and it has been disabled.',
+    errorRejectingTask: 'Error rejecting task',
+    taskHasTimeLimit: 'This task has a time limit of {{minutes}} minutes',
+    
     // Activity type translations
     locationEnter: 'Location Entry',
     locationExit: 'Location Exit',
@@ -748,6 +760,18 @@ export const translations = {
     loadingMore: 'Cargando más...',
     activityTypes: 'Tipos de Actividad',
     activity: 'Actividad',
+    
+    // Task confirmation modal
+    confirmTask: 'Confirmar Tarea',
+    taskConfirmationQuestion: '¿Desea aceptar esta tarea?',
+    accept: 'Aceptar',
+    reject: 'Rechazar',
+    timeLimit: 'Límite de tiempo',
+    minutes: 'minutos',
+    taskRejected: 'Tarea Rechazada',
+    taskRejectedMessage: 'Ha rechazado esta tarea y ha sido deshabilitada.',
+    errorRejectingTask: 'Error al rechazar la tarea',
+    taskHasTimeLimit: 'Esta tarea tiene un límite de tiempo de {{minutes}} minutos',
     
     // Activity type translations
     locationEnter: 'Entrada a Ubicación',
