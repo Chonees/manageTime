@@ -35,12 +35,6 @@ const DashboardScreen = ({ navigation }) => {
   const [tasks, setTasks] = useState([]);
   const theme = useTheme();
   
-  // Estados para controlar el trabajo
-  const [isWorking, setIsWorking] = useState(false);
-  const [workStartTime, setWorkStartTime] = useState(null);
-  const [workTime, setWorkTime] = useState('00:00:00');
-  const [loadingAction, setLoadingAction] = useState(false);
-  
   // Referencia para el intervalo de actualización de ubicación
   const locationUpdateIntervalRef = useRef(null);
   // Referencia para el intervalo de actualización de tareas
@@ -49,7 +43,6 @@ const DashboardScreen = ({ navigation }) => {
   // Load initial data
   useEffect(() => {
     loadDashboardData();
-    checkWorkStatus();
     
     // Iniciar actualización de la ubicación cada 10 segundos
     startLocationUpdates();
@@ -67,48 +60,6 @@ const DashboardScreen = ({ navigation }) => {
       }
     };
   }, []);
-
-  // Efecto para actualizar el contador de tiempo
-  useEffect(() => {
-    let interval;
-    
-    if (isWorking && workStartTime) {
-      interval = setInterval(() => {
-        const now = new Date();
-        const diff = now - workStartTime;
-        
-        const hours = Math.floor(diff / (1000 * 60 * 60));
-        const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-        const seconds = Math.floor((diff % (1000 * 60)) / 1000);
-        
-        setWorkTime(`${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`);
-      }, 1000);
-    }
-    
-    return () => {
-      if (interval) {
-        clearInterval(interval);
-      }
-    };
-  }, [isWorking, workStartTime]);
-
-  // Verificar si el usuario está trabajando actualmente
-  const checkWorkStatus = async () => {
-    try {
-      // En una implementación real, esto sería una llamada a la API
-      // const status = await api.getWorkStatus();
-      // setIsWorking(status.isWorking);
-      // if (status.isWorking && status.startTime) {
-      //   setWorkStartTime(new Date(status.startTime));
-      // }
-      
-      // Por ahora, asumimos que no está trabajando
-      setIsWorking(false);
-      setWorkStartTime(null);
-    } catch (error) {
-      console.error('Error checking work status:', error);
-    }
-  };
 
   // Función para obtener las últimas tareas sin mostrar el indicador de carga
   const fetchLatestTasks = async () => {
@@ -207,116 +158,11 @@ const DashboardScreen = ({ navigation }) => {
     }, 15000); // Reducido a 15 segundos para pruebas
   };
 
-  // Función para iniciar trabajo
-  const handleStartWork = async () => {
-    if (!position) {
-      Alert.alert(t('error'), t('noLocationError'));
-      return;
-    }
-    
-    try {
-      setLoadingAction(true);
-      
-      const coords = {
-        latitude: position.latitude,
-        longitude: position.longitude
-      };
-      
-      console.log('Registrando disponibilidad con coordenadas:', coords);
-      
-      // Registrar actividad de disponibilidad directamente, sin llamar a startWork
-      try {
-        console.log('Registrando actividad de disponibilidad...');
-        const activityData = {
-          type: 'task_activity', // Usar el tipo que el backend reconoce
-          message: 'Usuario marcado como disponible',
-          metadata: {
-            latitude: String(coords.latitude),
-            longitude: String(coords.longitude),
-            timestamp: new Date().toISOString(),
-            availability: 'available' // Esto es crucial para identificar que es una actividad de disponibilidad
-          }
-        };
-        
-        console.log('Datos de actividad a enviar:', JSON.stringify(activityData));
-        const activityResult = await api.saveActivity(activityData);
-        console.log('Actividad registrada correctamente:', JSON.stringify(activityResult));
-        
-        setIsWorking(true);
-        setWorkStartTime(new Date());
-        
-        Alert.alert(t('success'), t('workStarted'));
-      } catch (activityError) {
-        console.error('Error al registrar actividad:', activityError);
-        Alert.alert(t('error'), activityError.message || t('errorStartingWork'));
-      }
-    } catch (error) {
-      console.error('Error al iniciar trabajo:', error);
-      Alert.alert(t('error'), error.message || t('errorStartingWork'));
-    } finally {
-      setLoadingAction(false);
-    }
-  };
-
-  // Función para finalizar trabajo
-  const handleEndWork = async () => {
-    if (!position) {
-      Alert.alert(t('error'), t('noLocationError'));
-      return;
-    }
-    
-    try {
-      setLoadingAction(true);
-      
-      const coords = {
-        latitude: position.latitude,
-        longitude: position.longitude
-      };
-      
-      console.log('Registrando no disponibilidad con coordenadas:', coords);
-      
-      // Registrar actividad de no disponibilidad directamente, sin llamar a endWork
-      try {
-        console.log('Registrando actividad de no disponibilidad...');
-        const duration = workStartTime ? Math.floor((new Date() - workStartTime) / 1000) : 0;
-        const activityData = {
-          type: 'task_activity', // Usar el tipo que el backend reconoce
-          message: `Usuario marcado como no disponible (duración: ${Math.floor(duration/60)} minutos)`,
-          metadata: {
-            duration: duration,
-            latitude: String(coords.latitude),
-            longitude: String(coords.longitude),
-            timestamp: new Date().toISOString(),
-            availability: 'unavailable' // Esto es crucial para identificar que es una actividad de disponibilidad
-          }
-        };
-        
-        console.log('Datos de actividad a enviar:', JSON.stringify(activityData));
-        const activityResult = await api.saveActivity(activityData);
-        console.log('Actividad registrada correctamente:', JSON.stringify(activityResult));
-        
-        setIsWorking(false);
-        setWorkStartTime(null);
-        
-        Alert.alert(t('success'), t('workEnded'));
-      } catch (activityError) {
-        console.error('Error al registrar actividad:', activityError);
-        Alert.alert(t('error'), activityError.message || t('errorEndingWork'));
-      }
-    } catch (error) {
-      console.error('Error al finalizar trabajo:', error);
-      Alert.alert(t('error'), error.message || t('errorEndingWork'));
-    } finally {
-      setLoadingAction(false);
-    }
-  };
-
   // Function to refresh data
   const onRefresh = async () => {
     setRefreshing(true);
     try {
       await loadDashboardData();
-      await checkWorkStatus();
     } catch (error) {
       console.error('Error refreshing data:', error);
     } finally {
@@ -414,40 +260,7 @@ const DashboardScreen = ({ navigation }) => {
           mapOnly={true}
           customHeight={240}
           transparentContainer={true}
-          isWorking={isWorking}
         />
-
-        {/* Disponible/No disponible Button */}
-        {isWorking ? (
-          <View style={styles.workStatusContainer}>
-            <Text style={[styles.workStatusText, { color: theme.colors.text.primary }]}>
-              {t('workingSince')} {workTime}
-            </Text>
-            <TouchableOpacity 
-              style={[styles.workButton, { backgroundColor: theme.colors.error }]}
-              onPress={handleEndWork}
-              disabled={loadingAction}
-            >
-              {loadingAction ? (
-                <ActivityIndicator size="small" color="#fff3e5" />
-              ) : (
-                <Text style={[styles.workButtonText, { color: theme.colors.text.dark }]}>{t('endWork')}</Text>
-              )}
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <TouchableOpacity 
-            style={[styles.workButton, { backgroundColor: theme.colors.primary }]}
-            onPress={handleStartWork}
-            disabled={loadingAction}
-          >
-            {loadingAction ? (
-              <ActivityIndicator size="small" color="#fff3e5" />
-            ) : (
-              <Text style={[styles.workButtonText, { color: theme.colors.text.dark }]}>{t('startWork')}</Text>
-            )}
-          </TouchableOpacity>
-        )}
       </View>
 
       {/* Pending tasks Card */}
@@ -569,65 +382,33 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
   },
-  // Los estilos mapContainer y cardBody han sido eliminados para simplificar la estructura
-  workButton: {
-    padding: 15,
-    alignItems: 'center',
-    justifyContent: 'center',
-    margin: 10,
-    borderRadius: 8,
-  },
-  workButtonText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  workStatusContainer: {
-    padding: 10,
-    alignItems: 'center',
-    backgroundColor: '#1c1c1c',
-    borderBottomLeftRadius: 15,
-    borderBottomRightRadius: 15,
-  },
-  workStatusText: {
-    fontSize: 16,
-    marginBottom: 10,
-    fontWeight: '500',
-    color: '#fff3e5',
-  },
   taskItem: {
     paddingVertical: 12,
     paddingHorizontal: 5,
-    // Se eliminó el borde inferior
-  },
-  taskContent: {
-    flex: 1,
   },
   taskTitle: {
     fontSize: 16,
     fontWeight: '500',
   },
-  emptyText: {
-    textAlign: 'center',
-    fontSize: 16,
-    paddingVertical: 20,
-  },
   buttonsContainer: {
     flexDirection: 'row',
-    justifyContent: 'center',
-    marginHorizontal: 8,
-    marginVertical: 15,
+    justifyContent: 'space-around',
+    paddingVertical: 20,
+    marginHorizontal: 5,
   },
   navButton: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 15,
-    borderRadius: 8,
-    width: '80%',
+    paddingVertical: 12,
+    marginHorizontal: 5,
+    borderRadius: 15,
   },
   navButtonText: {
     fontSize: 16,
-    marginLeft: 5,
+    fontWeight: 'bold',
+    marginLeft: 8,
   },
 });
 

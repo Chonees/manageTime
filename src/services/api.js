@@ -837,7 +837,9 @@ export const assignTask = async (taskData) => {
       })
     };
     
+    // Usar la ruta correcta para asignar tareas
     const response = await fetchWithRetry(`${getApiUrl()}/api/tasks/assign`, options);
+    console.log('Response status:', response.status);
     
     // Si la respuesta no es exitosa, lanzamos un error
     if (!response.ok) {

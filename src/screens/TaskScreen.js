@@ -249,7 +249,7 @@ const TaskScreen = ({ navigation }) => {
       userId: selectedUserId, // Puede ser null
       location: locationData, // Asignar la ubicación correctamente formateada
       handsFreeMode: handsFreeMode,
-      keywords: taskKeywords.length > 0 ? taskKeywords : undefined,
+      keywords: taskKeywords.length > 0 ? taskKeywords.join(',') : undefined,
       radius: parseFloat(taskRadius) || 1.0,
       locationName: taskLocationName || ''
     };
