@@ -176,10 +176,22 @@ const sendPushNotifications = async (tokens, title, body, data = {}) => {
  */
 const notifyByRole = async (title, body, data = {}, role = null) => {
   try {
+    // Verificar si la notificación es solo para administradores
+    const isAdminOnlyNotification = data.adminOnly === true;
+    
+    // Si la notificación es solo para administradores, forzar el rol a 'admin'
+    if (isAdminOnlyNotification && role !== 'admin') {
+      logger.info('Notificación marcada como adminOnly, forzando rol a admin');
+      role = 'admin';
+    }
+    
     // Construir query para buscar usuarios con token
     const query = { pushToken: { $exists: true, $ne: null } };
+    
+    // Si se especifica un rol, filtrar por ese rol
     if (role) {
       query.isAdmin = role === 'admin';
+      logger.info(`Filtrando usuarios por rol: isAdmin=${query.isAdmin}`);
     }
     
     // Buscar usuarios que coincidan con el rol
@@ -194,9 +206,9 @@ const notifyByRole = async (title, body, data = {}, role = null) => {
     const tokens = users.map(user => user.pushToken).filter(Boolean);
     logger.info(`Enviando notificación a ${tokens.length} usuarios con rol ${role || 'cualquiera'}`);
     
-    // Log de usuarios que recibirán notificación
+    // Log detallado de usuarios que recibirán notificación
     users.forEach(user => {
-      console.log(`Usuario que recibirá notificación: ${user.username}, Token: ${user.pushToken}`);
+      console.log(`Usuario que recibirá notificación: ${user.username}, isAdmin: ${user.isAdmin}, Token: ${user.pushToken}`);
     });
     
     // Enviar notificaciones
@@ -217,14 +229,40 @@ const notifyByRole = async (title, body, data = {}, role = null) => {
  */
 const notifyUser = async (userId, title, body, data = {}) => {
   try {
+    // Verificar si la notificación es solo para administradores
+    if (data.adminOnly === true) {
+      // Verificar si el usuario es administrador
+      const user = await User.findById(userId);
+      if (!user || !user.isAdmin) {
+        logger.warn(`Notificación solo para administradores, usuario ${userId} no es administrador`);
+        return { success: false, error: 'Usuario no es administrador' };
+      }
+    }
+    
+    // Buscar el usuario y verificar que tenga token
     const user = await User.findById(userId);
     
-    if (!user || !user.pushToken) {
-      logger.warn(`Usuario ${userId} no tiene token de push registrado`);
+    if (!user) {
+      logger.warn(`Usuario ${userId} no encontrado`);
+      return { success: false, error: 'Usuario no encontrado' };
+    }
+    
+    if (!user.pushToken) {
+      logger.warn(`Usuario ${userId} (${user.username}) no tiene token de push registrado`);
       return { success: false, error: 'Usuario sin token' };
     }
     
-    return await sendPushNotifications([user.pushToken], title, body, data);
+    // Marcar explícitamente que esta notificación es para un usuario específico
+    const notificationData = {
+      ...data,
+      userSpecific: true,
+      targetUserId: userId
+    };
+    
+    logger.info(`Enviando notificación específica al usuario ${user.username} (${userId})`);
+    console.log(`Notificación para usuario específico: ${user.username}, isAdmin: ${user.isAdmin}, Token: ${user.pushToken}`);
+    
+    return await sendPushNotifications([user.pushToken], title, body, notificationData);
   } catch (error) {
     logger.error(`Error notificando al usuario ${userId}`, error);
     return { success: false, error: error.message };
@@ -300,23 +338,34 @@ const notifyAdminActivity = async (activity, notifyOwner = false) => {
       userId: activity.userId,
       username: username,
       critical: true,
-      priority: 'high'
+      priority: 'high',
+      adminOnly: true // Marcar que esta notificación es solo para administradores
     };
     
-    logger.info(`Enviando notificación de actividad "${activity.type}" a administradores`);
-    console.log(`Enviando notificación para actividad: ${activity.type}, de ${username}, mensaje: "${body}"`);
+    logger.info(`Enviando notificación de actividad "${activity.type}" SOLO a administradores`);
+    console.log(`Enviando notificación para actividad: ${activity.type}, de ${username}, mensaje: "${body}" SOLO a administradores`);
     
-    // Enviar notificación a todos los administradores
+    // Enviar notificación EXCLUSIVAMENTE a usuarios con rol de administrador
     const adminResult = await notifyByRole(title, body, notificationData, 'admin');
     
     // Si se solicita notificar también al propietario de la actividad y no es un admin
-    if (notifyOwner && activity.userId) {
+    // Y SOLO si es una notificación de tarea asignada al usuario
+    if (notifyOwner && activity.userId && 
+        (activity.type === 'task_assign' || activity.type === 'task_update' || 
+         activity.type === 'task_complete' || activity.type === 'task_activity')) {
       try {
         // Verificar que el usuario no sea un administrador para evitar notificaciones duplicadas
+        // Y que sea el propietario de la tarea
         const user = await User.findById(activity.userId);
         if (user && !user.isAdmin) {
-          logger.info(`Enviando notificación también al propietario de la actividad: ${user.username}`);
-          await notifyUser(activity.userId, title, body, notificationData);
+          logger.info(`Enviando notificación de tarea al propietario: ${user.username}`);
+          // Crear datos específicos para la notificación del usuario
+          const userNotificationData = {
+            ...notificationData,
+            adminOnly: false,
+            userSpecific: true
+          };
+          await notifyUser(activity.userId, title, body, userNotificationData);
         }
       } catch (ownerError) {
         logger.error(`Error al notificar al propietario de la actividad: ${activity.userId}`, ownerError);
