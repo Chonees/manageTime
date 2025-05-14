@@ -1943,6 +1943,135 @@ export const getUserAvailabilityStatus = async () => {
   }
 };
 
+// Function to save a task template for admin users
+// @param {Object} taskTemplate - Task template data
+// @returns {Promise<Object>} - Saved task template
+export const saveTaskTemplate = async (taskTemplate) => {
+  try {
+    // Obtenemos el token de autenticación
+    let token;
+    try {
+      token = await AsyncStorage.getItem('token');
+    } catch (storageError) {
+      throw new Error('No se pudo acceder al token de autenticación');
+    }
+    
+    if (!token) {
+      throw new Error('No hay token de autenticación disponible');
+    }
+    
+    // Establecemos un timeout para la solicitud
+    const options = {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify(taskTemplate)
+    };
+    
+    const response = await fetchWithRetry(`${getApiUrl()}/api/task-templates`, options);
+    
+    // Si la respuesta no es exitosa, lanzamos un error
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || `Error ${response.status}: ${response.statusText}`);
+    }
+    
+    // Procesamos la respuesta
+    const responseData = await response.json();
+    
+    return responseData;
+  } catch (error) {
+    throw error;
+  }
+};
+
+// Function to get task templates for admin users
+// @returns {Promise<Array>} - List of task templates
+export const getTaskTemplates = async () => {
+  try {
+    // Obtenemos el token de autenticación
+    let token;
+    try {
+      token = await AsyncStorage.getItem('token');
+    } catch (storageError) {
+      throw new Error('No se pudo acceder al token de autenticación');
+    }
+    
+    if (!token) {
+      throw new Error('No hay token de autenticación disponible');
+    }
+    
+    // Establecemos un timeout para la solicitud
+    const options = {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      }
+    };
+    
+    const response = await fetchWithRetry(`${getApiUrl()}/api/task-templates`, options);
+    
+    // Si la respuesta no es exitosa, lanzamos un error
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || `Error ${response.status}: ${response.statusText}`);
+    }
+    
+    // Procesamos la respuesta
+    const responseData = await response.json();
+    
+    return responseData;
+  } catch (error) {
+    throw error;
+  }
+};
+
+// Function to delete a task template
+// @param {string} templateId - ID of the template to delete
+// @returns {Promise<Object>} - Result of the deletion
+export const deleteTaskTemplate = async (templateId) => {
+  try {
+    // Obtenemos el token de autenticación
+    let token;
+    try {
+      token = await AsyncStorage.getItem('token');
+    } catch (storageError) {
+      throw new Error('No se pudo acceder al token de autenticación');
+    }
+    
+    if (!token) {
+      throw new Error('No hay token de autenticación disponible');
+    }
+    
+    // Establecemos un timeout para la solicitud
+    const options = {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      }
+    };
+    
+    const response = await fetchWithRetry(`${getApiUrl()}/api/task-templates/${templateId}`, options);
+    
+    // Si la respuesta no es exitosa, lanzamos un error
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || `Error ${response.status}: ${response.statusText}`);
+    }
+    
+    // Procesamos la respuesta
+    const responseData = await response.json();
+    
+    return responseData;
+  } catch (error) {
+    throw error;
+  }
+};
+
 // Function to get admin activities with pagination
 // @param {Object} options - Options for query (page, limit, sort)
 // @returns {Promise<Object>} - List of activities and pagination info

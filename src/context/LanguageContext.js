@@ -705,6 +705,21 @@ export const translations = {
     noLocationData: 'No location data available',
     cannotOpenMaps: 'Cannot open maps application',
     mapError: 'Error opening maps',
+    
+    // Task templates
+    taskTemplates: 'Task Templates',
+    saveAsTemplate: 'Save as Template',
+    templateName: 'Template Name',
+    saveTemplate: 'Save Template',
+    useTemplate: 'Use Template',
+    deleteTemplate: 'Delete Template',
+    noTemplates: 'No templates found',
+    templateSaved: 'Template saved successfully',
+    templateDeleted: 'Template deleted successfully',
+    errorSavingTemplate: 'Error saving template',
+    errorDeletingTemplate: 'Error deleting template',
+    enterTemplateName: 'Enter template name',
+    selectTemplate: 'Select Template',
   },
   es: {
     login: 'Iniciar Sesión',
@@ -1275,6 +1290,21 @@ export const translations = {
     noLocationData: 'No hay datos de ubicación disponibles',
     cannotOpenMaps: 'No se puede abrir la aplicación de mapas',
     mapError: 'Error al abrir mapas',
+    
+    // Task templates
+    taskTemplates: 'Plantillas de Tareas',
+    saveAsTemplate: 'Guardar como Plantilla',
+    templateName: 'Nombre de la Plantilla',
+    saveTemplate: 'Guardar Plantilla',
+    useTemplate: 'Usar Plantilla',
+    deleteTemplate: 'Eliminar Plantilla',
+    noTemplates: 'No se encontraron plantillas',
+    templateSaved: 'Plantilla guardada correctamente',
+    templateDeleted: 'Plantilla eliminada correctamente',
+    errorSavingTemplate: 'Error al guardar la plantilla',
+    errorDeletingTemplate: 'Error al eliminar la plantilla',
+    enterTemplateName: 'Ingrese nombre de la plantilla',
+    selectTemplate: 'Seleccionar Plantilla',
   }
 };
 

@@ -24,6 +24,7 @@ import LanguageToggle from '../components/LanguageToggle';
 import * as api from '../services/api';
 import LocationRadiusSelector from '../components/LocationRadiusSelector';
 import SavedLocationsSelector from '../components/SavedLocationsSelector';
+import TaskTemplateSelector from '../components/TaskTemplateSelector';
 
 const { width, height } = Dimensions.get('window');
 
@@ -53,6 +54,7 @@ const TaskScreen = ({ navigation }) => {
   const [isTimePickerVisible, setTimePickerVisible] = useState(false); // Estado para controlar la visibilidad del selector personalizado
   const [selectedHours, setSelectedHours] = useState(0); // Horas seleccionadas
   const [selectedMinutes, setSelectedMinutes] = useState(30); // Minutos seleccionados (default 30 min)
+  const [showTemplateSelector, setShowTemplateSelector] = useState(false); // Estado para mostrar el selector de plantillas
 
   // Function to handle pull-to-refresh
   const onRefresh = async () => {
@@ -645,6 +647,47 @@ const TaskScreen = ({ navigation }) => {
     }));
   };
 
+  // Función para manejar la selección de una plantilla de tarea
+  const handleSelectTemplate = (template) => {
+    // Aplicar los datos de la plantilla al formulario
+    setNewTaskTitle(template.title || '');
+    setNewTaskDescription(template.description || '');
+    
+    // Aplicar datos de ubicación si existen
+    if (template.location) {
+      setTaskLocation(template.location.coordinates || null);
+      setTaskRadius(template.radius || 1.0);
+      setTaskLocationName(template.locationName || '');
+    }
+    
+    // Aplicar límite de tiempo si existe
+    if (template.timeLimit) {
+      const hours = Math.floor(template.timeLimit / 60);
+      const minutes = template.timeLimit % 60;
+      setSelectedHours(hours);
+      setSelectedMinutes(minutes);
+      setTaskTimeLimit(`${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`);
+    }
+    
+    // Aplicar palabras clave si existen
+    if (template.keywords && Array.isArray(template.keywords)) {
+      setTaskKeywords(template.keywords);
+    }
+    
+    // Aplicar modo manos libres
+    setHandsFreeMode(template.handsFreeMode || false);
+    
+    // Cerrar el selector de plantillas
+    setShowTemplateSelector(false);
+    
+    // Mostrar mensaje de confirmación
+    Alert.alert(
+      t('success'),
+      `${t('templateApplied')}: ${template.name}`,
+      [{ text: 'OK' }]
+    );
+  };
+
   // Renderizar el formulario para añadir tareas
   const renderAddTaskForm = () => {
     return (
@@ -710,6 +753,16 @@ const TaskScreen = ({ navigation }) => {
           >
             <Ionicons name="bookmark" size={24} color="#000000" />
           </TouchableOpacity>
+          
+          {/* Botón para seleccionar plantillas de tareas (solo para administradores) */}
+          {user?.isAdmin && (
+            <TouchableOpacity 
+              style={[styles.templateButton, { backgroundColor: '#fff3e5', padding: 10, marginLeft: 8, width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }]}
+              onPress={() => setShowTemplateSelector(true)}
+            >
+              <Ionicons name="copy-outline" size={24} color="#000000" />
+            </TouchableOpacity>
+          )}
         </View>
         
         {/* Opción de Modo Manos Libres */}
@@ -844,6 +897,25 @@ const TaskScreen = ({ navigation }) => {
           onClose={() => setShowSavedLocationsSelector(false)}
           onSelect={handleSelectSavedLocation}
         />
+        
+        {/* Task Templates Selector - Solo para administradores */}
+        {user?.isAdmin && (
+          <TaskTemplateSelector
+            visible={showTemplateSelector}
+            onClose={() => setShowTemplateSelector(false)}
+            onSelectTemplate={handleSelectTemplate}
+            currentTask={{
+              title: newTaskTitle,
+              description: newTaskDescription,
+              location: taskLocation ? { coordinates: taskLocation.coordinates } : null,
+              radius: taskRadius,
+              locationName: taskLocationName,
+              timeLimit: selectedHours * 60 + selectedMinutes,
+              keywords: taskKeywords,
+              handsFreeMode: handsFreeMode
+            }}
+          />
+        )}
       </View>
     );
   };
