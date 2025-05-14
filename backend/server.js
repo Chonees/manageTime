@@ -14,7 +14,8 @@ const activityRoutes = require('./src/routes/activity.routes');
 const reportRoutes = require('./src/routes/report.routes');
 const savedLocationRoutes = require('./src/routes/savedLocation.routes');
 const notificationRoutes = require('./src/routes/notification.routes');
-const taskTemplateRoutes = require('./src/routes/taskTemplateRoutes');
+// Importar rutas de plantillas de tareas
+const taskTemplateRoutes = require('./src/routes/taskTemplateRoutes.js');
 
 // Inicializar app
 const app = express();
