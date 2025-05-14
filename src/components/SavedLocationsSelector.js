@@ -176,27 +176,36 @@ const SavedLocationsSelector = ({ visible, onClose, onSelect }) => {
           onPress={() => handleSelectLocation(item)}
           disabled={isDeleting}
         >
+          <Ionicons name="location-outline" size={24} color="#fff3e5" style={styles.locationIcon} />
           <View style={styles.locationInfo}>
             <Text style={styles.locationName}>{item.name || t('unnamedLocation')}</Text>
             <Text style={styles.locationDetails}>
               {t('assignedRadius')} {(item.radius || 0).toFixed(1)} km
             </Text>
             <Text style={styles.locationDetails}>
-              {t('coordinates')} {formatCoordinate(latitude)}, {formatCoordinate(longitude)}
+              <Ionicons name="navigate-outline" size={12} color="rgba(255, 243, 229, 0.7)" /> {formatCoordinate(latitude)}, {formatCoordinate(longitude)}
             </Text>
           </View>
-          <Ionicons name="chevron-forward" size={20} color="#fff3e5" />
         </TouchableOpacity>
         
         <TouchableOpacity
           style={styles.deleteButton}
-          onPress={() => handleDeleteLocation(item._id)}
+          onPress={() => {
+            Alert.alert(
+              t('deleteLocation'),
+              `${t('deleteLocationConfirmation')} "${item.name || t('unnamedLocation')}"?`,
+              [
+                { text: t('cancel'), style: 'cancel' },
+                { text: t('delete'), style: 'destructive', onPress: () => handleDeleteLocation(item._id) }
+              ]
+            );
+          }}
           disabled={isDeleting}
         >
           {isDeleting ? (
-            <ActivityIndicator size="small" color="#fff3e5" />
+            <ActivityIndicator size="small" color="#ff5252" />
           ) : (
-            <Ionicons name="trash-outline" size={22} color="#fff3e5" />
+            <Ionicons name="trash-outline" size={20} color="#ff5252" />
           )}
         </TouchableOpacity>
       </View>
@@ -211,81 +220,94 @@ const SavedLocationsSelector = ({ visible, onClose, onSelect }) => {
   return (
     <Modal
       visible={visible}
-      animationType="slide"
-      transparent={false}
+      animationType="fade"
+      transparent={true}
       onRequestClose={onClose}
     >
-      <SafeAreaView style={styles.container}>
-        <View style={styles.header}>
-          <Text style={styles.title}>{t('savedLocations')}</Text>
-          <TouchableOpacity style={styles.closeButton} onPress={onClose}>
-            <Ionicons name="close" size={24} color="#fff3e5" />
-          </TouchableOpacity>
-        </View>
-
-        {/* Search Input */}
-        <View style={styles.searchContainer}>
-          <Ionicons name="search" size={20} color="#a8a8a8" style={styles.searchIcon} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder={t('searchLocations')}
-            placeholderTextColor="#a8a8a8"
-            value={searchTerm}
-            onChangeText={setSearchTerm}
-          />
-          {searchTerm.length > 0 && (
-            <TouchableOpacity style={styles.clearButton} onPress={() => setSearchTerm('')}>
-              <Ionicons name="close-circle" size={20} color="#a8a8a8" />
-            </TouchableOpacity>
-          )}
-        </View>
-
-        {loading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#fff3e5" />
-            <Text style={styles.loadingText}>{t('loadingLocations')}</Text>
-          </View>
-        ) : error ? (
-          <View style={styles.errorContainer}>
-            <Text style={styles.errorText}>{error}</Text>
-            <TouchableOpacity style={styles.retryButton} onPress={loadSavedLocations}>
-              <Text style={styles.retryButtonText}>{t('retry')}</Text>
+      <View style={styles.modalContainer}>
+        <View style={styles.modalContent}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>{t('savedLocations')}</Text>
+            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+              <Ionicons name="close" size={24} color="#fff3e5" />
             </TouchableOpacity>
           </View>
-        ) : filteredLocations.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            {searchTerm.length > 0 ? (
-              <Text style={styles.emptyText}>{t('noMatchingLocations')}</Text>
-            ) : (
-              <Text style={styles.emptyText}>{t('noSavedLocations')}</Text>
+
+          <View style={styles.searchContainer}>
+            <Ionicons name="search" size={20} color="rgba(255, 243, 229, 0.7)" style={styles.searchIcon} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder={t('searchLocations')}
+              placeholderTextColor="rgba(255, 243, 229, 0.5)"
+              value={searchTerm}
+              onChangeText={setSearchTerm}
+            />
+            {searchTerm.length > 0 && (
+              <TouchableOpacity style={styles.clearButton} onPress={() => setSearchTerm('')}>
+                <Ionicons name="close-circle" size={20} color="rgba(255, 243, 229, 0.5)" />
+              </TouchableOpacity>
             )}
           </View>
-        ) : (
-          <FlatList
-            data={filteredLocations}
-            renderItem={renderLocationItem}
-            keyExtractor={keyExtractor}
-            contentContainerStyle={styles.listContent}
-          />
-        )}
-      </SafeAreaView>
+
+          {loading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color="#fff3e5" />
+              <Text style={styles.loadingText}>{t('loadingLocations')}</Text>
+            </View>
+          ) : error ? (
+            <View style={styles.errorContainer}>
+              <Text style={styles.errorText}>{error}</Text>
+              <TouchableOpacity style={styles.retryButton} onPress={loadSavedLocations}>
+                <Text style={styles.retryButtonText}>{t('retry')}</Text>
+              </TouchableOpacity>
+            </View>
+          ) : filteredLocations.length === 0 ? (
+            <View style={styles.emptyContainer}>
+              {searchTerm.length > 0 ? (
+                <Text style={styles.emptyText}>{t('noMatchingLocations')}</Text>
+              ) : (
+                <Text style={styles.emptyText}>{t('noSavedLocations')}</Text>
+              )}
+            </View>
+          ) : (
+            <FlatList
+              data={filteredLocations}
+              renderItem={renderLocationItem}
+              keyExtractor={keyExtractor}
+              contentContainerStyle={styles.listContent}
+            />
+          )}
+        </View>
+      </View>
     </Modal>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
+  modalContainer: {
     flex: 1,
-    backgroundColor: '#2e2e2e'
-  },
-  header: {
-    flexDirection: 'row',
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 15,
-    backgroundColor: '#1c1c1c',
   },
-  title: {
+  modalContent: {
+    width: '90%',
+    maxHeight: '80%',
+    backgroundColor: '#2e2e2e',
+    borderRadius: 15,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 243, 229, 0.2)',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 243, 229, 0.1)',
+  },
+  modalTitle: {
     fontSize: 18,
     fontWeight: 'bold',
     color: '#fff3e5',
@@ -299,11 +321,11 @@ const styles = StyleSheet.create({
     margin: 15,
     marginTop: 10,
     marginBottom: 15,
-    backgroundColor: '#1c1c1c',
+    backgroundColor: 'rgba(255, 243, 229, 0.1)',
     borderRadius: 10,
     paddingHorizontal: 10,
     borderWidth: 1,
-    borderColor: 'rgba(255, 243, 229, 0.3)',
+    borderColor: 'rgba(255, 243, 229, 0.2)',
   },
   searchIcon: {
     marginRight: 8,
@@ -318,45 +340,41 @@ const styles = StyleSheet.create({
     padding: 5,
   },
   loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
+    padding: 30,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   loadingText: {
+    color: 'rgba(255, 243, 229, 0.7)',
     marginTop: 10,
-    color: '#fff3e5',
   },
   errorContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
     padding: 20,
+    alignItems: 'center',
   },
   errorText: {
     color: '#ff5252',
+    marginBottom: 10,
     textAlign: 'center',
-    marginBottom: 15,
   },
   retryButton: {
-    backgroundColor: '#fff3e5',
+    backgroundColor: 'rgba(255, 243, 229, 0.2)',
     paddingVertical: 8,
     paddingHorizontal: 15,
-    borderRadius: 5,
+    borderRadius: 8,
   },
   retryButtonText: {
-    color: '#000000',
-    fontWeight: 'bold',
+    color: '#fff3e5',
   },
   emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
+    padding: 30,
     alignItems: 'center',
-    padding: 20,
+    justifyContent: 'center',
   },
   emptyText: {
-    color: '#fff3e5',
+    color: 'rgba(255, 243, 229, 0.7)',
+    marginTop: 10,
     textAlign: 'center',
-    opacity: 0.7,
   },
   listContent: {
     padding: 10,
@@ -364,18 +382,21 @@ const styles = StyleSheet.create({
   locationItemContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 10,
     backgroundColor: '#1c1c1c',
+    marginBottom: 10,
     borderRadius: 10,
     overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 243, 229, 0.1)',
   },
   locationItem: {
     flex: 1,
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 15,
-    paddingHorizontal: 15,
+    padding: 12,
+  },
+  locationIcon: {
+    marginRight: 10,
   },
   locationInfo: {
     flex: 1,
@@ -384,17 +405,17 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     color: '#fff3e5',
-    marginBottom: 5,
+    marginBottom: 2,
   },
   locationDetails: {
-    fontSize: 12,
-    color: '#fff3e5',
-    opacity: 0.7,
+    fontSize: 14,
+    color: 'rgba(255, 243, 229, 0.7)',
     marginBottom: 2,
   },
   deleteButton: {
     padding: 15,
-    backgroundColor: 'rgba(255, 82, 82, 0.2)',
+    borderLeftWidth: 1,
+    borderLeftColor: 'rgba(255, 243, 229, 0.1)',
   },
 });
 

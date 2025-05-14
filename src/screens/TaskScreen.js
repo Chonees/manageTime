@@ -154,7 +154,10 @@ const TaskScreen = ({ navigation }) => {
 
   // Función para mostrar el selector de tiempo
   const showTimePicker = () => {
+    console.log('Mostrando selector de tiempo');
+    // Asegurarse de que el estado se actualice correctamente
     setTimePickerVisible(true);
+    console.log('Estado del selector de tiempo actualizado:', true);
   };
 
   // Función para ocultar el selector de tiempo
@@ -174,12 +177,22 @@ const TaskScreen = ({ navigation }) => {
 
   // Función para aumentar minutos
   const incrementMinutes = () => {
-    setSelectedMinutes(prev => (prev < 55) ? prev + 5 : 0);
+    console.log('Incrementando minutos');
+    setSelectedMinutes(prev => {
+      const newValue = (prev < 55) ? prev + 5 : 0;
+      console.log(`Minutos actualizados: ${prev} -> ${newValue}`);
+      return newValue;
+    });
   };
 
   // Función para disminuir minutos
   const decrementMinutes = () => {
-    setSelectedMinutes(prev => (prev > 0) ? prev - 5 : 55);
+    console.log('Decrementando minutos');
+    setSelectedMinutes(prev => {
+      const newValue = (prev > 0) ? prev - 5 : 55;
+      console.log(`Minutos actualizados: ${prev} -> ${newValue}`);
+      return newValue;
+    });
   };
 
   // Función para confirmar la selección
@@ -256,16 +269,22 @@ const TaskScreen = ({ navigation }) => {
       locationName: taskLocationName || ''
     };
     
-    // Añadir tiempo límite si está establecido
-    if (taskTimeLimit && Number(taskTimeLimit) > 0) {
-      taskData.timeLimit = Number(taskTimeLimit);
+    // Añadir tiempo límite si está seleccionado (convertir horas y minutos a minutos totales)
+    if (selectedHours > 0 || selectedMinutes > 0) {
+      // Convertir horas y minutos a un valor total en minutos
+      const totalMinutes = (selectedHours * 60) + selectedMinutes;
+      console.log(`Tiempo límite calculado: ${selectedHours}h:${selectedMinutes}m = ${totalMinutes} minutos`);
+      
+      // Añadir al objeto de la tarea
+      taskData.timeLimit = totalMinutes;
       taskData.timeLimitSet = new Date().toISOString(); // Establecer la fecha actual como inicio del límite
     }
     
     // DEBUG: Mostrar qué datos se envían al backend
     console.log('DATOS DE TAREA A ENVIAR:', JSON.stringify(taskData, null, 2));
-    console.log('timeLimit específicamente:', taskTimeLimit, typeof taskTimeLimit);
-    console.log('location específicamente:', JSON.stringify(locationData, null, 2));
+    console.log('timeLimit enviado:', taskData.timeLimit, typeof taskData.timeLimit);
+    console.log('location enviado:', JSON.stringify(taskData.location, null, 2));
+    console.log('userId enviado:', taskData.userId, typeof taskData.userId);
     
     try {
       console.log(t('creatingTask'), taskData);
@@ -653,10 +672,29 @@ const TaskScreen = ({ navigation }) => {
     setNewTaskTitle(template.title || '');
     setNewTaskDescription(template.description || '');
     
-    // Aplicar datos de ubicación si existen
+    // Aplicar datos de ubicación si existen (verificando diferentes estructuras posibles)
     if (template.location) {
-      setTaskLocation(template.location.coordinates || null);
-      setTaskRadius(template.radius || 1.0);
+      // Verificar si la ubicación tiene la estructura esperada o si es directamente un array de coordenadas
+      if (typeof template.location === 'object') {
+        if (template.location.coordinates) {
+          setTaskLocation(template.location);
+        } else if (Array.isArray(template.location)) {
+          // Si es un array directamente, asumir que son coordenadas
+          setTaskLocation({ coordinates: template.location });
+        } else {
+          // Si no tiene ninguna estructura reconocible, no establecer ubicación
+          setTaskLocation(null);
+        }
+      } else {
+        setTaskLocation(null);
+      }
+      // Asegurarnos de que el radio se maneje correctamente, incluso si es un valor decimal pequeño
+    const radius = template.radius !== undefined && template.radius !== null
+      ? parseFloat(template.radius)
+      : 1.0;
+    
+    console.log(`Radio de plantilla: ${template.radius} (tipo: ${typeof template.radius}), convertido a: ${radius}`);
+    setTaskRadius(radius);
       setTaskLocationName(template.locationName || '');
     }
     
@@ -936,13 +974,21 @@ const TaskScreen = ({ navigation }) => {
               {/* Selector de horas */}
               <View style={styles.timePickerColumn}>
                 <Text style={styles.timePickerLabel}>{t('hours') || "Horas"}</Text>
-                <TouchableOpacity style={styles.timeButton} onPress={incrementHours}>
-                  <Ionicons name="chevron-up" size={24} color="#fff3e5" />
-                </TouchableOpacity>
-                <Text style={styles.timeValue}>{selectedHours.toString().padStart(2, '0')}</Text>
-                <TouchableOpacity style={styles.timeButton} onPress={decrementHours}>
-                  <Ionicons name="chevron-down" size={24} color="#fff3e5" />
-                </TouchableOpacity>
+                <TouchableOpacity 
+                style={[styles.timeButton, { padding: 15 }]} 
+                onPress={incrementHours}
+                activeOpacity={0.5}
+              >
+                <Ionicons name="chevron-up" size={30} color="#fff3e5" />
+              </TouchableOpacity>
+              <Text style={styles.timeValue}>{selectedHours.toString().padStart(2, '0')}</Text>
+              <TouchableOpacity 
+                style={[styles.timeButton, { padding: 15 }]} 
+                onPress={decrementHours}
+                activeOpacity={0.5}
+              >
+                <Ionicons name="chevron-down" size={30} color="#fff3e5" />
+              </TouchableOpacity>
               </View>
               
               {/* Separador */}
@@ -951,13 +997,21 @@ const TaskScreen = ({ navigation }) => {
               {/* Selector de minutos */}
               <View style={styles.timePickerColumn}>
                 <Text style={styles.timePickerLabel}>{t('minutes') || "Minutos"}</Text>
-                <TouchableOpacity style={styles.timeButton} onPress={incrementMinutes}>
-                  <Ionicons name="chevron-up" size={24} color="#fff3e5" />
-                </TouchableOpacity>
-                <Text style={styles.timeValue}>{selectedMinutes.toString().padStart(2, '0')}</Text>
-                <TouchableOpacity style={styles.timeButton} onPress={decrementMinutes}>
-                  <Ionicons name="chevron-down" size={24} color="#fff3e5" />
-                </TouchableOpacity>
+                <TouchableOpacity 
+                style={[styles.timeButton, { padding: 15 }]} 
+                onPress={incrementMinutes}
+                activeOpacity={0.5}
+              >
+                <Ionicons name="chevron-up" size={30} color="#fff3e5" />
+              </TouchableOpacity>
+              <Text style={styles.timeValue}>{selectedMinutes.toString().padStart(2, '0')}</Text>
+              <TouchableOpacity 
+                style={[styles.timeButton, { padding: 15 }]} 
+                onPress={decrementMinutes}
+                activeOpacity={0.5}
+              >
+                <Ionicons name="chevron-down" size={30} color="#fff3e5" />
+              </TouchableOpacity>
               </View>
             </View>
             
@@ -1045,6 +1099,7 @@ const TaskScreen = ({ navigation }) => {
       )}
       
       {renderUserSelector()}
+      {renderCustomTimePicker()}
     </SafeAreaView>
   );
 };
