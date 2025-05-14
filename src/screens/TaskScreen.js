@@ -727,13 +727,11 @@ const TaskScreen = ({ navigation }) => {
               </Text>
               <Ionicons name="chevron-down" size={20} color="#fff3e5" />
             </TouchableOpacity>
-            
-            {renderCustomTimePicker()}
           </View>
         )}
         
-        {/* Botón para abrir selector de ubicación y radio */}
-        <View style={styles.locationButtonsContainer}>
+        {/* Botón para seleccionar ubicación */}
+        <View style={styles.locationContainer}>
           <TouchableOpacity 
             style={styles.locationButton}
             onPress={() => setShowLocationSelector(true)}
@@ -754,6 +752,7 @@ const TaskScreen = ({ navigation }) => {
             <Ionicons name="bookmark" size={24} color="#000000" />
           </TouchableOpacity>
           
+          {/* Botón para plantillas de tareas (solo para administradores) */}
           {/* Botón para seleccionar plantillas de tareas (solo para administradores) */}
           {user?.isAdmin && (
             <TouchableOpacity 
