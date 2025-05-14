@@ -234,9 +234,10 @@ const notifyUser = async (userId, title, body, data = {}) => {
 /**
  * Notifica a los administradores sobre una actividad
  * @param {Object} activity - Objeto de actividad
+ * @param {Boolean} notifyOwner - Si se debe notificar también al propietario de la actividad
  * @returns {Promise<Object>} - Resultado del envío de notificaciones
  */
-const notifyAdminActivity = async (activity) => {
+const notifyAdminActivity = async (activity, notifyOwner = false) => {
   try {
     // Obtener el nombre de usuario desde varias fuentes posibles
     const username = activity.metadata?.username || activity.username || 'Usuario';
@@ -306,7 +307,24 @@ const notifyAdminActivity = async (activity) => {
     console.log(`Enviando notificación para actividad: ${activity.type}, de ${username}, mensaje: "${body}"`);
     
     // Enviar notificación a todos los administradores
-    return await notifyByRole(title, body, notificationData, 'admin');
+    const adminResult = await notifyByRole(title, body, notificationData, 'admin');
+    
+    // Si se solicita notificar también al propietario de la actividad y no es un admin
+    if (notifyOwner && activity.userId) {
+      try {
+        // Verificar que el usuario no sea un administrador para evitar notificaciones duplicadas
+        const user = await User.findById(activity.userId);
+        if (user && !user.isAdmin) {
+          logger.info(`Enviando notificación también al propietario de la actividad: ${user.username}`);
+          await notifyUser(activity.userId, title, body, notificationData);
+        }
+      } catch (ownerError) {
+        logger.error(`Error al notificar al propietario de la actividad: ${activity.userId}`, ownerError);
+        // No interrumpimos el flujo principal si falla esta notificación
+      }
+    }
+    
+    return adminResult;
   } catch (error) {
     logger.error('Error notificando actividad a administradores', error);
     return { success: false, error: error.message };

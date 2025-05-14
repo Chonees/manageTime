@@ -86,8 +86,12 @@ exports.createActivity = async (req, res) => {
         savedActivity.metadata.critical = true;
         savedActivity.metadata.push_priority = 'high';
         
-        // Enviar notificación
-        const result = await notificationUtil.notifyAdminActivity(savedActivity);
+        // Determinar si el usuario propietario también debe recibir la notificación
+        // Solo para tipos específicos de actividades que son relevantes para el usuario
+        const notifyOwner = ['task_complete', 'task_activity'].includes(type);
+        
+        // Enviar notificación (solo a admins por defecto, y al propietario si corresponde)
+        const result = await notificationUtil.notifyAdminActivity(savedActivity, notifyOwner);
         console.log(`Resultado envío notificación:`, JSON.stringify(result));
       } else {
         console.log(`Tipo de actividad ${type} no requiere notificación push`);

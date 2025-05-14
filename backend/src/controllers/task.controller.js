@@ -282,9 +282,9 @@ exports.createAssignedTask = async (req, res) => {
     console.log('Datos de la tarea asignada:', JSON.stringify(populatedTask));
     
     // Registrar actividad de creación de tarea
-    await registerTaskActivity(req.user._id, task._id, 'task_create', populatedTask);
+    const activity = await registerTaskActivity(req.user._id, task._id, 'task_create', populatedTask);
     
-    // Enviar notificación push al usuario asignado
+    // Enviar notificación push al usuario asignado y a los administradores
     try {
       const targetUser = await User.findById(userId);
       if (targetUser) {
@@ -301,7 +301,7 @@ exports.createAssignedTask = async (req, res) => {
           locationName: locationName || 'Sin ubicación específica'
         };
         
-        // Enviar la notificación
+        // Enviar la notificación SOLO al usuario asignado, no a todos los usuarios
         const notificationResult = await notificationUtil.notifyUser(
           userId, 
           notificationTitle, 
@@ -309,7 +309,22 @@ exports.createAssignedTask = async (req, res) => {
           notificationData
         );
         
-        console.log('Resultado de notificación:', notificationResult);
+        // También notificar a los administradores sobre la asignación de tarea
+        if (activity) {
+          // Convertir la actividad a un objeto simple
+          const activityObj = activity.toObject ? activity.toObject() : activity;
+          // Asegurar que los metadatos existan
+          if (!activityObj.metadata) activityObj.metadata = {};
+          // Añadir información adicional para la notificación
+          activityObj.metadata.username = req.user.username;
+          activityObj.metadata.targetUsername = targetUser.username;
+          activityObj.metadata.title = title;
+          
+          // Notificar SOLO a los administradores, no al usuario asignado (ya fue notificado arriba)
+          await notificationUtil.notifyAdminActivity(activityObj, false);
+        }
+        
+        console.log('Resultado de notificación al usuario:', notificationResult);
       }
     } catch (notificationError) {
       console.error('Error enviando notificación de nueva tarea:', notificationError);
@@ -491,43 +506,152 @@ exports.updateTask = async (req, res) => {
     console.log(`Tarea actualizada: ${task._id}`);
     console.log('Datos de la tarea actualizada:', JSON.stringify(populatedTask));
     
-    // Registrar la actividad correspondiente
+    // Registrar la actividad correspondiente y enviar notificaciones apropiadas
+    let activity;
+    let notificationType = null;
+    let notificationTitle = '';
+    let notificationBody = '';
+    
     if (completed !== undefined) {
       if (completed === true) {
         // Si la tarea fue marcada como completada, registrar actividad específica de completado
         console.log(`Registrando tarea completada: ${task._id}`);
-        await registerTaskActivity(req.user._id, task._id, 'task_complete', populatedTask);
+        activity = await registerTaskActivity(req.user._id, task._id, 'task_complete', populatedTask);
+        notificationType = 'task_complete';
+        notificationTitle = 'Tarea completada';
+        notificationBody = `La tarea "${task.title}" ha sido completada`;
       } else if (completed === false && task.isModified('completed')) {
         // Si la tarea fue marcada como no completada después de estar completada
         console.log(`Registrando tarea reactivada: ${task._id}`);
-        await registerTaskActivity(req.user._id, task._id, 'task_update', {
+        activity = await registerTaskActivity(req.user._id, task._id, 'task_update', {
           ...populatedTask.toObject(),
           changes: { completed: false }
         });
+        notificationType = 'task_update';
+        notificationTitle = 'Tarea reactivada';
+        notificationBody = `La tarea "${task.title}" ha sido reactivada`;
       }
     } else if (status !== undefined) {
       // Registrar actividades específicas para cambios de estado
-      if (status === 'in-progress' || status === 'in_progress') {
+      if (status === 'in-progress' || status === 'in_progress' || status === 'accepted') {
         console.log(`Registrando tarea aceptada: ${task._id}`);
-        await registerTaskActivity(req.user._id, task._id, 'task_accept', populatedTask);
-      } else if (status === 'accepted') {
-        console.log(`Registrando tarea aceptada: ${task._id}`);
-        await registerTaskActivity(req.user._id, task._id, 'task_accept', populatedTask);
+        activity = await registerTaskActivity(req.user._id, task._id, 'task_accept', populatedTask);
+        notificationType = 'task_accept';
+        notificationTitle = 'Tarea aceptada';
+        notificationBody = `La tarea "${task.title}" ha sido aceptada`;
       } else if (status === 'rejected') {
         console.log(`Registrando tarea rechazada: ${task._id}`);
-        await registerTaskActivity(req.user._id, task._id, 'task_reject', populatedTask);
+        activity = await registerTaskActivity(req.user._id, task._id, 'task_reject', populatedTask);
+        notificationType = 'task_reject';
+        notificationTitle = 'Tarea rechazada';
+        notificationBody = `La tarea "${task.title}" ha sido rechazada`;
       } else {
         // Para cualquier otro cambio de estado, registrar como actualización normal
         console.log(`Registrando cambio de estado de tarea: ${task._id} a ${status}`);
-        await registerTaskActivity(req.user._id, task._id, 'task_update', {
+        activity = await registerTaskActivity(req.user._id, task._id, 'task_update', {
           ...populatedTask.toObject(),
           changes: { status }
         });
+        notificationType = 'task_update';
+        notificationTitle = 'Tarea actualizada';
+        notificationBody = `La tarea "${task.title}" ha sido actualizada`;
+      }
+    }
+    
+    // Enviar notificaciones si hay actividad registrada
+    if (activity && notificationType) {
+      try {
+        // Determinar si debemos notificar al propietario de la tarea
+        const shouldNotifyOwner = task.userId && task.userId.toString() !== req.user._id.toString();
+        
+        // Si el usuario actual no es el propietario de la tarea, notificar al propietario
+        if (shouldNotifyOwner) {
+          console.log(`Enviando notificación al propietario de la tarea: ${task.userId}`);
+          
+          // Preparar datos para la notificación
+          const notificationData = {
+            taskId: task._id.toString(),
+            type: notificationType,
+            priority: 'high',
+            title: task.title,
+            updatedBy: req.user.username || 'Usuario'
+          };
+          
+          // Enviar notificación SOLO al propietario de la tarea
+          await notificationUtil.notifyUser(
+            task.userId.toString(),
+            notificationTitle,
+            notificationBody,
+            notificationData
+          );
+        }
+        
+        // Notificar a los administradores sobre la actualización
+        const activityObj = activity.toObject ? activity.toObject() : activity;
+        if (!activityObj.metadata) activityObj.metadata = {};
+        
+        // Añadir información adicional para la notificación
+        activityObj.metadata.username = req.user.username;
+        activityObj.metadata.title = task.title;
+        
+        // Notificar SOLO a los administradores (no al propietario, ya fue notificado arriba si corresponde)
+        await notificationUtil.notifyAdminActivity(activityObj, false);
+        
+      } catch (notificationError) {
+        console.error('Error enviando notificaciones de actualización de tarea:', notificationError);
+        // No interrumpir el flujo por un error de notificación
       }
     } else {
       // Para cualquier otra actualización, registrar como actualización normal
       console.log(`Registrando actualización general de tarea: ${task._id}`);
-      await registerTaskActivity(req.user._id, task._id, 'task_update', populatedTask);
+      const activity = await registerTaskActivity(req.user._id, task._id, 'task_update', {
+        ...populatedTask.toObject(),
+        changes: req.body
+      });
+      
+      // Enviar notificaciones para actualizaciones generales
+      try {
+        // Determinar si debemos notificar al propietario de la tarea
+        const shouldNotifyOwner = task.userId && task.userId.toString() !== req.user._id.toString();
+        
+        // Si el usuario actual no es el propietario de la tarea, notificar al propietario
+        if (shouldNotifyOwner) {
+          console.log(`Enviando notificación al propietario de la tarea: ${task.userId}`);
+          
+          // Preparar datos para la notificación
+          const notificationData = {
+            taskId: task._id.toString(),
+            type: 'task_update',
+            priority: 'high',
+            title: task.title,
+            updatedBy: req.user.username || 'Usuario'
+          };
+          
+          // Enviar notificación SOLO al propietario de la tarea
+          await notificationUtil.notifyUser(
+            task.userId.toString(),
+            'Tarea actualizada',
+            `La tarea "${task.title}" ha sido actualizada`,
+            notificationData
+          );
+        }
+        
+        // Notificar a los administradores sobre la actualización
+        if (activity) {
+          const activityObj = activity.toObject ? activity.toObject() : activity;
+          if (!activityObj.metadata) activityObj.metadata = {};
+          
+          // Añadir información adicional para la notificación
+          activityObj.metadata.username = req.user.username;
+          activityObj.metadata.title = task.title;
+          
+          // Notificar SOLO a los administradores (no al propietario, ya fue notificado arriba si corresponde)
+          await notificationUtil.notifyAdminActivity(activityObj, false);
+        }
+      } catch (notificationError) {
+        console.error('Error enviando notificaciones de actualización general de tarea:', notificationError);
+        // No interrumpir el flujo por un error de notificación
+      }
     }
     
     res.status(200).json(populatedTask);
