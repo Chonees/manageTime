@@ -1532,6 +1532,16 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: 'bold',
   },
+  locationContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  templateButton: {
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   timeLimitContainer: {
     flexDirection: 'row',
     alignItems: 'center',
