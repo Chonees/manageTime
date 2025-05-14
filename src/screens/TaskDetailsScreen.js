@@ -9,7 +9,9 @@ import {
   Alert,
   TextInput,
   StatusBar,
-  SafeAreaView
+  SafeAreaView,
+  Linking,
+  Platform
 } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
@@ -921,6 +923,55 @@ const TaskDetailsScreen = ({ route, navigation }) => {
     }
   };
 
+  // Función para abrir la ubicación de la tarea en la aplicación de mapas nativa
+  const openInMaps = () => {
+    if (!task || !task.location || !task.location.coordinates) {
+      Alert.alert(t('error') || 'Error', t('noLocationData') || 'No hay datos de ubicación disponibles');
+      return;
+    }
+
+    const latitude = task.location.coordinates[1];
+    const longitude = task.location.coordinates[0];
+    const label = task.locationName || task.title || 'Ubicación de la tarea';
+
+    try {
+      // Crear URL según la plataforma
+      let url;
+      if (Platform.OS === 'ios') {
+        // URL para Apple Maps en iOS
+        url = `maps://app?saddr=Current%20Location&daddr=${latitude},${longitude}&dirflg=d`;
+        console.log(`Abriendo Apple Maps con URL: ${url}`);
+      } else {
+        // URL para Google Maps en Android y otros
+        url = `google.navigation:q=${latitude},${longitude}&mode=d`;
+        console.log(`Abriendo Google Maps con URL: ${url}`);
+      }
+
+      // Verificar si la URL puede ser abierta
+      Linking.canOpenURL(url)
+        .then(supported => {
+          if (supported) {
+            return Linking.openURL(url);
+          } else {
+            // Si la URL específica de la plataforma no es compatible, intentar con una URL web de Google Maps
+            const webUrl = `https://www.google.com/maps/dir/?api=1&destination=${latitude},${longitude}&travelmode=driving`;
+            console.log(`URL específica no soportada, intentando con URL web: ${webUrl}`);
+            return Linking.openURL(webUrl);
+          }
+        })
+        .catch(err => {
+          console.error('Error al abrir la aplicación de mapas:', err);
+          Alert.alert(
+            t('error') || 'Error', 
+            t('cannotOpenMaps') || 'No se pudo abrir la aplicación de mapas'
+          );
+        });
+    } catch (error) {
+      console.error('Error al intentar abrir mapas:', error);
+      Alert.alert(t('error') || 'Error', t('mapError') || 'Error al abrir mapas');
+    }
+  };
+
   if (loading) {
     return (
       <View style={styles.centerContainer}>
@@ -1106,9 +1157,9 @@ const TaskDetailsScreen = ({ route, navigation }) => {
                     longitude: task.location.coordinates[0],
                   }}
                   radius={task.radius * 1000} // Convert km to meters for map display
-                  strokeWidth={1}
-                  strokeColor={'#4b4b4b'}
-                  fillColor={'rgba(75, 75, 75, 0.3)'}
+                  strokeWidth={2}
+                  strokeColor={'#1877F2'} // Color azul de Facebook
+                  fillColor={'rgba(24, 119, 242, 0.2)'} // Color azul de Facebook con transparencia
                 />
               )}
               {userLocation && (
@@ -1135,6 +1186,17 @@ const TaskDetailsScreen = ({ route, navigation }) => {
             ) : (
               <Text style={styles.outsideRadius}>{t('outsideTaskRadius')}</Text>
             )}
+            
+            {/* Botón para abrir la ubicación en mapas nativos */}
+            <TouchableOpacity 
+              style={styles.directionsButton}
+              onPress={openInMaps}
+            >
+              <Ionicons name="navigate-outline" size={20} color="#fff" style={styles.buttonIcon} />
+              <Text style={styles.directionsButtonText}>
+                {t('navigateToHere') || 'Navigate to here'}
+              </Text>
+            </TouchableOpacity>
             
             {/* Botón de iniciar/finalizar tarea integrado en el contenedor de mapa */}
             <View style={styles.mapActionButtonContainer}>
@@ -1437,8 +1499,21 @@ const styles = StyleSheet.create({
 
   mapActionButtonContainer: {
     marginTop: 15,
-
-
+  },
+  directionsButton: {
+    backgroundColor: '#4A90E2',
+    padding: 12,
+    borderRadius: 15,
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginTop: 10,
+    marginBottom: 10,
+  },
+  directionsButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold',
   },
   startButton: {
     backgroundColor: '#4CAF50',

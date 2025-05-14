@@ -692,13 +692,19 @@ export const translations = {
     assignedRadius: 'Radius',
     
     // Location search
-    searchLocation: 'Search location or address...',
+    searchLocation: 'Search for location or address...',
     noResults: 'No Results',
     noLocationResults: 'No locations found matching your search',
     errorSearchingLocation: 'Error searching for location',
     selectedLocation: 'Selected Location',
     unnamedLocation: 'Unnamed Location',
     testNotifications: 'Test Notifications',
+    navigateToHere: 'Navigate to here',
+    openInAppleMaps: 'Open in Apple Maps',
+    openInGoogleMaps: 'Open in Google Maps',
+    noLocationData: 'No location data available',
+    cannotOpenMaps: 'Cannot open maps application',
+    mapError: 'Error opening maps',
   },
   es: {
     login: 'Iniciar Sesión',
@@ -1263,6 +1269,12 @@ export const translations = {
     selectedLocation: 'Ubicación Seleccionada',
     unnamedLocation: 'Ubicación Sin Nombre',
     testNotifications: 'Probar Notificaciones',
+    navigateToHere: 'Navegar hasta aquí',
+    openInAppleMaps: 'Abrir en Apple Maps',
+    openInGoogleMaps: 'Abrir en Google Maps',
+    noLocationData: 'No hay datos de ubicación disponibles',
+    cannotOpenMaps: 'No se puede abrir la aplicación de mapas',
+    mapError: 'Error al abrir mapas',
   }
 };
 
