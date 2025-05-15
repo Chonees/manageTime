@@ -649,6 +649,13 @@ const TaskDetailsScreen = ({ route, navigation }) => {
   };
 
   const handleDeleteTask = async () => {
+    // Verificar si el usuario es administrador
+    if (!user?.isAdmin) {
+      console.error('Permiso denegado: Solo los administradores pueden eliminar tareas');
+      Alert.alert(t('permissionDenied'), t('adminOnlyDeleteTasks'));
+      return;
+    }
+
     Alert.alert(
       t('confirmDelete'),
       t('confirmDeleteTaskMessage'),
@@ -1083,12 +1090,14 @@ const TaskDetailsScreen = ({ route, navigation }) => {
             </Text>
           </View>
           
-          <TouchableOpacity 
-            style={styles.deleteButton}
-            onPress={handleDeleteTask}
-          >
-            <Ionicons name="trash-outline" size={24} color="#e74c3c" />
-          </TouchableOpacity>
+          {user?.isAdmin && (
+            <TouchableOpacity 
+              style={styles.deleteButton}
+              onPress={handleDeleteTask}
+            >
+              <Ionicons name="trash-outline" size={24} color="#e74c3c" />
+            </TouchableOpacity>
+          )}
         </View>
         
         <View style={styles.titleContainer}>

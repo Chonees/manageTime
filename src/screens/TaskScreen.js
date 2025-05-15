@@ -401,9 +401,16 @@ const TaskScreen = ({ navigation }) => {
     }
   };
 
-  // Eliminar tarea
+  // Eliminar tarea - solo para administradores
   const deleteTask = async (taskId) => {
     try {
+      // Verificar si el usuario es administrador
+      if (!user?.isAdmin) {
+        console.error('Permiso denegado: Solo los administradores pueden eliminar tareas');
+        Alert.alert(t('permissionDenied'), t('adminOnlyDeleteTasks'));
+        return;
+      }
+      
       const taskToDelete = tasks.find(task => task._id === taskId);
       if (!taskToDelete) {
         console.error(t('taskNotFound'), taskId);
@@ -530,15 +537,17 @@ const TaskScreen = ({ navigation }) => {
       >
         <View style={styles.taskHeader}>
           <Text style={styles.taskTitle}>{item.title || t('noTitle')}</Text>
-          <TouchableOpacity 
-            onPress={(e) => {
-              e.stopPropagation();
-              deleteTask(item._id);
-            }}
-            style={styles.deleteButton}
-          >
-            <Text style={styles.deleteButtonText}>×</Text>
-          </TouchableOpacity>
+          {user?.isAdmin && (
+            <TouchableOpacity 
+              onPress={(e) => {
+                e.stopPropagation();
+                deleteTask(item._id);
+              }}
+              style={styles.deleteButton}
+            >
+              <Text style={styles.deleteButtonText}>×</Text>
+            </TouchableOpacity>
+          )}
         </View>
         
         <View style={styles.taskDetails}>
