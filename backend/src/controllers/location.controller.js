@@ -3,6 +3,103 @@ const Task = require('../models/task.model');
 const Activity = require('../models/activity.model');
 const mongoose = require('mongoose');
 
+// Registrar ubicación en tiempo real
+exports.realTimeLocation = async (req, res) => {
+  try {
+    const { latitude, longitude, accuracy, altitude, heading, speed, timestamp } = req.body;
+    
+    if (!latitude || !longitude) {
+      return res.status(400).json({ 
+        message: 'Se requieren las coordenadas de ubicación' 
+      });
+    }
+    
+    // Crear nuevo registro de ubicación con tipo 'tracking'
+    const location = new Location({
+      userId: req.user._id,
+      type: 'tracking',
+      latitude,
+      longitude,
+      metadata: {
+        accuracy,
+        altitude,
+        heading,
+        speed,
+        timestamp: timestamp || new Date().toISOString()
+      }
+    });
+    
+    // Guardar en la base de datos
+    await location.save();
+    
+    // No creamos una actividad para cada actualización en tiempo real
+    // para evitar saturar el panel de administrador
+    
+    res.status(201).json({ 
+      success: true, 
+      message: 'Ubicación en tiempo real registrada',
+      location
+    });
+  } catch (error) {
+    console.error('Error al registrar ubicación en tiempo real:', error);
+    res.status(500).json({ message: 'Error al registrar ubicación en tiempo real' });
+  }
+};
+
+// Guardar lote de ubicaciones 
+exports.saveBatchLocations = async (req, res) => {
+  try {
+    const { locations } = req.body;
+    
+    if (!Array.isArray(locations) || locations.length === 0) {
+      return res.status(400).json({ 
+        message: 'Se requiere un array de ubicaciones' 
+      });
+    }
+    
+    // Procesar cada ubicación del lote
+    const savedLocations = [];
+    
+    for (const loc of locations) {
+      const { latitude, longitude, timestamp } = loc;
+      
+      if (!latitude || !longitude) {
+        continue; // Saltamos ubicaciones sin coordenadas válidas
+      }
+      
+      // Crear nuevo registro de ubicación
+      const location = new Location({
+        userId: req.user._id,
+        type: 'tracking',
+        latitude,
+        longitude,
+        timestamp: timestamp || new Date().toISOString(),
+        metadata: loc.metadata || {}
+      });
+      
+      // Guardar en la base de datos
+      await location.save();
+      savedLocations.push(location);
+    }
+    
+    // Si no se guardó ninguna ubicación, devolver error
+    if (savedLocations.length === 0) {
+      return res.status(400).json({ 
+        message: 'No se pudo guardar ninguna ubicación válida' 
+      });
+    }
+    
+    res.status(201).json({ 
+      success: true, 
+      message: `${savedLocations.length} ubicaciones guardadas correctamente`,
+      savedLocations
+    });
+  } catch (error) {
+    console.error('Error al guardar lote de ubicaciones:', error);
+    res.status(500).json({ message: 'Error al guardar lote de ubicaciones' });
+  }
+};
+
 // Iniciar trabajo (registrar ubicación de inicio)
 exports.startWork = async (req, res) => {
   try {
