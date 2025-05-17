@@ -3,6 +3,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { LanguageProvider, useLanguage } from './src/context/LanguageContext';
 import { ThemeProvider } from './src/context/ThemeContext';
+import { LocationTrackingProvider } from './src/context/LocationTrackingContext';
 import AppNavigator from './src/navigation/AppNavigator';
 import { setLanguage } from './src/services/location-service';
 import { NavigationContainer } from '@react-navigation/native';
@@ -85,11 +86,13 @@ const App = () => {
       <SafeAreaProvider>
         <LanguageProvider>
           <LanguageWrapper>
-            <AuthProvider>
-              <NavigationContainer>
-                <AppNavigator />
-              </NavigationContainer>
-            </AuthProvider>
+            <LocationTrackingProvider>
+              <AuthProvider>
+                <NavigationContainer>
+                  <AppNavigator />
+                </NavigationContainer>
+              </AuthProvider>
+            </LocationTrackingProvider>
           </LanguageWrapper>
         </LanguageProvider>
       </SafeAreaProvider>
