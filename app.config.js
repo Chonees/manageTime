@@ -1,3 +1,6 @@
+// Cargar variables de entorno
+import 'dotenv/config';
+
 // Configuración de Expo
 module.exports = {
   name: "Workproof",
@@ -42,8 +45,9 @@ module.exports = {
   },
   extra: {
     // Configuración para diferentes entornos
-
-    apiUrl: "https://managetime-backend-48f256c2dfe5.herokuapp.com/api",
+    
+    // Usar exclusivamente la variable de entorno
+    apiUrl: `${process.env.API_URL}/api`,
 
     // Tiempo de espera para solicitudes API (en milisegundos)
     apiTimeout: 60000,

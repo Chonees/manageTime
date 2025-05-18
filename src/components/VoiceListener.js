@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Platform, Vibration } from 'react-native';
+import { getApiUrl } from '../services/platform-config';
 import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -486,7 +487,7 @@ const VoiceListener = ({ isTaskActive = false, taskData = null, onKeywordDetecte
       };
       
       // URL directa al endpoint
-      const url = `https://managetime-backend-48f256c2dfe5.herokuapp.com/api/tasks/${targetTaskId}/note`;
+      const url = `${getApiUrl()}/tasks/${targetTaskId}/note`;
       
       // Enviar la nota al backend
       const response = await fetch(url, {
