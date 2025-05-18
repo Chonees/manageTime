@@ -2,6 +2,7 @@ import React, { createContext, useState, useContext, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as api from '../services/api';
 import { registerForPushNotifications, registerAdminPushToken } from '../services/notification-service';
+import { Platform, DeviceEventEmitter } from 'react-native';
 
 // Crear el contexto de autenticación
 const AuthContext = createContext();
@@ -26,7 +27,21 @@ export const AuthProvider = ({ children }) => {
       }
     }, 5000); // 5 segundos máximo de espera
 
-    checkAuthentication();
+    const setupAuth = async () => {
+      const authResult = await checkAuthentication();
+      
+      // Si el usuario está autenticado, emitir evento para iniciar el rastreo
+      if (authResult && authResult.success && user) {
+        try {
+          console.log('Usuario autenticado, emitiendo evento para iniciar rastreo');
+          DeviceEventEmitter.emit('START_LOCATION_TRACKING');
+        } catch (eventError) {
+          console.error('Error al emitir evento de inicio de rastreo:', eventError);
+        }
+      }
+    };
+    
+    setupAuth();
 
     return () => clearTimeout(authTimeout);
   }, []);
@@ -43,14 +58,17 @@ export const AuthProvider = ({ children }) => {
       if (result.valid) {
         console.log('Token válido, usuario autenticado:', result.user);
         setUser(result.user);
+        return { success: true, user: result.user };
       } else {
         console.log('Token inválido o no existe');
         setUser(null);
+        return { success: false };
       }
     } catch (error) {
       console.error('Error al verificar autenticación:', error);
       setUser(null);
       setError('Error al verificar la autenticación');
+      return { success: false, error: error.message };
     } finally {
       setLoading(false);
     }
@@ -88,6 +106,14 @@ export const AuthProvider = ({ children }) => {
       } catch (notificationError) {
         console.error('Error al registrar notificaciones push:', notificationError);
         // No interrumpimos el flujo de login aunque falle el registro de notificaciones
+      }
+      
+      // Emitir evento para iniciar el rastreo automático de ubicación
+      try {
+        console.log('Emitiendo evento para iniciar rastreo automático de ubicación');
+        DeviceEventEmitter.emit('START_LOCATION_TRACKING');
+      } catch (eventError) {
+        console.error('Error al emitir evento de inicio de rastreo:', eventError);
       }
       
       return { success: true, user: result.user };
