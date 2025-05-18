@@ -158,19 +158,6 @@ const LoginScreen = ({ navigation }) => {
             )}
           </TouchableOpacity>
           
-          <View style={styles.orContainer}>
-            <View style={styles.orLine} />
-            <Text style={styles.orText}>{t('or')}</Text>
-            <View style={styles.orLine} />
-          </View>
-          
-          <View style={styles.socialButtonsContainer}>
-            <TouchableOpacity style={styles.googleButton}>
-              <Ionicons name="logo-google" size={24} color="#fff" style={styles.googleIcon} />
-              <Text style={styles.googleText}>Google</Text>
-            </TouchableOpacity>
-          </View>
-          
           <View style={styles.registerContainer}>
             <Text style={styles.registerText}>{t('dontHaveAccount')}</Text>
             <TouchableOpacity onPress={() => navigation.navigate('Register')}>
