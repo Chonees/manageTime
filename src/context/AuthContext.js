@@ -130,6 +130,10 @@ export const AuthProvider = ({ children }) => {
       console.log('Cerrando sesión...');
       await api.logout();
       
+      // Establecer indicador de cierre de sesión para que WelcomeScreen sepa que debe saltarse
+      await AsyncStorage.setItem('isLogout', 'true');
+      console.log('Indicador de cierre de sesión establecido');
+      
       console.log('Sesión cerrada correctamente');
       setUser(null);
       return { success: true };

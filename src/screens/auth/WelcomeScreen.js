@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { useTheme } from '../../context/ThemeContext';
 import { useLanguage } from '../../context/LanguageContext';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width, height } = Dimensions.get('window');
 
@@ -25,6 +26,37 @@ const WelcomeScreen = ({ navigation }) => {
   const scaleAnim = useRef(new Animated.Value(0.9)).current;
   
   useEffect(() => {
+    // Verificar si debemos mostrar la pantalla de bienvenida o ir directamente al login
+    const checkAppStartState = async () => {
+      try {
+        const isLogout = await AsyncStorage.getItem('isLogout');
+        
+        if (isLogout === 'true') {
+          // Si es un cierre de sesión, ir directamente a Login
+          console.log('Cierre de sesión detectado, saltando pantalla de bienvenida');
+          navigation.replace('Login');
+          // Resetear el indicador para la próxima vez
+          await AsyncStorage.setItem('isLogout', 'false');
+        } else {
+          // Es inicio normal de la app, mostrar animación y luego ir a Login
+          console.log('Inicio de app detectado, mostrando pantalla de bienvenida');
+          startWelcomeAnimation();
+        }
+      } catch (error) {
+        console.error('Error al verificar estado de inicio:', error);
+        // En caso de error, mostrar la animación por defecto
+        startWelcomeAnimation();
+      }
+    };
+    
+    // Iniciar la verificación
+    checkAppStartState();
+    
+    return () => {};
+  }, []);
+  
+  // Función para iniciar la animación de bienvenida
+  const startWelcomeAnimation = () => {
     // Secuencia de animaciones para el logo
     Animated.parallel([
       Animated.timing(fadeAnim, {
@@ -45,7 +77,7 @@ const WelcomeScreen = ({ navigation }) => {
       
       return () => clearTimeout(timer);
     });
-  }, []);
+  };
 
   return (
     <SafeAreaView style={styles.container}>
