@@ -34,7 +34,7 @@ const AdminActivityList = () => {
     pages: 1,
     total: 0
   });
-  const [filterType, setFilterType] = useState('all');
+  // Estado de filtro eliminado según solicitud
   const [viewMode, setViewMode] = useState('list');
 
   // Cargar las actividades
@@ -320,29 +320,9 @@ const AdminActivityList = () => {
     }
   };
 
-  // Filtrar actividades por tipo
+  // Mostrar todas las actividades (filtros eliminados según solicitud)
   const getFilteredActivities = () => {
-    if (filterType === 'all') {
-      return activities;
-    }
-    
-    return activities.filter(activity => {
-      const { type } = activity;
-      
-      if (filterType === 'availability') {
-        return ['clock_in', 'clock_out', 'started_working', 'stopped_working'].includes(type);
-      }
-      
-      if (filterType === 'tasks') {
-        return ['task_create', 'task_update', 'task_complete', 'task_delete'].includes(type);
-      }
-      
-      if (filterType === 'locations') {
-        return ['location_enter', 'location_exit'].includes(type);
-      }
-      
-      return true;
-    });
+    return activities;
   };
 
   // Agrupar actividades por usuario
@@ -436,43 +416,9 @@ const AdminActivityList = () => {
   // Renderizar el separador entre elementos
   const renderSeparator = () => <View style={styles.separator} />;
 
-  // Renderizar los botones de filtro
+  // Función vacía para los botones de filtro (eliminados según solicitud)
   const renderFilterButtons = () => {
-    return (
-      <View style={styles.filterContainer}>
-        <TouchableOpacity
-          style={[styles.filterButton, filterType === 'all' && styles.filterButtonActive]}
-          onPress={() => setFilterType('all')}
-        >
-          <Ionicons name="list-outline" size={16} color={filterType === 'all' ? theme.colors.darkGrey : theme.colors.lightCream} />
-          <Text style={[styles.filterButtonText, filterType === 'all' && styles.filterButtonTextActive]}>{t('all')}</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity
-          style={[styles.filterButton, filterType === 'availability' && styles.filterButtonActive]}
-          onPress={() => setFilterType('availability')}
-        >
-          <Ionicons name="person-outline" size={16} color={filterType === 'availability' ? theme.colors.darkGrey : theme.colors.lightCream} />
-          <Text style={[styles.filterButtonText, filterType === 'availability' && styles.filterButtonTextActive]}>{t('availability')}</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity
-          style={[styles.filterButton, filterType === 'location' && styles.filterButtonActive]}
-          onPress={() => setFilterType('location')}
-        >
-          <Ionicons name="location-outline" size={16} color={filterType === 'location' ? theme.colors.darkGrey : theme.colors.lightCream} />
-          <Text style={[styles.filterButtonText, filterType === 'location' && styles.filterButtonTextActive]}>{t('location')}</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity
-          style={[styles.filterButton, filterType === 'task' && styles.filterButtonActive]}
-          onPress={() => setFilterType('task')}
-        >
-          <Ionicons name="checkbox-outline" size={16} color={filterType === 'task' ? theme.colors.darkGrey : theme.colors.lightCream} />
-          <Text style={[styles.filterButtonText, filterType === 'task' && styles.filterButtonTextActive]}>{t('tasks')}</Text>
-        </TouchableOpacity>
-      </View>
-    );
+    return null;
   };
   // Renderizar los botones de modo de vista
   const renderViewModeButtons = () => {
