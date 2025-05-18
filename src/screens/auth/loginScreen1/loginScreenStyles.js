@@ -106,45 +106,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
   },
-  orContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: 20,
-  },
-  orLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: appTheme.colors.input.border,
-  },
-  orText: {
-    color: appTheme.colors.white,
-    paddingHorizontal: 10,
-    fontSize: 14,
-    opacity: 0.7,
-  },
-  socialButtonsContainer: {
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  googleButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: 50,
-    borderRadius: 15,
-    backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: appTheme.colors.input.border,
-    marginTop: 10,
-    paddingHorizontal: 20,
-  },
-  googleIcon: {
-    marginRight: 10,
-  },
-  googleText: {
-    color: appTheme.colors.white,
-    fontSize: 14,
-  },
   registerContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
