@@ -1,8 +1,14 @@
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
+import { API_URL } from '@env';
 
 // URL base para el backend en producción
-const BACKEND_URL = 'https://managetime-backend-48f256c2dfe5.herokuapp.com';
+const BACKEND_URL = API_URL;
+if (!BACKEND_URL) {
+  console.error('ERROR: La variable API_URL no está definida en el archivo .env');
+  throw new Error('API_URL must be defined in .env file');
+}
+console.log('URL del backend configurada en platform-config:', BACKEND_URL);
 
 // Configuración específica para cada plataforma
 const platformConfig = {

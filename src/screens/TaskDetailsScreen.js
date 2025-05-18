@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
+import { getApiUrl } from '../services/platform-config';
 import * as api from '../services/api';
 import { Ionicons } from '@expo/vector-icons';
 import MapView, { Marker, Circle } from 'react-native-maps';
@@ -743,7 +744,7 @@ const TaskDetailsScreen = ({ route, navigation }) => {
       }
       
       // Usar el mismo endpoint que usa VoiceListener
-      const url = `https://managetime-backend-48f256c2dfe5.herokuapp.com/api/tasks/${task._id}/note`;
+      const url = `${getApiUrl()}/tasks/${task._id}/note`;
       
       // Enviar la nota al backend usando el mismo formato que VoiceListener
       const response = await fetch(url, {
