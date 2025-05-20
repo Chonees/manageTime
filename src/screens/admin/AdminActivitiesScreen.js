@@ -25,6 +25,7 @@ const AdminActivitiesScreen = ({ navigation }) => {
   const { t } = useLanguage();
   const theme = useTheme();
   const [isGeneratingExcel, setIsGeneratingExcel] = React.useState(false);
+  const [isGeneratingTaskReport, setIsGeneratingTaskReport] = React.useState(false);
 
   const downloadExcelReport = async () => {
     try {
@@ -67,6 +68,46 @@ const AdminActivitiesScreen = ({ navigation }) => {
     }
   };
 
+  // Función para descargar el nuevo reporte de tareas
+  const downloadTaskReport = async () => {
+    try {
+      setIsGeneratingTaskReport(true);
+      
+      // Obtener el token directamente de AsyncStorage
+      const token = await AsyncStorage.getItem('token');
+      
+      if (!token) {
+        throw new Error('No authentication token available');
+      }
+      
+      // URL del endpoint del nuevo reporte de tareas
+      const reportUrl = `${api.getApiUrl()}/api/task-reports/tasks`;
+      
+      // Añadir token como parámetro de consulta
+      const fullUrl = `${reportUrl}?token=${encodeURIComponent(token)}`;
+      console.log('Opening task report URL:', fullUrl);
+      
+      // Intentar abrir la URL
+      const canOpen = await Linking.canOpenURL(fullUrl);
+      if (!canOpen) {
+        throw new Error('Cannot open the task report URL');
+      }
+      
+      await Linking.openURL(fullUrl);
+      
+      setTimeout(() => {
+        setIsGeneratingTaskReport(false);
+      }, 2000);
+    } catch (error) {
+      console.error('Error downloading task report:', error);
+      Alert.alert(
+        t('error'), 
+        error.message || 'Error downloading task report',
+        [{ text: 'OK', onPress: () => setIsGeneratingTaskReport(false) }]
+      );
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar backgroundColor={theme.colors.darkGrey} barStyle="light-content" />
@@ -80,12 +121,21 @@ const AdminActivitiesScreen = ({ navigation }) => {
         <Text style={styles.headerTitle}>{t('viewAllActivities')}</Text>
         <View style={styles.buttonGroup}>
           <TouchableOpacity 
-            style={styles.excelButton}
+            style={[styles.excelButton, { marginRight: 10 }]}
             onPress={downloadExcelReport}
             disabled={isGeneratingExcel}
           >
             <Ionicons name="calculator-outline" size={20} color={theme.colors.white} />
             {isGeneratingExcel && <ActivityIndicator size="small" color={theme.colors.white} style={{marginLeft: 5}} />}
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={[styles.excelButton, { backgroundColor: '#2c2c4a' }]}
+            onPress={downloadTaskReport}
+            disabled={isGeneratingTaskReport}
+          >
+            <Ionicons name="document-text-outline" size={20} color={theme.colors.white} />
+            {isGeneratingTaskReport && <ActivityIndicator size="small" color={theme.colors.white} style={{marginLeft: 5}} />}
           </TouchableOpacity>
         </View>
       </View>

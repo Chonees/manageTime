@@ -65,21 +65,21 @@ const TaskDetailsScreen = ({ route, navigation }) => {
     };
   }, [taskId]);
 
-  // Efecto para iniciar el temporizador solo cuando la tarea está aceptada o en progreso
+  // Efecto para iniciar el temporizador solo cuando la tarea está en camino o en el sitio
   useEffect(() => {
     if (task) {
       startLocationTracking();
       
       // Mostrar el temporizador si la tarea tiene límite de tiempo
       if (task.timeLimit) {
-        // Si la tarea está aceptada o en progreso y tiene timeLimitSet, iniciar el timer
-        if ((task.status === 'accepted' || task.status === 'in-progress' || task.status === 'in_progress') && 
+        // Si la tarea está en camino o en el sitio y tiene timeLimitSet, iniciar el timer
+        if ((task.status === 'on_the_way' || task.status === 'on_site') && 
              task.timeLimitSet) {
           console.log(`Iniciando temporizador para tarea ${task._id} con estado ${task.status}`);
           startTaskTimer();
           
           // Si la tarea está en progreso, establecer taskStarted en true
-          if ((task.status === 'in-progress' || task.status === 'in_progress') && !taskStarted) {
+          if ((task.status === 'on_site') && !taskStarted) {
             setTaskStarted(true);
           }
         } 
@@ -96,64 +96,72 @@ const TaskDetailsScreen = ({ route, navigation }) => {
   // Efecto para mostrar automáticamente el modal de confirmación
   useEffect(() => {
     // Mostrar automáticamente el modal de confirmación para usuarios normales
-    // cuando se carga una tarea que no está en progreso ni completada
+    // cuando se carga una tarea que está esperando aceptación
     if (
       task && 
       !user.isAdmin && 
       !hasShownConfirmation && 
-      task.status === 'pending' && 
+      (task.status === 'waiting_for_acceptance') && 
       !task.completed
     ) {
+      console.log('⚠️ Mostrando modal de confirmación para tarea:', taskId);
       // Pequeño delay para asegurar que la interfaz ya está renderizada
       const timer = setTimeout(() => {
         setShowTaskConfirmation(true);
       }, 500);
       
       return () => clearTimeout(timer);
+    } else if (task) {
+      console.log('ℹ️ No se muestra confirmación. Estado actual:', { 
+        taskId: taskId,
+        status: task.status, 
+        isAdmin: user?.isAdmin, 
+        hasShownConfirmation, 
+        isCompleted: task.completed 
+      });
+      
+      // El backend ya debe estar utilizando exclusivamente los nuevos estados
     }
-  }, [task, user, hasShownConfirmation]);
+  }, [task, user, hasShownConfirmation, taskId]);
 
   // Efecto para comprobar si esta tarea ya ha sido confirmada anteriormente
   useEffect(() => {
     // Función para verificar si esta tarea ya ha sido confirmada
     const checkTaskConfirmation = async () => {
       try {
-        if (taskId) {
-          // Obtener la lista de tareas confirmadas de AsyncStorage
-          const confirmedTasksString = await AsyncStorage.getItem('confirmedTasks');
-          const confirmedTasks = confirmedTasksString ? JSON.parse(confirmedTasksString) : [];
-          
-          // Verificar si esta tarea está en la lista
-          if (confirmedTasks.includes(taskId)) {
-            console.log(`Tarea ${taskId} ya fue confirmada anteriormente`);
-            setHasShownConfirmation(true);
-          }
+        // Obtener estado guardado de confirmación para esta tarea
+        const confirmedTasksJson = await AsyncStorage.getItem('confirmedTasks');
+        const confirmedTasks = confirmedTasksJson ? JSON.parse(confirmedTasksJson) : [];
+        
+        // Verificar si esta tarea ya está en la lista de confirmadas
+        if (confirmedTasks.includes(taskId)) {
+          console.log(`Tarea ${taskId} ya ha sido confirmada anteriormente`);
+          setHasShownConfirmation(true);
+        } else {
+          console.log(`Tarea ${taskId} aún no ha sido confirmada`);
+          setHasShownConfirmation(false);
         }
       } catch (error) {
-        console.error('Error verificando estado de confirmación de tarea:', error);
+        console.error('Error al verificar confirmación de tarea:', error);
+        // Si hay error, seguimos mostrando el modal por seguridad
+        setHasShownConfirmation(false);
       }
     };
     
     checkTaskConfirmation();
   }, [taskId]);
 
-  // Efecto para detener el temporizador cuando el usuario entra en el radio de la tarea
+  // Efecto para detener el temporizador y cambiar el estado cuando el usuario entra en el radio de la tarea
   useEffect(() => {
     // Verificar si el usuario entró al radio y hay un temporizador activo
     if (isWithinRadius && task?.timeLimit && task?.timeLimitSet) {
-      console.log('USUARIO ENTRÓ AL RADIO - DETENIENDO TEMPORIZADOR');
-      
-      // Notificar al usuario
-      Alert.alert(
-        t('timerStopped') || 'Temporizador Detenido',
-        t('timerStoppedBecauseInRadius') || 'El temporizador ha sido detenido porque has llegado al lugar de la tarea.',
-        [{ text: t('ok') || 'OK' }]
-      );
+      console.log('USUARIO ENTRÓ AL RADIO - DETENIENDO TEMPORIZADOR Y CAMBIANDO ESTADO A ON_SITE');
       
       // Primero actualizar el estado local inmediatamente
       setTask({
         ...task,
-        timeLimitSet: null
+        timeLimitSet: null,
+        status: 'on_site' // Cambiar al estado "en el sitio"
       });
       
       // Limpiar cualquier intervalo existente del temporizador
@@ -167,9 +175,15 @@ const TaskDetailsScreen = ({ route, navigation }) => {
       
       // Luego actualizar en el backend
       api.updateTask(taskId, { 
-        timeLimitSet: null // Eliminar la fecha de inicio del temporizador
+        timeLimitSet: null, // Eliminar la fecha de inicio del temporizador
+        status: 'on_site' // Cambiar al estado "en el sitio"
       }).then(updatedTask => {
-        console.log('Tarea actualizada en backend: temporizador desactivado');
+        console.log('Tarea actualizada en backend: temporizador desactivado y estado cambiado a ON_SITE');
+        
+        // Registrar actividad de llegada al sitio si no estaba en ese estado previamente
+        if (task.status !== 'on_site') {
+          submitActivity(`Llegada al sitio de la tarea`);
+        }
       }).catch(error => {
         console.error('Error al actualizar la tarea:', error);
       });
@@ -244,6 +258,12 @@ const TaskDetailsScreen = ({ route, navigation }) => {
   // Función para manejar cuando el tiempo se agota
   const handleTimeExpired = async () => {
     try {
+      // Si la tarea ya está en el sitio o completada, no hacer nada
+      if (task.status === 'on_site' || task.status === 'completed') {
+        console.log('El tiempo expiró, pero la tarea ya está en el sitio o completada, no se elimina.');
+        return;
+      }
+      
       // Notificar al usuario que el tiempo se ha agotado
       Alert.alert(
         t('timeExpired') || 'Tiempo Agotado',
@@ -645,9 +665,9 @@ const TaskDetailsScreen = ({ route, navigation }) => {
       // Establecer la fecha de inicio del temporizador
       const now = new Date().toISOString();
       
-      // Update task status to in-progress
+      // Update task status to on_site (en el sitio)
       const updatedTask = await api.updateTask(taskId, { 
-        status: 'in-progress',
+        status: 'on_site',
         timeLimitSet: now  // Establecer explícitamente la fecha de inicio del temporizador
       });
       
@@ -683,7 +703,7 @@ const TaskDetailsScreen = ({ route, navigation }) => {
       
       // Luego actualizar la tarea en el backend
       const updatedTask = await api.updateTask(taskId, { 
-        status: 'completed',
+        status: 'completed', // Mantener status 'completed' como estaba
         completed: true,
         timeLimitSet: null // Eliminar la fecha de inicio del temporizador
       });
@@ -933,7 +953,7 @@ const TaskDetailsScreen = ({ route, navigation }) => {
       
       // Actualizar el estado de la tarea a "accepted" (no "in-progress")
       const updatedTask = await api.updateTask(taskId, { 
-        status: 'accepted',
+        status: 'on_the_way',
         acceptedAt: new Date().toISOString()
       });
       
@@ -1086,7 +1106,7 @@ const TaskDetailsScreen = ({ route, navigation }) => {
       </View>
       
       {/* Timer display section prominently positioned */}
-      {task && task.timeLimit > 0 && remainingTime !== null && (
+      {remainingTime !== null && (
         <View style={[
           styles.timerContainer, 
           remainingTime < 300000 ? styles.timerWarning : null  // Rojo cuando quedan menos de 5 minutos
@@ -1139,7 +1159,7 @@ const TaskDetailsScreen = ({ route, navigation }) => {
               </Text>
             </TouchableOpacity>
             <Text style={styles.taskStatus}>
-              {task.completed ? t('completed') : t('pending')}
+              {task.completed ? t('completed') : t(task.status)}
             </Text>
           </View>
           
