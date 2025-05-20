@@ -59,6 +59,14 @@ const registerTaskActivity = async (userId, taskId, type, taskData) => {
           rejectedAt: new Date().toISOString()
         };
         break;
+      case 'task_on_site':
+        message = `Llegada al sitio de la tarea "${taskData.title}"`;
+        metadata = { 
+          title: taskData.title,
+          arrivedAt: new Date().toISOString(),
+          status: 'on_site'
+        };
+        break;
       default:
         message = `Acción realizada en tarea "${taskData.title}"`;
     }
@@ -450,18 +458,21 @@ exports.updateTask = async (req, res) => {
       task.status = status;
       
       // Registrar timestamps para cambios de estado específicos
-      if (status === 'in-progress' || status === 'in_progress') {
+      if (status === 'on_site') {
+        // Cuando el usuario llega al sitio, registrar que ya está en el lugar
+        // El temporizador se detendrá en el cliente, pero mantenemos el timeLimitSet
+        console.log(`🌍 Usuario ha llegado al sitio de la tarea ${task._id}`);
+      } else if (status === 'on_the_way') {
         task.acceptedAt = new Date();
-      } else if (status === 'accepted') {
-        task.acceptedAt = new Date();
-        // Si la tarea tiene límite de tiempo, comenzar a contar desde que se acepta
+        // Si la tarea tiene límite de tiempo, comenzar a contar desde que el usuario está en camino
         if (task.timeLimit && !task.timeLimitSet) {
           task.timeLimitSet = new Date();
-          console.log(`⏱️ Iniciando temporizador para tarea ${task._id} al ser aceptada: ${task.timeLimitSet}`);
+          console.log(`⏱️ Iniciando temporizador para tarea ${task._id} al estar en camino: ${task.timeLimitSet}`);
         }
-      } else if (status === 'rejected') {
-        task.rejected = true;
-        task.rejectedAt = new Date();
+      } else if (status === 'waiting_for_acceptance') {
+        // Reset de los campos si la tarea vuelve a estado inicial
+        task.acceptedAt = null;
+        task.timeLimitSet = null;
       }
     }
     
@@ -533,13 +544,19 @@ exports.updateTask = async (req, res) => {
       }
     } else if (status !== undefined) {
       // Registrar actividades específicas para cambios de estado
-      if (status === 'in-progress' || status === 'in_progress' || status === 'accepted') {
-        console.log(`Registrando tarea aceptada: ${task._id}`);
+      if (status === 'on_the_way') {
+        console.log(`Registrando tarea en camino: ${task._id}`);
         activity = await registerTaskActivity(req.user._id, task._id, 'task_accept', populatedTask);
         notificationType = 'task_accept';
         notificationTitle = 'Tarea aceptada';
-        notificationBody = `La tarea "${task.title}" ha sido aceptada`;
-      } else if (status === 'rejected') {
+        notificationBody = `La tarea "${task.title}" ha sido aceptada y está en camino`;
+      } else if (status === 'on_site') {
+        console.log(`Registrando llegada a sitio de tarea: ${task._id}`);
+        activity = await registerTaskActivity(req.user._id, task._id, 'task_on_site', populatedTask);
+        notificationType = 'task_on_site';
+        notificationTitle = 'Llegada al sitio';
+        notificationBody = `El usuario ha llegado al sitio de la tarea "${task.title}"`;
+      } else if (status === 'waiting_for_acceptance') {
         console.log(`Registrando tarea rechazada: ${task._id}`);
         activity = await registerTaskActivity(req.user._id, task._id, 'task_reject', populatedTask);
         notificationType = 'task_reject';

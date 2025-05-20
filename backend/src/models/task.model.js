@@ -17,8 +17,8 @@ const taskSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['pending', 'in_progress', 'in-progress', 'completed', 'paused', 'rejected', 'accepted'],
-    default: 'pending'
+    enum: ['waiting_for_acceptance', 'on_the_way', 'on_site', 'completed'],
+    default: 'waiting_for_acceptance'
   },
   userId: {
     type: mongoose.Schema.Types.ObjectId,

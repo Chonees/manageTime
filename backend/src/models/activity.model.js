@@ -25,8 +25,6 @@ const ActivitySchema = new Schema({
       'login',
       'logout',
       'location_check',
-      'clock_in',
-      'clock_out',
       'task_activity',
       'voice_note',
       'location_enter',

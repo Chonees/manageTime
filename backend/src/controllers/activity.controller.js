@@ -30,7 +30,7 @@ exports.createActivity = async (req, res) => {
     const validTypes = [
       'location_enter', 'location_exit', 
       'task_complete', 'task_create', 'task_update', 'task_delete',
-      'started_working', 'stopped_working', 'clock_in', 'clock_out', 'task_activity',
+      'task_activity',
       'task_accept', 'task_reject', 'task_assign'
     ];
     
@@ -69,7 +69,7 @@ exports.createActivity = async (req, res) => {
     // Enviar notificación push a administradores según el tipo de actividad
     try {
       // Enviar notificación para todos los tipos relevantes
-      if (['clock_in', 'clock_out', 'started_working', 'stopped_working', 'task_complete', 'location_enter', 'location_exit', 'task_activity'].includes(type)) {
+      if (['task_complete', 'location_enter', 'location_exit', 'task_activity'].includes(type)) {
         console.log(`Intentando enviar notificación para actividad tipo: ${type}`);
         
         const savedActivity = activity.toObject();

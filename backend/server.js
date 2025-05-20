@@ -12,6 +12,7 @@ const taskRoutes = require('./src/routes/task.routes');
 const statsRoutes = require('./src/routes/stats.routes');
 const activityRoutes = require('./src/routes/activity.routes');
 const reportRoutes = require('./src/routes/report.routes');
+const taskReportRoutes = require('./src/routes/taskReport.routes');
 const savedLocationRoutes = require('./src/routes/savedLocation.routes');
 const notificationRoutes = require('./src/routes/notification.routes');
 // Importar rutas de plantillas de tareas
@@ -66,6 +67,7 @@ app.use('/api/tasks', taskRoutes);
 app.use('/api/stats', statsRoutes);
 app.use('/api/activities', activityRoutes);
 app.use('/api/reports', reportRoutes);
+app.use('/api/task-reports', taskReportRoutes);
 app.use('/api/saved-locations', savedLocationRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/task-templates', taskTemplateRoutes);

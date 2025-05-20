@@ -137,6 +137,45 @@ const TaskDetailsScreen = ({ route, navigation }) => {
     checkTaskConfirmation();
   }, [taskId]);
 
+  // Efecto para detener el temporizador cuando el usuario entra en el radio de la tarea
+  useEffect(() => {
+    // Verificar si el usuario entró al radio y hay un temporizador activo
+    if (isWithinRadius && task?.timeLimit && task?.timeLimitSet) {
+      console.log('USUARIO ENTRÓ AL RADIO - DETENIENDO TEMPORIZADOR');
+      
+      // Notificar al usuario
+      Alert.alert(
+        t('timerStopped') || 'Temporizador Detenido',
+        t('timerStoppedBecauseInRadius') || 'El temporizador ha sido detenido porque has llegado al lugar de la tarea.',
+        [{ text: t('ok') || 'OK' }]
+      );
+      
+      // Primero actualizar el estado local inmediatamente
+      setTask({
+        ...task,
+        timeLimitSet: null
+      });
+      
+      // Limpiar cualquier intervalo existente del temporizador
+      if (timerIntervalRef.current) {
+        clearInterval(timerIntervalRef.current);
+        timerIntervalRef.current = null;
+      }
+      
+      // Establecer el tiempo restante a null para que no se muestre el contador
+      setRemainingTime(null);
+      
+      // Luego actualizar en el backend
+      api.updateTask(taskId, { 
+        timeLimitSet: null // Eliminar la fecha de inicio del temporizador
+      }).then(updatedTask => {
+        console.log('Tarea actualizada en backend: temporizador desactivado');
+      }).catch(error => {
+        console.error('Error al actualizar la tarea:', error);
+      });
+    }
+  }, [isWithinRadius, task]);
+
   // Función para iniciar el temporizador de la tarea
   const startTaskTimer = () => {
     if (!task) {
@@ -232,6 +271,15 @@ const TaskDetailsScreen = ({ route, navigation }) => {
     const seconds = totalSeconds % 60;
     
     return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+  };
+
+  // Función para detener el temporizador
+  const stopTaskTimer = () => {
+    if (timerIntervalRef.current) {
+      console.log('Deteniendo el temporizador de la tarea');
+      clearInterval(timerIntervalRef.current);
+      timerIntervalRef.current = null;
+    }
   };
 
   const startLocationTracking = async () => {
@@ -630,10 +678,14 @@ const TaskDetailsScreen = ({ route, navigation }) => {
       // Primero asegurarse de detener el modo manos libres
       setTaskStarted(false);
       
+      // Detener el temporizador si está activo
+      stopTaskTimer();
+      
       // Luego actualizar la tarea en el backend
       const updatedTask = await api.updateTask(taskId, { 
         status: 'completed',
-        completed: true 
+        completed: true,
+        timeLimitSet: null // Eliminar la fecha de inicio del temporizador
       });
       setTask(updatedTask);
 
