@@ -134,7 +134,7 @@ exports.createTask = async (req, res) => {
       userId: assignedUserId,
       completed: false,
       handsFreeMode: handsFreeMode === true, // Asegurar que se guarde como booleano
-      status: status || 'pending', // Usar el status proporcionado o 'pending' por defecto
+      status: status || 'waiting_for_acceptance', // Usar el status proporcionado o 'waiting_for_acceptance' por defecto
       keywords: keywords || '' // Guardar las palabras clave específicas para activación por voz
     };
     
@@ -247,7 +247,7 @@ exports.createAssignedTask = async (req, res) => {
       userId: userId,
       completed: false,
       handsFreeMode: handsFreeMode === true, // Asegurar que se guarde como booleano
-      status: status || 'pending', // Usar el status proporcionado o 'pending' por defecto
+      status: status || 'waiting_for_acceptance', // Usar el status proporcionado o 'waiting_for_acceptance' por defecto
       keywords: keywords || '' // Guardar las palabras clave específicas para activación por voz
     };
     
