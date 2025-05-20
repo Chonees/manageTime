@@ -10,6 +10,60 @@ const moment = require('moment-timezone');
 const Task = require('../models/task.model');
 const User = require('../models/user.model');
 const Activity = require('../models/activity.model');
+const jwt = require('jsonwebtoken');
+
+/**
+ * Función auxiliar para verificar el token y autenticar al administrador
+ * @param {Object} req - Objeto de solicitud
+ * @param {Object} res - Objeto de respuesta
+ * @returns {Boolean} - True si está autenticado, false si no
+ */
+const verifyAdminToken = async (req, res) => {
+  // Verificar autenticación - primero intentar desde token en parámetro de consulta
+  if (req.query.token) {
+    try {
+      console.log('Token recibido en query:', req.query.token);
+      
+      // Verificar el token con el secreto adecuado
+      const JWT_SECRET = process.env.JWT_SECRET || 'tokenSecretJWT';
+      const decoded = jwt.verify(req.query.token, JWT_SECRET);
+      console.log('Token decodificado:', decoded);
+      
+      if (decoded && decoded.id) {
+        // Buscar usuario para verificar si es admin
+        const user = await User.findById(decoded.id);
+        console.log('Usuario encontrado:', user ? user.username : 'ninguno');
+        
+        if (user && (user.isAdmin === true || decoded.isAdmin === true)) {
+          req.user = {
+            id: user._id,
+            _id: user._id,
+            username: user.username,
+            role: 'admin', // Establecer role para compatibilidad
+            isAdmin: true
+          };
+          console.log('Usuario autenticado como admin');
+          return true;
+        } else {
+          console.log('Usuario no es admin:', user ? (user.isAdmin ? 'Es admin' : 'No es admin') : 'rol desconocido');
+          return res.status(403).json({ message: 'Acceso denegado: se requieren permisos de administrador' });
+        }
+      }
+    } catch (error) {
+      console.error('Error al verificar token:', error);
+      return res.status(401).json({ message: 'Token inválido o expirado' });
+    }
+  }
+  
+  // Si hay un usuario autenticado por middleware estándar, verificar si es admin
+  if (req.user && req.user.isAdmin) {
+    console.log('Usuario ya autenticado como admin por middleware');
+    return true;
+  }
+  
+  console.log('No se proporcionó token de autenticación');
+  return res.status(401).json({ message: 'No se proporcionó token de autenticación' });
+};
 
 /**
  * Generates an Excel report of task-based activities
@@ -18,6 +72,12 @@ const Activity = require('../models/activity.model');
  */
 exports.generateTaskReport = async (req, res) => {
   try {
+    // Verificar autenticación usando el token de la consulta primero
+    const isAuthenticated = await verifyAdminToken(req, res);
+    if (!isAuthenticated) {
+      // Si verifyAdminToken no devuelve true, ya ha enviado una respuesta de error
+      return;
+    }
     console.log('Generating task-based Excel report with params:', req.query);
     
     // Initialize tracking variables

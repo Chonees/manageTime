@@ -3,11 +3,11 @@ const router = express.Router();
 const taskReportController = require('../controllers/taskReport.controller');
 const authMiddleware = require('../middleware/auth.middleware');
 
-// All routes are protected and require admin permissions
+// Rutas para generar reportes (permiten token en query parameter)
+router.get('/tasks', taskReportController.generateTaskReport);
+
+// El resto de rutas de reportes requieren autenticación tradicional
 router.use(authMiddleware.verifyToken);
 router.use(authMiddleware.isAdmin);
-
-// GET /api/reports/tasks - Generate task-based Excel report
-router.get('/tasks', taskReportController.generateTaskReport);
 
 module.exports = router;
