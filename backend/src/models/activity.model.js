@@ -26,7 +26,8 @@ const ActivitySchema = new Schema({
       'logout',
       'location_check',
       'task_activity',
-      'voice_note',
+      'bitacora',      // Nuevo tipo para notas de voz/keywords
+      'NOTES',         // Nuevo tipo para notas de voz/keywords (preferido)
       'location_enter',
       'location_exit',
       'task_create',
@@ -35,7 +36,8 @@ const ActivitySchema = new Schema({
       'task_delete',
       'task_assign',
       'task_accept',
-      'task_reject'
+      'task_reject',
+      'task_on_site'   // Tipo para cuando se llega al sitio de la tarea
     ]
   },
   

@@ -977,7 +977,7 @@ exports.addSimpleVoiceNote = async (req, res) => {
     const activity = new Activity({
       userId,
       taskId: taskObjectId,
-      type: type || 'voice_note',
+      type: 'NOTES', // Ahora siempre guardaremos como NOTES
       message: keyword || text, // Usar la palabra clave si está disponible, si no usar el texto completo
       metadata: {
         source: 'voice_assistant',
