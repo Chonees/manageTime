@@ -77,20 +77,22 @@ const AdminActivitiesScreen = ({ navigation }) => {
       const token = await AsyncStorage.getItem('token');
       
       if (!token) {
-        throw new Error('No authentication token available');
+        throw new Error('No hay token de autenticación disponible');
       }
       
       // URL del endpoint del nuevo reporte de tareas
       const reportUrl = `${api.getApiUrl()}/api/task-reports/tasks`;
       
-      // Añadir token como parámetro de consulta
-      const fullUrl = `${reportUrl}?token=${encodeURIComponent(token)}`;
-      console.log('Opening task report URL:', fullUrl);
+      // Añadir token como parámetro de consulta y opciones de formato
+      // formatVoiceNotes=true: cambia "voice_note" a "bitacora" e incluye el texto completo
+      // groupByTask=true: agrupa las actividades por tarea en secciones claras
+      const fullUrl = `${reportUrl}?token=${encodeURIComponent(token)}&formatVoiceNotes=true&groupByTask=true`;
+      console.log('Abriendo URL de reporte de tareas con formato mejorado:', fullUrl);
       
       // Intentar abrir la URL
       const canOpen = await Linking.canOpenURL(fullUrl);
       if (!canOpen) {
-        throw new Error('Cannot open the task report URL');
+        throw new Error('No se puede abrir la URL del reporte');
       }
       
       await Linking.openURL(fullUrl);
@@ -99,10 +101,10 @@ const AdminActivitiesScreen = ({ navigation }) => {
         setIsGeneratingTaskReport(false);
       }, 2000);
     } catch (error) {
-      console.error('Error downloading task report:', error);
+      console.error('Error al descargar el reporte de tareas:', error);
       Alert.alert(
         t('error'), 
-        error.message || 'Error downloading task report',
+        error.message || 'Error al descargar el reporte de tareas',
         [{ text: 'OK', onPress: () => setIsGeneratingTaskReport(false) }]
       );
     }

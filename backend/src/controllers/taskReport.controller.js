@@ -90,6 +90,10 @@ exports.generateTaskReport = async (req, res) => {
     const endDate = req.query.endDate ? new Date(req.query.endDate) : null;
     const userId = req.query.userId;
     
+    // Leer opciones de formato
+    const formatVoiceNotes = req.query.formatVoiceNotes === 'true';
+    const groupByTask = req.query.groupByTask === 'true'; // Esto ya lo hacemos por defecto
+    
     // Configure date filters if provided
     if (endDate) {
       // Set end date to end of day
@@ -206,7 +210,7 @@ exports.generateTaskReport = async (req, res) => {
       { header: 'Task', key: 'task', width: 25 },
       { header: 'Action', key: 'action', width: 15 },
       { header: 'Status', key: 'status', width: 15 },
-      { header: 'Details', key: 'details', width: 30 }
+      { header: 'Details', key: 'details', width: 40 }
     ];
     
     // Apply style to activities header
@@ -241,7 +245,7 @@ exports.generateTaskReport = async (req, res) => {
           { header: 'Task', key: 'task', width: 25 },
           { header: 'Action', key: 'action', width: 15 },
           { header: 'Status', key: 'status', width: 15 },
-          { header: 'Details', key: 'details', width: 30 }
+          { header: 'Details', key: 'details', width: 40 }
         ];
         
         // Apply style to user sheet header
@@ -279,7 +283,7 @@ exports.generateTaskReport = async (req, res) => {
           
           // Add task header to user sheet
           const taskHeaderRow = userSheet.addRow({
-            date: `TASK: ${taskName}`
+            date: `TAREA: ${taskName}`
           });
           
           // Apply task header style
@@ -341,8 +345,12 @@ exports.generateTaskReport = async (req, res) => {
                 statusText = 'on_site';
                 break;
               case 'voice_note':
-                actionType = 'Voice keyword';
-                details = activity.message;
+                // Si se solicita formatear notas de voz, mostrarlas como Bitácora
+                actionType = formatVoiceNotes ? 'Bitácora' : 'Voice Note';
+                // Usar el mensaje de la actividad o texto en metadata como keyword
+                details = activity.message || 
+                  (activity.metadata && activity.metadata.keyword ? activity.metadata.keyword : '') || 
+                  (activity.metadata && activity.metadata.fullText ? activity.metadata.fullText : '');
                 break;
               default:
                 actionType = activity.type;
@@ -376,6 +384,13 @@ exports.generateTaskReport = async (req, res) => {
           }
           
           // Add empty row after task section
+          userSheet.addRow({});
+          
+          // Add a divider line
+          const dividerRow = userSheet.addRow({
+            date: '----------------------------'
+          });
+          dividerRow.font = { italic: true, color: { argb: '888888' } };
           userSheet.addRow({});
         }
         
