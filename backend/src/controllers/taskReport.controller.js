@@ -345,8 +345,9 @@ exports.generateTaskReport = async (req, res) => {
                 statusText = 'on_site';
                 break;
               case 'voice_note':
-                // Si se solicita formatear notas de voz, mostrarlas como Bitácora
-                actionType = formatVoiceNotes ? 'Bitácora' : 'Voice Note';
+              case 'NOTES':
+                // Si se solicita formatear notas de voz, mostrarlas como NOTA
+                actionType = formatVoiceNotes ? 'NOTE' : 'Note';
                 // Usar el mensaje de la actividad o texto en metadata como keyword
                 details = activity.message || 
                   (activity.metadata && activity.metadata.keyword ? activity.metadata.keyword : '') || 
