@@ -453,26 +453,34 @@ exports.updateTask = async (req, res) => {
     if (handsFreeMode !== undefined) task.handsFreeMode = handsFreeMode === true; // Asegurar que se guarde como booleano
     
     // Manejar cambios de estado
+    let statusChanged = false;
     if (status !== undefined) {
       const oldStatus = task.status;
-      task.status = status;
       
-      // Registrar timestamps para cambios de estado específicos
-      if (status === 'on_site') {
-        // Cuando el usuario llega al sitio, registrar que ya está en el lugar
-        // El temporizador se detendrá en el cliente, pero mantenemos el timeLimitSet
-        console.log(`🌍 Usuario ha llegado al sitio de la tarea ${task._id}`);
-      } else if (status === 'on_the_way') {
-        task.acceptedAt = new Date();
-        // Si la tarea tiene límite de tiempo, comenzar a contar desde que el usuario está en camino
-        if (task.timeLimit && !task.timeLimitSet) {
-          task.timeLimitSet = new Date();
-          console.log(`⏱️ Iniciando temporizador para tarea ${task._id} al estar en camino: ${task.timeLimitSet}`);
+      // Verificar si el estado realmente cambió
+      if (oldStatus !== status) {
+        statusChanged = true;
+        task.status = status;
+        
+        // Registrar timestamps para cambios de estado específicos
+        if (status === 'on_site') {
+          // Cuando el usuario llega al sitio, registrar que ya está en el lugar
+          // El temporizador se detendrá en el cliente, pero mantenemos el timeLimitSet
+          console.log(`🌍 Usuario ha llegado al sitio de la tarea ${task._id}`);
+        } else if (status === 'on_the_way') {
+          task.acceptedAt = new Date();
+          // Si la tarea tiene límite de tiempo, comenzar a contar desde que el usuario está en camino
+          if (task.timeLimit && !task.timeLimitSet) {
+            task.timeLimitSet = new Date();
+            console.log(`⏱️ Iniciando temporizador para tarea ${task._id} al estar en camino: ${task.timeLimitSet}`);
+          }
+        } else if (status === 'waiting_for_acceptance') {
+          // Reset de los campos si la tarea vuelve a estado inicial
+          task.acceptedAt = null;
+          task.timeLimitSet = null;
         }
-      } else if (status === 'waiting_for_acceptance') {
-        // Reset de los campos si la tarea vuelve a estado inicial
-        task.acceptedAt = null;
-        task.timeLimitSet = null;
+      } else {
+        console.log(`⚠️ Estado de tarea ${task._id} no cambió (sigue siendo ${status}). No se registrará actividad duplicada.`);
       }
     }
     
@@ -542,33 +550,20 @@ exports.updateTask = async (req, res) => {
         notificationTitle = 'Tarea reactivada';
         notificationBody = `La tarea "${task.title}" ha sido reactivada`;
       }
-    } else if (status !== undefined) {
-      // Registrar actividades específicas para cambios de estado
+    } else if (status !== undefined && statusChanged) {
+      // Solo registrar actividades si el estado realmente cambió
       if (status === 'on_the_way') {
-        console.log(`Registrando tarea en camino: ${task._id}`);
+        console.log(`Registrando actividad de tarea en camino: ${task._id}`);
         activity = await registerTaskActivity(req.user._id, task._id, 'task_accept', populatedTask);
         notificationType = 'task_accept';
         notificationTitle = 'Tarea aceptada';
         notificationBody = `La tarea "${task.title}" ha sido aceptada y está en camino`;
       } else if (status === 'on_site') {
-        // Verificar primero si ya existe una actividad de llegada al sitio para esta tarea
-        console.log(`Verificando si ya existe registro de llegada al sitio para tarea: ${task._id}`);
-        
-        const existingActivity = await Activity.findOne({
-          taskId: task._id,
-          type: 'task_on_site'
-        });
-        
-        if (!existingActivity) {
-          console.log(`Registrando llegada a sitio de tarea (primera vez): ${task._id}`);
-          activity = await registerTaskActivity(req.user._id, task._id, 'task_on_site', populatedTask);
-          notificationType = 'task_on_site';
-          notificationTitle = 'Llegada al sitio';
-          notificationBody = `El usuario ha llegado al sitio de la tarea "${task.title}"`;
-        } else {
-          console.log(`Ya existe registro de llegada al sitio para tarea ${task._id}, no se crea duplicado`);
-          // No creamos una nueva actividad, pero mantenemos actualizado el estado
-        }
+        console.log(`Registrando actividad de tarea en sitio: ${task._id}`);
+        activity = await registerTaskActivity(req.user._id, task._id, 'task_on_site', populatedTask);
+        notificationType = 'task_on_site';
+        notificationTitle = 'Llegada al sitio';
+        notificationBody = `El usuario ha llegado al sitio de la tarea "${task.title}"`;
       } else if (status === 'waiting_for_acceptance') {
         console.log(`Registrando tarea rechazada: ${task._id}`);
         activity = await registerTaskActivity(req.user._id, task._id, 'task_reject', populatedTask);
