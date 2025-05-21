@@ -35,6 +35,7 @@ const TaskDetailsScreen = ({ route, navigation }) => {
   const [assignedUser, setAssignedUser] = useState(null);
   const [userLocation, setUserLocation] = useState(null);
   const [isWithinRadius, setIsWithinRadius] = useState(false);
+  const [hasLoggedOnSite, setHasLoggedOnSite] = useState(false); // Estado para controlar si ya se ha registrado la llegada
   const [taskStarted, setTaskStarted] = useState(false);
   const [locationWatcher, setLocationWatcher] = useState(null);
   const [isLocationTracking, setIsLocationTracking] = useState(false);
@@ -189,6 +190,27 @@ const TaskDetailsScreen = ({ route, navigation }) => {
       });
     }
   }, [isWithinRadius, task]);
+
+  useEffect(() => {
+    if (isWithinRadius && task && task.status !== 'on_site' && !hasLoggedOnSite) {
+      console.log('⚠️ Usuario dentro del radio pero la tarea no está en estado "on_site"');
+      
+      // Si la tarea no está completada y no está en estado "on_site", actualizar estado
+      if (!task.completed) {
+        console.log('📱 Actualizando tarea a estado "on_site"');
+        api.updateTask(task._id, { status: 'on_site' })
+          .then(updatedTask => {
+            console.log('✅ Tarea actualizada a estado on_site:', updatedTask);
+            setTask(updatedTask);
+            setHasLoggedOnSite(true); // Marcar que ya se ha registrado la llegada
+            console.log('🔄 hasLoggedOnSite establecido a TRUE para evitar registros duplicados');
+          })
+          .catch(error => {
+            console.error('❌ Error al actualizar tarea a on_site:', error);
+          });
+      }
+    }
+  }, [isWithinRadius, task, hasLoggedOnSite]);
 
   // Función para iniciar el temporizador de la tarea
   const startTaskTimer = () => {
@@ -478,74 +500,88 @@ const TaskDetailsScreen = ({ route, navigation }) => {
   };
 
   const checkIfWithinTaskRadius = (userCoords) => {
-    console.log(t('radiusCheckDivider'));
-    
-    // Skip check if task isn't loaded yet
-    if (!task) {
-      console.log('Task data not loaded yet, skipping radius check');
-      return;
-    }
-    
-    console.log(t('checkingTaskRadius', { taskId: task._id }));
-    
-    // Validate task has location data
-    if (!task?.location?.coordinates || task.location.coordinates.length !== 2) {
-      console.error(t('taskMissingCoordinates', { location: JSON.stringify(task?.location) }));
-      setIsWithinRadius(false);
-      return;
-    }
-    
-    // Get task data
-    const taskCoords = {
-      latitude: task.location.coordinates[1],
-      longitude: task.location.coordinates[0]
-    };
-    
-    const taskRadius = task.radius || 0.1; // Default to 0.1km if not specified
-    console.log(t('taskPosition', { position: JSON.stringify(taskCoords) }));
-    console.log(t('taskRadius', { radius: taskRadius }));
-    console.log(t('userPosition', { position: JSON.stringify(userCoords) }));
-    
-    // Calculate distance
-    const distanceInKm = calculateDistance(
-      userCoords.latitude, 
-      userCoords.longitude, 
-      taskCoords.latitude, 
-      taskCoords.longitude
-    );
-    
-    const distanceInMeters = distanceInKm * 1000;
-    console.log(t('distanceToTask', { 
-      km: distanceInKm.toFixed(6), 
-      meters: distanceInMeters.toFixed(2) 
-    }));
-    
-    // Check if within radius - compare kilometers to kilometers since radius is in km
-    const withinRadius = distanceInKm <= taskRadius;
-    
-    if (withinRadius) {
-      console.log(t('withinTaskRadius', { 
-        distance: distanceInMeters.toFixed(0),
-        taskTitle: task.title
-      }));
-    } else {
-      console.log(t('outsideTaskRadius', { 
-        distance: distanceInMeters.toFixed(0),
-        taskTitle: task.title,
-        radius: taskRadius * 1000 // Convert to meters for log display
-      }));
-    }
-    
-    // Only update state if value changed to avoid rerenders
-    if (isWithinRadius !== withinRadius) {
-      console.log(t('updatingRadiusState', { 
-        from: isWithinRadius.toString(), 
-        to: withinRadius.toString() 
-      }));
-      setIsWithinRadius(withinRadius);
-    }
-    console.log(t('radiusCheckDivider'));
+  console.log(t('radiusCheckDivider'));
+  
+  // Skip check if task isn't loaded yet
+  if (!task) {
+    console.log('Task data not loaded yet, skipping radius check');
+    return;
+  }
+  
+  console.log(t('checkingTaskRadius', { taskId: task._id }));
+  
+  // Validate task has location data
+  if (!task?.location?.coordinates || task.location.coordinates.length !== 2) {
+    console.error(t('taskMissingCoordinates', { location: JSON.stringify(task?.location) }));
+    setIsWithinRadius(false);
+    return;
+  }
+  
+  // Get task data
+  const taskCoords = {
+    latitude: task.location.coordinates[1],
+    longitude: task.location.coordinates[0]
   };
+  
+  const taskRadius = task.radius || 0.1; // Default to 0.1km if not specified
+  console.log(t('taskPosition', { position: JSON.stringify(taskCoords) }));
+  console.log(t('taskRadius', { radius: taskRadius }));
+  console.log(t('userPosition', { position: JSON.stringify(userCoords) }));
+  
+  // Calculate distance
+  const distanceInKm = calculateDistance(
+    userCoords.latitude, 
+    userCoords.longitude, 
+    taskCoords.latitude, 
+    taskCoords.longitude
+  );
+  
+  const distanceInMeters = distanceInKm * 1000;
+  console.log(t('distanceToTask', { 
+    km: distanceInKm.toFixed(6), 
+    meters: distanceInMeters.toFixed(2) 
+  }));
+  
+  // Check if within radius - compare kilometers to kilometers since radius is in km
+  const withinRadius = distanceInKm <= taskRadius;
+  
+  // Log position relative to task radius
+  if (withinRadius) {
+    console.log(t('withinTaskRadius', { 
+      distance: distanceInMeters.toFixed(0),
+      taskTitle: task.title
+    }));
+  } else {
+    console.log(t('outsideTaskRadius', { 
+      distance: distanceInMeters.toFixed(0),
+      taskTitle: task.title,
+      radius: taskRadius * 1000 // Convert to meters for log display
+    }));
+  }
+  
+  // Detectar cuando el usuario entra al radio (transición de fuera a dentro)
+  if (withinRadius && !isWithinRadius) {
+    console.log('⭐ Usuario acaba de entrar al radio de la tarea');
+    setHasLoggedOnSite(false); // Resetear para permitir un nuevo registro
+  }
+  
+  // Detectar cuando el usuario sale del radio (transición de dentro a fuera)
+  if (!withinRadius && isWithinRadius) {
+    console.log('⭐ Usuario acaba de salir del radio de la tarea');
+    setHasLoggedOnSite(false); // Resetear para permitir un nuevo registro cuando vuelva a entrar
+  }
+  
+  // Solo actualizar estado si el valor cambió para evitar rerenderizaciones
+  if (isWithinRadius !== withinRadius) {
+    console.log(t('updatingRadiusState', { 
+      from: isWithinRadius.toString(), 
+      to: withinRadius.toString() 
+    }));
+    setIsWithinRadius(withinRadius);
+  }
+  
+  console.log(t('radiusCheckDivider'));
+};
 
   const calculateDistance = (lat1, lon1, lat2, lon2) => {
     const R = 6371; // Radius of the Earth in km
@@ -801,7 +837,7 @@ const TaskDetailsScreen = ({ route, navigation }) => {
       // Crear un objeto de nota exactamente igual al formato usado por VoiceListener
       const noteData = {
         text: inputText,
-        type: 'voice_note', // Usar el mismo tipo que las notas de voz
+        type: 'NOTES', // Actualizado al nuevo tipo que reemplaza a 'voice_note'
         timestamp: new Date().toISOString(),
         keyword: '', // Campo vacío pero incluido para mantener consistencia
         source: 'manual_input' // Identificar que es entrada manual

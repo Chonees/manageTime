@@ -1785,7 +1785,7 @@ export const addSimpleVoiceNote = async (taskId, text, token) => {
       },
       body: JSON.stringify({ 
         text, 
-        type: 'voice_note',
+        type: 'NOTES', // Actualizado para usar el nuevo tipo
         timestamp: new Date().toISOString()
       })
     };

@@ -480,14 +480,14 @@ const VoiceListener = ({ isTaskActive = false, taskData = null, onKeywordDetecte
       // Datos de la nota
       const noteData = {
         text: noteText,
-        type: 'voice_note',
+        type: 'NOTES', // Cambiado a 'NOTES' según la solicitud del usuario
         timestamp: new Date().toISOString(),
         // Incluir la palabra clave detectada en los datos de la nota
         keyword: detectedKeyword || ''
       };
       
       // URL directa al endpoint
-      const url = `${getApiUrl()}/tasks/${targetTaskId}/note`;
+      const url = `${getApiUrl()}/api/tasks/${targetTaskId}/note`;
       
       // Enviar la nota al backend
       const response = await fetch(url, {

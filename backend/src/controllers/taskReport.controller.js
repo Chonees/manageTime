@@ -396,8 +396,8 @@ exports.generateTaskReport = async (req, res) => {
           userSheet.addRow({});
         }
         
-        // Activities without a task
-        const untaskedActivities = activities.filter(a => !a.taskId);
+        // Activities without a task or actividades de tipo 'updated' (task_update)
+        const untaskedActivities = activities.filter(a => !a.taskId || a.type === 'task_update');
         
         if (untaskedActivities.length > 0) {
           // Add section header
