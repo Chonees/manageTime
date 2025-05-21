@@ -551,11 +551,24 @@ exports.updateTask = async (req, res) => {
         notificationTitle = 'Tarea aceptada';
         notificationBody = `La tarea "${task.title}" ha sido aceptada y está en camino`;
       } else if (status === 'on_site') {
-        console.log(`Registrando llegada a sitio de tarea: ${task._id}`);
-        activity = await registerTaskActivity(req.user._id, task._id, 'task_on_site', populatedTask);
-        notificationType = 'task_on_site';
-        notificationTitle = 'Llegada al sitio';
-        notificationBody = `El usuario ha llegado al sitio de la tarea "${task.title}"`;
+        // Verificar primero si ya existe una actividad de llegada al sitio para esta tarea
+        console.log(`Verificando si ya existe registro de llegada al sitio para tarea: ${task._id}`);
+        
+        const existingActivity = await Activity.findOne({
+          taskId: task._id,
+          type: 'task_on_site'
+        });
+        
+        if (!existingActivity) {
+          console.log(`Registrando llegada a sitio de tarea (primera vez): ${task._id}`);
+          activity = await registerTaskActivity(req.user._id, task._id, 'task_on_site', populatedTask);
+          notificationType = 'task_on_site';
+          notificationTitle = 'Llegada al sitio';
+          notificationBody = `El usuario ha llegado al sitio de la tarea "${task.title}"`;
+        } else {
+          console.log(`Ya existe registro de llegada al sitio para tarea ${task._id}, no se crea duplicado`);
+          // No creamos una nueva actividad, pero mantenemos actualizado el estado
+        }
       } else if (status === 'waiting_for_acceptance') {
         console.log(`Registrando tarea rechazada: ${task._id}`);
         activity = await registerTaskActivity(req.user._id, task._id, 'task_reject', populatedTask);
