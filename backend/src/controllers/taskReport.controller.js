@@ -121,7 +121,8 @@ exports.generateTaskReport = async (req, res) => {
         'task_accept', 
         'task_reject',
         'task_on_site',
-        'voice_note'
+        'voice_note',
+        'NOTES' // Añadido nuevo tipo para notas de voz/keywords
       ]
     };
     
