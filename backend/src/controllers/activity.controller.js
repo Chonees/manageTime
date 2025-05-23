@@ -217,11 +217,14 @@ exports.getAllActivities = async (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const skip = (page - 1) * limit;
     
-    // Definir tipos de actividad a excluir
-    const excludedTypes = ['location_check']; 
+    // Ya no excluimos location_check para que aparezcan en el panel de admin
+    // const excludedTypes = ['location_check']; 
     
-    // Construir filtro para excluir tipos no deseados
-    const filter = { type: { $nin: excludedTypes } };
+    // No aplicamos filtro de exclusión por tipo
+    // const filter = { type: { $nin: excludedTypes } };
+    
+    // Filtro vacío para incluir todas las actividades
+    const filter = {};
     
     // Aplicar filtro de ordenación si existe
     const sort = req.query.sort || { createdAt: -1 };
