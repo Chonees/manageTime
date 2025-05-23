@@ -31,7 +31,8 @@ exports.createActivity = async (req, res) => {
       'location_enter', 'location_exit', 
       'task_complete', 'task_create', 'task_update', 'task_delete',
       'task_activity',
-      'task_accept', 'task_reject', 'task_assign'
+      'task_accept', 'task_reject', 'task_assign',
+      'NOTES' // Añadido soporte para notas
     ];
     
     if (!validTypes.includes(type)) {

@@ -937,7 +937,7 @@ exports.addSimpleVoiceNote = async (req, res) => {
   try {
     // Extraer datos de la petición
     const { taskId } = req.params;
-    const { text, type, keyword } = req.body;
+    const { text, type, keyword, latitude, longitude, accuracy } = req.body;
     const userId = req.user._id || req.user.id;
     
     console.log(`[SIMPLE VOICE NOTE] Recibida petición para añadir nota a tarea ${taskId}`);
@@ -991,7 +991,11 @@ exports.addSimpleVoiceNote = async (req, res) => {
         source: 'voice_assistant',
         timestamp: new Date().toISOString(),
         fullText: text, // Guardar el texto completo en metadatos
-        keyword: keyword // Guardar la palabra clave en metadatos
+        keyword: keyword, // Guardar la palabra clave en metadatos
+        // Guardar coordenadas si están disponibles
+        latitude: latitude ? Number(latitude) : undefined,
+        longitude: longitude ? Number(longitude) : undefined,
+        accuracy: accuracy ? Number(accuracy) : undefined
       },
       createdAt: new Date()
     });
