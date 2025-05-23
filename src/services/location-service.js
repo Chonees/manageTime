@@ -417,7 +417,7 @@ export const startLocationMonitoring = async () => {
     }
     
     // Iniciar el monitoreo periódico
-    locationMonitoringInterval = setInterval(checkTasksProximity, 30000); // Comprobar cada 30 segundos
+    locationMonitoringInterval = setInterval(checkTasksProximity, 20000); // Comprobar cada 20 segundos
     
     // Realizar la primera comprobación inmediatamente
     await checkTasksProximity();

@@ -13,8 +13,7 @@ import {
   Dimensions,
   Modal,
   SafeAreaView,
-  ScrollView,
-  TextInput
+  ScrollView
 } from 'react-native';
 import MapView, { Marker } from 'react-native-maps';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -45,98 +44,22 @@ const AdminActivityList = () => {
   const [selectedCoordinates, setSelectedCoordinates] = useState(null);
   const [timeFilter, setTimeFilter] = useState(null); // Filtro de tiempo (rango de horas)
 
-  // Estado para el modal de selección de horas
-  const [timeModalVisible, setTimeModalVisible] = useState(false);
-  const [startHour, setStartHour] = useState(7);
-  const [endHour, setEndHour] = useState(8);
-  const [startHourText, setStartHourText] = useState('7');
-  const [endHourText, setEndHourText] = useState('8');
-  const [startPeriod, setStartPeriod] = useState('AM');
-  const [endPeriod, setEndPeriod] = useState('AM');
-
-  // Horas disponibles para los selectores
-  const hours = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
-  const periods = ['AM', 'PM'];
-
-  // Convertir hora con periodo (AM/PM) a formato 24 horas
-  const convertTo24Hour = (hour, period) => {
-    let hour24 = hour;
-    if (period === 'PM' && hour !== 12) {
-      hour24 = hour + 12;
-    } else if (period === 'AM' && hour === 12) {
-      hour24 = 0;
-    }
-    return hour24;
-  };
-
-  // Convertir hora de formato 24 horas a formato 12 horas con periodo
-  const convertTo12Hour = (hour24) => {
-    let hour = hour24 % 12;
-    hour = hour === 0 ? 12 : hour;
-    const period = hour24 >= 12 ? 'PM' : 'AM';
-    return { hour, period };
-  };
-
-  // Aplicar el filtro de tiempo seleccionado
-  const applyTimeFilter = () => {
-    // Verificar si los campos están vacíos
-    if (startHourText.trim() === '' || endHourText.trim() === '') {
-      alert('Por favor ingresa valores válidos para ambas horas');
-      return;
-    }
-    
-    // Convertir los valores de texto a números
-    const startHourValue = parseInt(startHourText);
-    const endHourValue = parseInt(endHourText);
-    
-    // Validar que los valores son números válidos
-    if (isNaN(startHourValue) || isNaN(endHourValue) ||
-        startHourValue < 0 || startHourValue > 12 ||
-        endHourValue < 0 || endHourValue > 12) {
-      alert('Por favor ingresa horas válidas entre 0 y 12');
-      return;
-    }
-    
-    // Convertir 0 a 12 para formato de 12 horas
-    const adjustedStartHour = startHourValue === 0 ? 12 : startHourValue;
-    const adjustedEndHour = endHourValue === 0 ? 12 : endHourValue;
-    
-    // Convertir a formato de 24 horas
-    const start = convertTo24Hour(adjustedStartHour, startPeriod);
-    const end = convertTo24Hour(adjustedEndHour, endPeriod);
-    
-    // Validar que el rango sea válido (inicio antes que fin)
-    if (start >= end) {
-      alert('La hora de inicio debe ser anterior a la hora de fin');
-      return;
-    }
-    
-    // Actualizar los estados internos
-    setStartHour(adjustedStartHour);
-    setEndHour(adjustedEndHour);
-    setTimeFilter({ start, end });
-    setTimeModalVisible(false);
-  };
-
-  // Limpiar el filtro de tiempo
-  const clearTimeFilter = () => {
-    setTimeFilter(null);
-    setStartHourText('7');
-    setEndHourText('8');
-    setStartHour(7);
-    setEndHour(8);
-    setTimeModalVisible(false);
-  };
-
-  // Formatear el rango de horas para mostrar
-  const formatTimeRange = () => {
-    if (!timeFilter) return 'Todas las horas';
-    
-    const { hour: startHour12, period: startPeriod12 } = convertTo12Hour(timeFilter.start);
-    const { hour: endHour12, period: endPeriod12 } = convertTo12Hour(timeFilter.end);
-    
-    return `${startHour12} ${startPeriod12} - ${endHour12} ${endPeriod12}`;
-  };
+  // Opciones de horas disponibles para filtrar
+  const hourRanges = [
+    { label: 'Todas las horas', value: null },
+    { label: '7-8 AM', value: { start: 7, end: 8 } },
+    { label: '8-9 AM', value: { start: 8, end: 9 } },
+    { label: '9-10 AM', value: { start: 9, end: 10 } },
+    { label: '10-11 AM', value: { start: 10, end: 11 } },
+    { label: '11-12 PM', value: { start: 11, end: 12 } },
+    { label: '12-1 PM', value: { start: 12, end: 13 } },
+    { label: '1-2 PM', value: { start: 13, end: 14 } },
+    { label: '2-3 PM', value: { start: 14, end: 15 } },
+    { label: '3-4 PM', value: { start: 15, end: 16 } },
+    { label: '4-5 PM', value: { start: 16, end: 17 } },
+    { label: '5-6 PM', value: { start: 17, end: 18 } },
+    { label: '6-7 PM', value: { start: 18, end: 19 } },
+  ];
 
   // Cargar las actividades
   const loadActivities = async (page = 1) => {
@@ -677,177 +600,52 @@ const AdminActivityList = () => {
   // Renderizar el separador entre elementos
   const renderSeparator = () => <View style={styles.separator} />;
   
-  // Renderizar el modal para selección de horas - versión simplificada
-  const renderTimeFilterModal = () => {
-    return (
-      <Modal
-        visible={timeModalVisible}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setTimeModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.timeModalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>{t('filterByTime')}</Text>
-              <TouchableOpacity onPress={() => setTimeModalVisible(false)}>
-                <Ionicons name="close" size={24} color="#fff3e5" />
-              </TouchableOpacity>
-            </View>
-            
-            <View style={styles.simpleTimeContainer}>
-              {/* Desde */}
-              <View style={styles.simpleTimeInputGroup}>
-                <Text style={styles.simpleTimeLabel}>{t('from')}</Text>
-                <View style={styles.timeInputContainer}>
-                  <TextInput
-                    style={styles.timeInput}
-                    keyboardType="number-pad"
-                    maxLength={2}
-                    value={startHourText}
-                    onChangeText={setStartHourText}
-                  />
-                  <View style={styles.periodSwitchContainer}>
-                    <TouchableOpacity
-                      style={[
-                        styles.periodSwitchButton,
-                        startPeriod === 'AM' && styles.periodSwitchButtonActive
-                      ]}
-                      onPress={() => setStartPeriod('AM')}
-                    >
-                      <Text style={[
-                        styles.periodSwitchText,
-                        startPeriod === 'AM' && styles.periodSwitchTextActive
-                      ]}>AM</Text>
-                    </TouchableOpacity>
-                    
-                    <TouchableOpacity
-                      style={[
-                        styles.periodSwitchButton,
-                        startPeriod === 'PM' && styles.periodSwitchButtonActive
-                      ]}
-                      onPress={() => setStartPeriod('PM')}
-                    >
-                      <Text style={[
-                        styles.periodSwitchText,
-                        startPeriod === 'PM' && styles.periodSwitchTextActive
-                      ]}>PM</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              </View>
-              
-              {/* Hasta */}
-              <View style={styles.simpleTimeInputGroup}>
-                <Text style={styles.simpleTimeLabel}>{t('to')}</Text>
-                <View style={styles.timeInputContainer}>
-                  <TextInput
-                    style={styles.timeInput}
-                    keyboardType="number-pad"
-                    maxLength={2}
-                    value={endHourText}
-                    onChangeText={setEndHourText}
-                  />
-                  <View style={styles.periodSwitchContainer}>
-                    <TouchableOpacity
-                      style={[
-                        styles.periodSwitchButton,
-                        endPeriod === 'AM' && styles.periodSwitchButtonActive
-                      ]}
-                      onPress={() => setEndPeriod('AM')}
-                    >
-                      <Text style={[
-                        styles.periodSwitchText,
-                        endPeriod === 'AM' && styles.periodSwitchTextActive
-                      ]}>AM</Text>
-                    </TouchableOpacity>
-                    
-                    <TouchableOpacity
-                      style={[
-                        styles.periodSwitchButton,
-                        endPeriod === 'PM' && styles.periodSwitchButtonActive
-                      ]}
-                      onPress={() => setEndPeriod('PM')}
-                    >
-                      <Text style={[
-                        styles.periodSwitchText,
-                        endPeriod === 'PM' && styles.periodSwitchTextActive
-                      ]}>PM</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              </View>
-            </View>
-            
-            <View style={styles.modalButtonsContainer}>
-              <TouchableOpacity 
-                style={styles.modalCancelButton} 
-                onPress={clearTimeFilter}
-              >
-                <Text style={styles.modalCancelButtonText}>{t('clearFilter')}</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity 
-                style={styles.modalApplyButton} 
-                onPress={applyTimeFilter}
-              >
-                <Text style={styles.modalApplyButtonText}>{t('applyFilter')}</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-    );
-  };
-
   // Renderizar los botones de filtro
   const renderFilterButtons = () => {
     return (
-      <View>
+      <>
         <View style={styles.filterContainer}>
           <TouchableOpacity
             style={[styles.filterButton, filterType === 'all' && styles.filterButtonActive]}
             onPress={() => {
               setFilterType('all');
-              setTimeFilter(null); // Limpiar filtro de hora al cambiar de tipo
+              setTimeFilter(null); // Resetear filtro de tiempo
             }}
           >
             <Ionicons
-              name="list-outline"
-              size={Math.min(width * 0.05, 18)}
+              name="apps-outline"
+              size={16}
               color={filterType === 'all' ? '#2e2e2e' : '#fff3e5'}
-              style={{ marginRight: 4 }}
             />
             <Text
               style={[
                 styles.filterButtonText,
-                filterType === 'all' && styles.filterButtonTextActive
+                filterType === 'all' && styles.filterButtonTextActive,
               ]}
             >
-              {t('allActivities')}
+              {t('all')}
             </Text>
           </TouchableOpacity>
           
           <TouchableOpacity
-            style={[styles.filterButton, filterType === 'login' && styles.filterButtonActive]}
+            style={[styles.filterButton, filterType === 'availability' && styles.filterButtonActive]}
             onPress={() => {
-              setFilterType('login');
-              setTimeFilter(null); // Limpiar filtro de hora al cambiar de tipo
+              setFilterType('availability');
+              setTimeFilter(null); // Resetear filtro de tiempo
             }}
           >
             <Ionicons
-              name="log-in-outline"
-              size={Math.min(width * 0.05, 18)}
-              color={filterType === 'login' ? '#2e2e2e' : '#fff3e5'}
-              style={{ marginRight: 4 }}
+              name="time-outline"
+              size={16}
+              color={filterType === 'availability' ? '#2e2e2e' : '#fff3e5'}
             />
             <Text
               style={[
                 styles.filterButtonText,
-                filterType === 'login' && styles.filterButtonTextActive
+                filterType === 'availability' && styles.filterButtonTextActive,
               ]}
             >
-              {t('logins')}
+              {t('availability')}
             </Text>
           </TouchableOpacity>
           
@@ -855,19 +653,18 @@ const AdminActivityList = () => {
             style={[styles.filterButton, filterType === 'task' && styles.filterButtonActive]}
             onPress={() => {
               setFilterType('task');
-              setTimeFilter(null); // Limpiar filtro de hora al cambiar de tipo
+              setTimeFilter(null); // Resetear filtro de tiempo
             }}
           >
             <Ionicons
-              name="checkmark-circle-outline"
-              size={Math.min(width * 0.05, 18)}
+              name="checkbox-outline"
+              size={16}
               color={filterType === 'task' ? '#2e2e2e' : '#fff3e5'}
-              style={{ marginRight: 4 }}
             />
             <Text
               style={[
                 styles.filterButtonText,
-                filterType === 'task' && styles.filterButtonTextActive
+                filterType === 'task' && styles.filterButtonTextActive,
               ]}
             >
               {t('tasks')}
@@ -876,67 +673,64 @@ const AdminActivityList = () => {
           
           <TouchableOpacity
             style={[styles.filterButton, filterType === 'location' && styles.filterButtonActive]}
-            onPress={() => {
-              setFilterType('location');
-              // No limpiar el filtro de hora si ya está establecido
-            }}
+            onPress={() => setFilterType('location')}
           >
             <Ionicons
               name="location-outline"
-              size={Math.min(width * 0.05, 18)}
+              size={16}
               color={filterType === 'location' ? '#2e2e2e' : '#fff3e5'}
-              style={{ marginRight: 4 }}
             />
             <Text
               style={[
                 styles.filterButtonText,
-                filterType === 'location' && styles.filterButtonTextActive
+                filterType === 'location' && styles.filterButtonTextActive,
               ]}
             >
-              {t('locations')}
+              {t('location')}
             </Text>
           </TouchableOpacity>
         </View>
         
-        {/* Mostrar botón de filtro de tiempo solo cuando se selecciona el filtro de ubicación */}
+        {/* Filtro de horas - Solo se muestra cuando el filtro de ubicación está activo */}
         {filterType === 'location' && (
           <View style={styles.timeFilterContainer}>
-            <TouchableOpacity 
-              style={styles.timeFilterMainButton}
-              onPress={() => setTimeModalVisible(true)}
-            >
-              <Ionicons 
-                name="time-outline" 
-                size={Math.min(width * 0.05, 18)} 
-                color="#fff3e5" 
-                style={{ marginRight: 6 }} 
-              />
-              <Text style={styles.timeFilterMainButtonText}>
-                {formatTimeRange()}
-              </Text>
-              <Ionicons 
-                name="chevron-down-outline" 
-                size={Math.min(width * 0.04, 16)} 
-                color="#fff3e5" 
-                style={{ marginLeft: 6 }} 
-              />
-            </TouchableOpacity>
-            
-            {timeFilter && (
-              <TouchableOpacity 
-                style={styles.timeFilterClearButton}
-                onPress={() => setTimeFilter(null)}
-              >
-                <Ionicons 
-                  name="close-circle-outline" 
-                  size={Math.min(width * 0.05, 18)} 
-                  color="#fff3e5" 
-                />
-              </TouchableOpacity>
-            )}
+            <Text style={styles.timeFilterLabel}>Filtrar por hora:</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              <View style={styles.timeFilterButtonsContainer}>
+                {hourRanges.map((range, index) => (
+                  <TouchableOpacity
+                    key={index}
+                    style={[
+                      styles.timeFilterButton,
+                      (!timeFilter && !range.value) || 
+                      (timeFilter && range.value && 
+                        timeFilter.start === range.value.start && 
+                        timeFilter.end === range.value.end) 
+                        ? styles.timeFilterButtonActive 
+                        : {}
+                    ]}
+                    onPress={() => setTimeFilter(range.value)}
+                  >
+                    <Text 
+                      style={[
+                        styles.timeFilterButtonText,
+                        (!timeFilter && !range.value) || 
+                        (timeFilter && range.value && 
+                          timeFilter.start === range.value.start && 
+                          timeFilter.end === range.value.end) 
+                          ? styles.timeFilterButtonTextActive 
+                          : {}
+                      ]}
+                    >
+                      {range.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </ScrollView>
           </View>
         )}
-      </View>
+      </>
     );
   };
   
@@ -1010,9 +804,9 @@ const AdminActivityList = () => {
   };
 
   // Renderizado principal del componente
-  return (
-    <>
-      {viewMode === 'list' ? (
+  if (viewMode === 'list') {
+    return (
+      <>
         <FlatList
           data={getFilteredActivities()}
           keyExtractor={(item) => item._id}
@@ -1050,7 +844,12 @@ const AdminActivityList = () => {
           }
           contentContainerStyle={styles.listContentContainer}
         />
-      ) : (
+        {renderMapModal()}
+      </>
+    );
+  } else {
+    return (
+      <>
         <SectionList
           sections={getGroupedActivities()}
           keyExtractor={(item) => item._id}
@@ -1089,11 +888,10 @@ const AdminActivityList = () => {
           }
           contentContainerStyle={styles.listContentContainer}
         />
-      )}
-      {renderMapModal()}
-      {renderTimeFilterModal()}
-    </>
-  );
+        {renderMapModal()}
+      </>
+    );
+  }
 };
 
 const styles = StyleSheet.create({
@@ -1232,127 +1030,37 @@ const styles = StyleSheet.create({
   // Estilos para el filtro de tiempo
   timeFilterContainer: {
     marginBottom: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
   },
-  timeFilterMainButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#1c1c1c',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 15,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 243, 229, 0.2)',
-    flex: 1,
-  },
-  timeFilterMainButtonText: {
+  timeFilterLabel: {
     fontSize: Math.min(width * 0.035, 14),
     color: '#fff3e5',
-    flex: 1,
+    marginBottom: 8,
+    fontWeight: 'bold',
   },
-  timeFilterClearButton: {
-    padding: 8,
-    marginLeft: 8,
-    backgroundColor: 'rgba(255, 243, 229, 0.1)',
-    borderRadius: 20,
+  timeFilterButtonsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
   },
-  // Estilos para el modal de selección de tiempo (versión simplificada)
-  timeModalContent: {
-    width: '85%',
-    backgroundColor: '#1c1c1c',
+  timeFilterButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     borderRadius: 15,
-    padding: 16,
-    elevation: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-  },
-  simpleTimeContainer: {
-    marginVertical: 20,
-  },
-  simpleTimeInputGroup: {
-    marginBottom: 16,
-  },
-  simpleTimeLabel: {
-    fontSize: Math.min(width * 0.04, 16),
-    color: '#fff3e5',
-    marginBottom: 10,
-    fontWeight: 'bold',
-  },
-  timeInputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  timeInput: {
-    backgroundColor: 'rgba(0, 0, 0, 0.2)',
-    borderRadius: 8,
-    padding: 10,
-    width: 60,
-    color: '#fff3e5',
-    fontSize: Math.min(width * 0.05, 18),
-    textAlign: 'center',
-    fontWeight: 'bold',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 243, 229, 0.2)',
-  },
-  periodSwitchContainer: {
-    flexDirection: 'row',
-    marginLeft: 16,
-    borderRadius: 8,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 243, 229, 0.2)',
-  },
-  periodSwitchButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    backgroundColor: 'rgba(0, 0, 0, 0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  periodSwitchButtonActive: {
-    backgroundColor: '#42a5f5',
-  },
-  periodSwitchText: {
-    color: '#fff3e5',
-    fontSize: Math.min(width * 0.04, 14),
-  },
-  periodSwitchTextActive: {
-    fontWeight: 'bold',
-    color: '#fff3e5',
-  },
-  modalButtonsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 16,
-  },
-  modalCancelButton: {
-    flex: 1,
     backgroundColor: '#1c1c1c',
-    padding: 12,
-    borderRadius: 10,
-    alignItems: 'center',
     marginRight: 8,
+    marginBottom: 8,
     borderWidth: 1,
     borderColor: 'rgba(255, 243, 229, 0.2)',
   },
-  modalCancelButtonText: {
-    color: '#fff3e5',
-    fontSize: Math.min(width * 0.04, 16),
-  },
-  modalApplyButton: {
-    flex: 1,
+  timeFilterButtonActive: {
     backgroundColor: '#42a5f5',
-    padding: 12,
-    borderRadius: 10,
-    alignItems: 'center',
-    marginLeft: 8,
+    borderColor: '#42a5f5',
   },
-  modalApplyButtonText: {
+  timeFilterButtonText: {
+    fontSize: Math.min(width * 0.03, 12),
     color: '#fff3e5',
-    fontSize: Math.min(width * 0.04, 16),
+  },
+  timeFilterButtonTextActive: {
+    color: '#fff3e5',
     fontWeight: 'bold',
   },
   // Estilos para los modos de vista
