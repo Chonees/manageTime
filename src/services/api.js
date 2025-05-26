@@ -55,12 +55,19 @@ export const fetchWithRetry = async (url, options, maxRetries = null) => {
   }
 };
 
-// Helper function to get auth header
+// Helper function to get auth header with timeout de seguridad
 export const getAuthHeader = async () => {
   try {
-    const token = await AsyncStorage.getItem('token');
+    // Usar timeout de seguridad para evitar que AsyncStorage se bloquee
+    const tokenPromise = AsyncStorage.getItem('token');
+    const timeoutPromise = new Promise(resolve => {
+      setTimeout(() => resolve(null), 3000); // 3 segundos máximo
+    });
+    
+    const token = await Promise.race([tokenPromise, timeoutPromise]);
     return token ? { 'Authorization': `Bearer ${token}` } : {};
   } catch (error) {
+    console.warn('Error obteniendo token para header:', error);
     return {};
   }
 };
@@ -223,89 +230,170 @@ export const register = async (username, password, email) => {
   }
 };
 
-// Function to verify if token is valid
+// Function to verify if token is valid - Versión mejorada con múltiples capas de protección
 export const checkToken = async () => {
   try {
-    const token = await AsyncStorage.getItem('token');
+    // Establecer un timeout global para toda la operación
+    return await Promise.race([
+      _checkTokenInternal(),
+      new Promise(resolve => {
+        // Si todo falla, asumimos que no estamos autenticados después de 8 segundos
+        setTimeout(() => resolve({ valid: false, timedOut: true }), 8000);
+      })
+    ]);
+  } catch (error) {
+    console.warn('Error crítico en checkToken:', error);
+    return { valid: false, error: 'Error crítico al verificar token' };
+  }
+};
+
+// Implementación interna de checkToken con manejo detallado de errores
+const _checkTokenInternal = async () => {
+  try {
+    // Obtener token con timeout de seguridad
+    const tokenPromise = AsyncStorage.getItem('token');
+    const tokenTimeout = new Promise(resolve => setTimeout(() => resolve(null), 3000));
+    const token = await Promise.race([tokenPromise, tokenTimeout]);
     
+    // Si no hay token, no estamos autenticados
     if (!token) {
-      return { valid: false };
+      console.log('No se encontró token en el almacenamiento local');
+      return { valid: false, reason: 'no-token' };
     }
     
-    // Primero intentamos obtener el usuario del almacenamiento local
+    // Primero intentamos obtener el usuario del almacenamiento local para respuesta rápida
     try {
-      const userString = await AsyncStorage.getItem('user');
+      const userPromise = AsyncStorage.getItem('user');
+      const userTimeout = new Promise(resolve => setTimeout(() => resolve(null), 2000));
+      const userString = await Promise.race([userPromise, userTimeout]);
+      
       if (userString) {
-        const user = JSON.parse(userString);
-        
-        // Intentamos verificar el token en segundo plano, pero no esperamos la respuesta
-        // Esto evita que la aplicación se quede cargando si hay problemas de red
-        fetch(`${getApiUrl()}/api/auth/check-token`, {
-          method: 'GET',
-          headers: await getAuthHeader()
-        }).then(async (response) => {
-          if (!response.ok) {
-            await AsyncStorage.removeItem('token');
-            await AsyncStorage.removeItem('user');
-          }
-        }).catch(e => {
-          // Manejo silencioso de errores
-        });
-        
-        // Retornamos inmediatamente con los datos del usuario
-        return { valid: true, user };
+        try {
+          const user = JSON.parse(userString);
+          console.log('Usuario encontrado en almacenamiento local:', user.username);
+          
+          // Verificar el token en segundo plano sin bloquear la UI
+          setTimeout(async () => {
+            try {
+              // No esperamos la respuesta para no bloquear
+              console.log('Verificando token en segundo plano...');
+              const headers = await getAuthHeader();
+              fetch(`${getApiUrl()}/api/auth/check-token`, {
+                method: 'GET',
+                headers: headers,
+                timeout: 30000 // 30 segundos
+              }).then(async (response) => {
+                if (!response.ok) {
+                  console.warn('Token inválido según verificación en segundo plano');
+                  await AsyncStorage.removeItem('token');
+                  await AsyncStorage.removeItem('user');
+                } else {
+                  console.log('Token validado en segundo plano');
+                  // Actualizar datos del usuario si es necesario
+                  const data = await response.json();
+                  if (data && data.user) {
+                    await AsyncStorage.setItem('user', JSON.stringify(data.user));
+                  }
+                }
+              }).catch(e => {
+                console.warn('Error en verificación de token en segundo plano:', e);
+              });
+            } catch (bgError) {
+              console.warn('Error en verificación de token en segundo plano:', bgError);
+            }
+          }, 100);
+          
+          // Devolver inmediatamente con los datos del usuario local
+          return { valid: true, user, fromCache: true };
+        } catch (parseError) {
+          console.warn('Error al parsear datos de usuario en caché:', parseError);
+          // Continuar con la verificación desde el servidor
+        }
       }
-    } catch (e) {
-      // Manejo silencioso de errores
+    } catch (storageError) {
+      console.warn('Error al acceder al almacenamiento local:', storageError);
+      // Continuar con la verificación desde el servidor
     }
     
-    // Si no tenemos datos del usuario en el almacenamiento, intentamos obtenerlos del servidor
+    console.log('No se encontró usuario en caché, verificando con el servidor...');
     
-    // Establecemos un timeout para la solicitud
+    // Si no hay datos en caché o son inválidos, verificar con el servidor
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), getTimeout()); // Timeout según la plataforma
+    const timeoutId = setTimeout(() => controller.abort(), 12000); // 12 segundos máximo
     
     try {
+      const headers = await getAuthHeader();
+      console.log('Enviando solicitud de verificación al servidor...');
+      
       const response = await fetch(`${getApiUrl()}/api/auth/check-token`, {
         method: 'GET',
-        headers: await getAuthHeader(),
+        headers: headers,
         signal: controller.signal
       });
       
       clearTimeout(timeoutId);
+      console.log('Respuesta recibida del servidor:', response.status);
       
       if (!response.ok) {
+        console.warn('Token inválido según el servidor:', response.status);
+        // Limpiar datos de autenticación
         await AsyncStorage.removeItem('token');
         await AsyncStorage.removeItem('user');
-        return { valid: false };
+        return { valid: false, reason: 'invalid-token' };
       }
       
+      // Procesar respuesta exitosa
       const data = await response.json();
+      console.log('Datos de usuario recibidos del servidor');
       
-      // Guardar datos del usuario
-      await AsyncStorage.setItem('user', JSON.stringify(data.user));
-      
-      return data;
-    } catch (error) {
-      if (error.name === 'AbortError') {
-        // Asumimos que el token es válido temporalmente
-        return { valid: true, user: { username: 'Usuario' }, offline: true };
+      // Guardar datos actualizados del usuario
+      if (data && data.user) {
+        await AsyncStorage.setItem('user', JSON.stringify(data.user));
+        return { valid: true, user: data.user, fromServer: true };
+      } else {
+        console.warn('Respuesta del servidor no contiene datos de usuario');
+        return { valid: false, reason: 'no-user-data' };
       }
-      throw error;
+    } catch (fetchError) {
+      clearTimeout(timeoutId);
+      console.warn('Error al verificar token con el servidor:', fetchError);
+      
+      // Si es un error de timeout o red, intentar usar datos locales como fallback
+      if (fetchError.name === 'AbortError' || fetchError.message.includes('network')) {
+        console.log('Error de red o timeout, intentando usar datos locales como fallback');
+        try {
+          const fallbackUserString = await AsyncStorage.getItem('user');
+          if (fallbackUserString) {
+            const fallbackUser = JSON.parse(fallbackUserString);
+            return { 
+              valid: true, 
+              user: fallbackUser, 
+              offline: true, 
+              reason: 'network-error-fallback' 
+            };
+          }
+        } catch (fallbackError) {
+          console.warn('Error al usar fallback local:', fallbackError);
+        }
+      }
+      
+      // En caso de fallo completo, crear un usuario mínimo para permitir que la app inicie
+      return { 
+        valid: true, 
+        user: { username: 'Usuario', isOfflineMode: true }, 
+        offline: true,
+        reason: 'complete-failure-fallback' 
+      };
     }
   } catch (error) {
-    // Si hay un error, intentamos usar los datos del usuario almacenados localmente
-    try {
-      const userString = await AsyncStorage.getItem('user');
-      if (userString) {
-        const user = JSON.parse(userString);
-        return { valid: true, user, offline: true };
-      }
-    } catch (e) {
-      // Manejo silencioso de errores
-    }
-    
-    return { valid: false, error: error.message };
+    console.error('Error general en verificación de token:', error);
+    // Último recurso: usuario offline con datos mínimos
+    return { 
+      valid: true, 
+      user: { username: 'Usuario', isOfflineMode: true }, 
+      offline: true,
+      error: error.message 
+    };
   }
 };
 

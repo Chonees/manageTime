@@ -230,51 +230,104 @@ export const registerForPushNotifications = async () => {
   try {
     console.log('Comenzando registro para notificaciones push...');
     
-    // Primero, verificar si tenemos permiso
-    const { status: existingStatus } = await Notifications.getPermissionsAsync();
+    // Implementación de timeout de seguridad para toda la operación
+    return await Promise.race([
+      _registerForPushNotificationsInternal(),
+      new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Timeout global en registro de notificaciones')), 15000);
+      })
+    ]).catch(error => {
+      console.warn('Error con timeout en registerForPushNotifications:', error);
+      // Devolver un token falso para no bloquear la inicialización
+      return 'timeout-fallback-token';
+    });
+  } catch (error) {
+    console.error('Error crítico en registerForPushNotifications:', error);
+    // Devolver un token falso para no bloquear la inicialización
+    return 'error-fallback-token';
+  }
+};
+
+// Implementación interna del registro de notificaciones
+const _registerForPushNotificationsInternal = async () => {
+  try {
+    // Primero, verificar si tenemos permiso con timeout
+    const permissionPromise = Notifications.getPermissionsAsync();
+    const permissionTimeout = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Timeout obteniendo permisos')), 5000);
+    });
+    
+    const { status: existingStatus } = await Promise.race([permissionPromise, permissionTimeout])
+      .catch(error => {
+        console.warn('Error verificando permisos:', error);
+        return { status: 'unknown' };
+      });
+      
     let finalStatus = existingStatus;
     
     if (existingStatus !== 'granted') {
       console.log('Solicitando permiso para notificaciones...');
-      const { status } = await Notifications.requestPermissionsAsync();
+      const requestPermissionPromise = Notifications.requestPermissionsAsync();
+      const requestTimeout = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Timeout solicitando permisos')), 5000);
+      });
+      
+      const { status } = await Promise.race([requestPermissionPromise, requestTimeout])
+        .catch(error => {
+          console.warn('Error solicitando permisos:', error);
+          return { status: 'unknown' };
+        });
+        
       finalStatus = status;
     }
     
-    // Si el permiso no fue concedido, salir
+    // Si el permiso no fue concedido, usamos un token simulado
     if (finalStatus !== 'granted') {
-      console.warn('Permiso para notificaciones no concedido');
-      return null;
+      console.warn('Permiso para notificaciones no concedido, usando token simulado');
+      return 'no-permission-token';
     }
     
     console.log('Permiso para notificaciones concedido, obteniendo token...');
     
-    // Obtener el token - debemos tratar excepciones específicas
+    // Obtener el token con manejo de errores mejorado
     let token;
     try {
-      // En Android 13+ a veces hay un error "Activity not registered" que podemos reintentar
-      const tokenData = await Notifications.getExpoPushTokenAsync({
+      const getTokenPromise = Notifications.getExpoPushTokenAsync({
         projectId: undefined, // Usar el projectId configurado en app.json
-      }).catch(error => {
-        console.error('Error inicial obteniendo token:', error);
-        // Reintento tras un breve retraso
-        return new Promise(resolve => {
-          setTimeout(() => {
-            resolve(Notifications.getExpoPushTokenAsync({
-              projectId: undefined,
-            }));
-          }, 1000);
-        });
       });
       
-      token = tokenData.data;
+      const tokenTimeout = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Timeout obteniendo token')), 8000);
+      });
+      
+      const tokenData = await Promise.race([getTokenPromise, tokenTimeout])
+        .catch(error => {
+          console.error('Error obteniendo token, intentando de nuevo:', error);
+          // Reintento tras un breve retraso
+          return new Promise((resolve, reject) => {
+            setTimeout(async () => {
+              try {
+                // Un último intento
+                const result = await Notifications.getExpoPushTokenAsync({
+                  projectId: undefined,
+                });
+                resolve(result);
+              } catch (retryError) {
+                reject(retryError);
+              }
+            }, 1500);
+          });
+        });
+      
+      token = tokenData?.data || null;
     } catch (tokenError) {
       console.error('Error final obteniendo token:', tokenError);
-      return null;
+      return 'token-error-fallback';
     }
     
     if (!token) {
       console.error('No se pudo obtener un token válido');
-      return null;
+      return 'null-token-fallback';
     }
     
     console.log('Token de notificaciones obtenido:', token);
@@ -288,44 +341,60 @@ export const registerForPushNotifications = async () => {
     
     // Configuraciones especiales para Android
     if (Platform.OS === 'android') {
-      Notifications.setNotificationChannelAsync('default', {
-        name: 'default',
-        importance: Notifications.AndroidImportance.MAX,
-        vibrationPattern: [0, 250, 250, 250],
-        lightColor: '#FF231F7C',
-      });
-    }
-    
-    // Enviar el token al servidor para todos los usuarios
-    try {
-      await sendPushTokenToServer(token);
-      console.log('Token enviado al servidor exitosamente');
-    } catch (serverError) {
-      console.error('Error enviando token al servidor:', serverError);
-    }
-    
-    // Adicionalmente, si es administrador, registrar el token para notificaciones de administrador
-    const isAdmin = await isUserAdmin();
-    if (isAdmin) {
       try {
-        console.log('Usuario es administrador, registrando token para notificaciones de admin');
-        const adminResult = await registerAdminPushToken(token);
-        if (adminResult.success) {
-          console.log('Token de administrador registrado correctamente');
-        } else {
-          console.error('Error registrando token de administrador:', adminResult.error);
-        }
-      } catch (adminError) {
-        console.warn('Error registrando token de admin:', adminError);
+        await Notifications.setNotificationChannelAsync('default', {
+          name: 'default',
+          importance: Notifications.AndroidImportance.MAX,
+          vibrationPattern: [0, 250, 250, 250],
+          lightColor: '#FF231F7C',
+        });
+      } catch (channelError) {
+        console.warn('Error configurando canal de notificaciones:', channelError);
       }
-    } else {
-      console.log('Usuario no es administrador, no se registra token de admin');
     }
     
+    // Realizar el resto de operaciones en segundo plano para no bloquear la inicialización
+    setTimeout(async () => {
+      try {
+        // Enviar el token al servidor
+        const serverResult = await sendPushTokenToServer(token)
+          .catch(error => {
+            console.error('Error enviando token al servidor:', error);
+            return false;
+          });
+          
+        console.log('Token enviado al servidor:', serverResult ? 'exitoso' : 'fallido');
+        
+        // Verificar admin y registrar token específico si es necesario
+        const adminCheckPromise = isUserAdmin();
+        const adminTimeout = new Promise((resolve) => {
+          setTimeout(() => resolve(false), 5000);
+        });
+        
+        const isAdmin = await Promise.race([adminCheckPromise, adminTimeout]);
+        if (isAdmin) {
+          try {
+            console.log('Usuario es administrador, registrando token para notificaciones de admin');
+            const adminResult = await registerAdminPushToken(token);
+            if (adminResult?.success) {
+              console.log('Token de administrador registrado correctamente');
+            } else {
+              console.error('Error registrando token de administrador:', adminResult?.error);
+            }
+          } catch (adminError) {
+            console.warn('Error registrando token de admin:', adminError);
+          }
+        }
+      } catch (bgError) {
+        console.warn('Error en operaciones de segundo plano de notificaciones:', bgError);
+      }
+    }, 100);
+    
+    // Devolver el token inmediatamente sin esperar las operaciones de segundo plano
     return token;
   } catch (error) {
-    console.error('Error general en registerForPushNotifications:', error);
-    return null;
+    console.error('Error en implementación interna de registro de notificaciones:', error);
+    return 'critical-error-fallback-token';
   }
 };
 
