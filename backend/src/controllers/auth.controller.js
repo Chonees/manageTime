@@ -87,13 +87,18 @@ exports.login = async (req, res) => {
       return res.status(401).json({ message: 'Contraseña incorrecta' });
     }
 
-    // Verificar si el usuario está activo
-    if (!user.isActive) {
+    // Verificar si el usuario está activo, excepto para administradores
+    if (!user.isActive && !user.isAdmin) {
       console.log('Intento de acceso de usuario desactivado:', username);
       return res.status(403).json({ message: 'Este usuario ha sido desactivado. Por favor, contacte al administrador.' });
     }
     
-    // Ya no actualizamos automáticamente a activo, mantenemos el estado actual
+    // Si es un administrador y estaba desactivado, lo activamos automáticamente
+    if (user.isAdmin && !user.isActive) {
+      user.isActive = true;
+      await user.save();
+      console.log('Administrador reactivado automáticamente:', username);
+    }
     
     // Generar token JWT
     const token = jwt.sign(
