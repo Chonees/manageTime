@@ -12,6 +12,8 @@ const IdleTimeContext = createContext();
 export const useIdleTime = () => useContext(IdleTimeContext);
 
 export const IdleTimeProvider = ({ children }) => {
+  console.log('⏱️ IdleTime: Inicializando IdleTimeProvider');
+  
   const [tracking, setTracking] = useState(false);
   const [isInTaskRadius, setIsInTaskRadius] = useState(false);
   const [currentTask, setCurrentTask] = useState(null);
@@ -240,6 +242,42 @@ export const IdleTimeProvider = ({ children }) => {
       const tasks = await response.json();
       console.log(`⏱️ IdleTime: Se encontraron ${tasks.length} tareas cercanas`);
       
+      // Si no hay tareas, el usuario siempre está en tiempo idle
+      if (tasks.length === 0) {
+        console.log('⏱️ IdleTime: No hay tareas asignadas, contando como tiempo IDLE');  
+        
+        // Si actualmente está marcado como dentro del radio de una tarea, actualizar estado
+        if (isInTaskRadius) {
+          try {
+            const updateData = {
+              isInTaskRadius: false,
+              taskId: null
+            };
+            
+            console.log('⏱️ IdleTime: Cambiando estado a IDLE porque no hay tareas');
+            const updateResponse = await fetch(`${getApiUrl()}/api/idle-time/update-radius`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+              },
+              body: JSON.stringify(updateData)
+            });
+            
+            if (updateResponse.ok) {
+              setIsInTaskRadius(false);
+              setCurrentTask(null);
+              setIdleStartTime(new Date());
+              await getStats();
+            }
+          } catch (error) {
+            console.error('⏱️ IdleTime: Error al actualizar estado sin tareas:', error);
+          }
+        }
+        
+        return; // Salir temprano, no hay tareas que verificar
+      }
+      
       // Verificar si está dentro del radio de alguna tarea
       let foundInRadius = false;
       let closestTask = null;
@@ -423,21 +461,52 @@ export const IdleTimeProvider = ({ children }) => {
       return;
     }
     
-    // Verificar si user existe y es válido antes de proceder
-    if (user && (user.id || user._id)) {
-      console.log('Usuario autenticado, iniciando seguimiento de tiempo idle automáticamente');
-      startTracking().catch(err => {
-        console.error('Error al iniciar tracking:', err);
-      });
-      getStats().catch(err => {
-        console.error('Error al obtener estadísticas:', err);
-      });
-    } else if (tracking) {
-      // Si no hay usuario válido pero el tracking está activo, detenerlo
-      stopTracking().catch(err => {
-        console.error('Error al detener tracking:', err);
-      });
-    }
+    const initializeIdleTracking = async () => {
+      // Verificar si user existe y es válido antes de proceder
+      if (user && (user.id || user._id)) {
+        console.log('⏱️ IdleTime: Usuario autenticado detectado:', user.username || user.id);
+        try {
+          // Iniciar una sesión de tiempo idle en el backend
+          const token = await getAuthToken();
+          if (!token) {
+            console.error('⏱️ IdleTime: No hay token disponible');
+            return;
+          }
+          
+          console.log('⏱️ IdleTime: Iniciando sesión de tiempo idle en el backend');
+          const startResponse = await fetch(`${getApiUrl()}/api/idle-time/start`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            }
+          });
+          
+          if (startResponse.ok) {
+            console.log('⏱️ IdleTime: Sesión de tiempo idle iniciada correctamente');
+            setSessionStartTime(new Date());
+            setIdleStartTime(new Date());
+            setTracking(true);
+            await getStats();
+            await checkNearbyTasks(); // Comprobar inmediatamente tareas cercanas
+          } else {
+            console.error('⏱️ IdleTime: Error al iniciar sesión de tiempo idle', await startResponse.text());
+          }
+        } catch (err) {
+          console.error('⏱️ IdleTime: Error al iniciar tracking:', err);
+        }
+      } else if (tracking) {
+        // Si no hay usuario válido pero el tracking está activo, detenerlo
+        try {
+          await stopTracking();
+        } catch (err) {
+          console.error('Error al detener tracking:', err);
+        }
+      }
+    };
+    
+    // Ejecutar inicialización
+    initializeIdleTracking();
     
     return () => {
       if (intervalRef.current) {
