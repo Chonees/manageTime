@@ -1,347 +1,331 @@
 import React, { useEffect, useState } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { Platform, View, Text, StyleSheet, LogBox } from 'react-native';
+import { AuthProvider } from './src/context/AuthContext';
+import { LanguageProvider } from './src/context/LanguageContext';
+import { ThemeProvider } from './src/context/ThemeContext';
+import { LocationTrackingProvider } from './src/context/LocationTrackingContext';
+import AppNavigator from './src/navigation/AppNavigator';
+import { NavigationContainer } from '@react-navigation/native';
+import { Platform, LogBox, Text, View, StyleSheet, Button, ActivityIndicator, Alert, ScrollView } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Importaciones estáticas con manejo de errores
-import { AuthProvider as AuthProviderOriginal, useAuth as useAuthOriginal } from './src/context/AuthContext';
-import { LanguageProvider as LanguageProviderOriginal, useLanguage as useLanguageOriginal } from './src/context/LanguageContext';
-import { ThemeProvider as ThemeProviderOriginal } from './src/context/ThemeContext';
-import { LocationTrackingProvider as LocationTrackingProviderOriginal } from './src/context/LocationTrackingContext';
-import AppNavigatorOriginal from './src/navigation/AppNavigator';
-import { setLanguage as setLanguageOriginal } from './src/services/location-service';
-import { NavigationContainer as NavigationContainerOriginal } from '@react-navigation/native';
+// INTERRUPTORES PARA HABILITAR/DESHABILITAR PROVIDERS
+// Cambia estos valores para probar diferentes combinaciones
+const ENABLE_THEME_PROVIDER = true;          // Tema (colores, estilos)
+const ENABLE_LANGUAGE_PROVIDER = true;       // Idioma
+const ENABLE_LOCATION_PROVIDER = true;       // Ubicación (más problemático)
+const ENABLE_AUTH_PROVIDER = true;           // Autenticación
 
-// Ignorar advertencias específicas que no son críticas
-LogBox.ignoreLogs(['Require cycle:', 'Possible Unhandled Promise']);
-
-// Componentes de seguridad para cuando las importaciones fallan
-const SafeAuthProvider = ({ children }) => children;
-const SafeLanguageProvider = ({ children }) => children;
-const SafeThemeProvider = ({ children }) => children;
-const SafeLocationTrackingProvider = ({ children }) => children;
-const SafeNavigationContainer = ({ children }) => children;
-const SafeAppNavigator = () => (
-  <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#282828' }}>
-    <Text style={{ color: '#fff3e5', fontSize: 18 }}>Cargando aplicación...</Text>
-  </View>
-);
-const safeDummyUseAuth = () => ({ isAuthenticated: false, loading: false });
-const safeDummyUseLanguage = () => ({ language: 'es' });
-const safeSetLanguage = () => {};
-
-// Configuración de versiones seguras de todos los componentes
-let AuthProvider, useAuth, LanguageProvider, useLanguage, 
-    ThemeProvider, LocationTrackingProvider, AppNavigator,
-    NavigationContainer, setLanguage;
-
-// Importaciones que pueden ser problemáticas
-let Notifications;
-let AsyncStorage;
-let registerForPushNotifications;
-
-// Asignar versiones seguras o fallbacks para cada importación
-try {
-  AuthProvider = AuthProviderOriginal;
-  useAuth = useAuthOriginal;
-} catch (error) {
-  console.warn('Error al acceder a AuthContext:', error);
-  AuthProvider = SafeAuthProvider;
-  useAuth = safeDummyUseAuth;
+// Ignorar todas las advertencias en producción para evitar que una advertencia interrumpa la app
+if (!__DEV__) {
+  LogBox.ignoreAllLogs();
+} else {
+  LogBox.ignoreLogs([
+    'Require cycle:', 
+    'AsyncStorage has been extracted',
+    'ReactNativeFiberHostComponent',
+    'NativeEventEmitter',
+    'Setting a timer'
+  ]);
 }
 
-try {
-  LanguageProvider = LanguageProviderOriginal;
-  useLanguage = useLanguageOriginal;
-} catch (error) {
-  console.warn('Error al acceder a LanguageContext:', error);
-  LanguageProvider = SafeLanguageProvider;
-  useLanguage = safeDummyUseLanguage;
+// Desactivar cualquier intento de registrar notificaciones push
+if (global.__EXPO_PUSH_TOKEN_RUNTIME_VALUE) {
+  global.__EXPO_PUSH_TOKEN_RUNTIME_VALUE = null;
 }
 
-try {
-  ThemeProvider = ThemeProviderOriginal;
-} catch (error) {
-  console.warn('Error al acceder a ThemeContext:', error);
-  ThemeProvider = SafeThemeProvider;
-}
-
-try {
-  LocationTrackingProvider = LocationTrackingProviderOriginal;
-} catch (error) {
-  console.warn('Error al acceder a LocationTrackingContext:', error);
-  LocationTrackingProvider = SafeLocationTrackingProvider;
-}
-
-try {
-  AppNavigator = AppNavigatorOriginal;
-} catch (error) {
-  console.warn('Error al acceder a AppNavigator:', error);
-  AppNavigator = SafeAppNavigator;
-}
-
-try {
-  NavigationContainer = NavigationContainerOriginal;
-} catch (error) {
-  console.warn('Error al acceder a NavigationContainer:', error);
-  NavigationContainer = SafeNavigationContainer;
-}
-
-try {
-  setLanguage = setLanguageOriginal;
-} catch (error) {
-  console.warn('Error al acceder a setLanguage:', error);
-  setLanguage = safeSetLanguage;
-}
-
-// Importar notificaciones, AsyncStorage y registerForPushNotifications con manejo de errores
-try {
-  Notifications = require('expo-notifications');
-} catch (error) {
-  console.warn('Error al cargar expo-notifications:', error);
-  Notifications = {
-    addNotificationReceivedListener: () => ({ remove: () => {} }),
-    addNotificationResponseReceivedListener: () => ({ remove: () => {} })
-  };
-}
-
-try {
-  AsyncStorage = require('@react-native-async-storage/async-storage');
-} catch (error) {
-  console.warn('Error al cargar AsyncStorage:', error);
-  AsyncStorage = {
-    getItem: async () => null,
-    setItem: async () => {}
-  };
-}
-
-try {
-  const notificationService = require('./src/services/notification-service');
-  registerForPushNotifications = notificationService.registerForPushNotifications;
-} catch (error) {
-  console.warn('Error al cargar notification-service:', error);
-  registerForPushNotifications = async () => 'mock-token';
-}
-
-// Crear un manejador global de errores
+// Manejador global de errores para capturar cualquier excepción no manejada
 const setupErrorHandling = () => {
-  if (global.ErrorUtils) {
-    // Guardar el manejador original
-    const originalHandler = global.ErrorUtils.getGlobalHandler();
-    
-    // Establecer nuestro manejador personalizado
-    global.ErrorUtils.setGlobalHandler((error, isFatal) => {
-      console.log(`Error global ${isFatal ? 'fatal' : 'no-fatal'} capturado:`, error);
-      // Puedes añadir aquí lógica para enviar el error a un servicio de monitoreo
+  if (!global.ErrorUtils) return;
+  
+  const originalHandler = global.ErrorUtils.getGlobalHandler();
+  
+  global.ErrorUtils.setGlobalHandler((error, isFatal) => {
+    // Guardar el error para poder diagnosticarlo después
+    try {
+      const errorString = typeof error === 'string' ? error : JSON.stringify(error, Object.getOwnPropertyNames(error));
+      console.log('Error global capturado:', errorString, 'Fatal:', isFatal);
       
-      // Llamar al manejador original
-      originalHandler(error, isFatal);
-    });
-  }
-};
-
-// Create a wrapper component to handle language updates
-const LanguageWrapper = ({ children }) => {
-  const { language } = useLanguage();
-
-  React.useEffect(() => {
-    try {
-      setLanguage(language);
-    } catch (error) {
-      console.warn('Error al establecer idioma:', error);
+      // Guardar en AsyncStorage para poder verlo después
+      AsyncStorage.setItem('lastCriticalError', errorString).catch(() => {});
+      
+      // Mostrar alerta en modo desarrollo
+      if (__DEV__) {
+        Alert.alert('Error detectado', errorString.substring(0, 100) + '...', [{ text: 'OK' }]);
+      }
+    } catch (e) {
+      console.log('Error al procesar excepción:', e);
     }
-  }, [language]);
-
-  return children;
+    
+    // Llamar al manejador original
+    originalHandler(error, isFatal);
+  });
 };
 
+// Configurar manejo de errores tan pronto como sea posible
+setupErrorHandling();
+
+// Componente principal con inicialización progresiva
 const App = () => {
-  const [notificationsConfigured, setNotificationsConfigured] = useState(false);
-  const [appInitialized, setAppInitialized] = useState(false);
-  const [error, setError] = useState(null);
-  const [loading, setLoading] = useState(true);
+  // Estados para manejar la inicialización y errores
+  const [initStage, setInitStage] = useState(0); // 0=inicio, 1=SafeArea, 2=Theme, 3=Navigation, 4=Language, 5=LocationTracking, 6=Auth
+  const [hasError, setHasError] = useState(false);
+  const [errorComponent, setErrorComponent] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
 
-  // Inicializar manejo de errores
+  // Inicialización progresiva y segura
   useEffect(() => {
-    try {
-      setupErrorHandling();
-      console.log('Manejo de errores global configurado');
-    } catch (err) {
-      console.warn('Error al configurar manejo de errores:', err);
-    }
-  }, []);
-
-  // Establecer un timeout de seguridad para la pantalla de carga
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setLoading(false);
-    }, 5000); // 5 segundos máximo de pantalla de carga
-
-    return () => clearTimeout(timer);
-  }, []);
-
-  // Configure notifications for admin - con manejo seguro de errores
-  useEffect(() => {
-    const configureNotifications = async () => {
+    const startApp = async () => {
       try {
-        console.log('Configurando notificaciones...');
+        // Intentar limpiar cualquier error previo almacenado
+        await AsyncStorage.removeItem('lastCriticalError').catch(() => {});
         
-        // Timeout de seguridad para el registro de notificaciones
-        const pushTokenPromise = registerForPushNotifications().catch(err => {
-          console.warn('Error al registrar notificaciones:', err);
-          return 'fallback-token';
-        });
+        // Registrar que la app está iniciando
+        console.log('Inicio de app detectado, mostrando pantalla de bienvenida');
         
-        const timeoutPromise = new Promise((_, reject) => {
-          setTimeout(() => reject(new Error('Timeout al registrar notificaciones')), 10000);
-        });
-        
-        const pushToken = await Promise.race([pushTokenPromise, timeoutPromise])
-          .catch(err => {
-            console.warn('No se pudo completar registro de notificaciones:', err);
-            return 'fallback-token';
-          });
-          
-        console.log('Registro de notificaciones completado con token:', pushToken);
-        setNotificationsConfigured(true);
-        
-        // Check if user is admin
-        try {
-          const userInfoString = await AsyncStorage.getItem('userInfo');
-          if (userInfoString) {
-            const userInfo = JSON.parse(userInfoString);
-            if (userInfo.isAdmin) {
-              console.log('Usuario admin detectado, habilitando manejo avanzado de notificaciones');
-              
-              // Suscripciones con manejo de errores
-              const foregroundSubscription = Notifications.addNotificationReceivedListener(notification => {
-                try {
-                  console.log('Notificación recibida en primer plano:', notification);
-                } catch (error) {
-                  console.warn('Error al procesar notificación:', error);
-                }
-              });
-              
-              const responseSubscription = Notifications.addNotificationResponseReceivedListener(response => {
-                try {
-                  console.log('Usuario tapó notificación:', response);
-                } catch (error) {
-                  console.warn('Error al procesar respuesta de notificación:', error);
-                }
-              });
-              
-              return () => {
-                try {
-                  foregroundSubscription.remove();
-                  responseSubscription.remove();
-                } catch (error) {
-                  console.warn('Error al eliminar suscripciones:', error);
-                }
-              };
-            }
-          }
-        } catch (error) {
-          console.warn('Error al verificar estado admin para notificaciones:', error);
+        // Verificar si hay un error fatal previo guardado
+        const lastError = await AsyncStorage.getItem('lastCriticalError').catch(() => null);
+        if (lastError) {
+          console.log('Se detectó un error previo:', lastError.substring(0, 100));
         }
+        
+        // Simular una inicialización progresiva segura
+        setTimeout(() => setInitStage(1), 100);  // SafeArea
+        setTimeout(() => setInitStage(2), 200);  // Theme
+        setTimeout(() => setInitStage(3), 300);  // Navigation
+        setTimeout(() => setInitStage(4), 400);  // Language
+        setTimeout(() => setInitStage(5), 500);  // LocationTracking 
+        setTimeout(() => setInitStage(6), 600);  // Auth completado
       } catch (error) {
-        console.warn('Error al configurar notificaciones:', error);
-      } finally {
-        // Marcar la app como inicializada incluso si hay errores
-        setAppInitialized(true);
-        setLoading(false);
+        console.error('Error durante la inicialización:', error);
+        setHasError(true);
+        setErrorMessage('Error durante la inicialización de la aplicación');
       }
     };
-    
-    // Envolvemos en try/catch adicional por seguridad
-    try {
-      configureNotifications();
-    } catch (error) {
-      console.error('Error crítico al configurar notificaciones:', error);
-      setAppInitialized(true);
-      setLoading(false);
-    }
+
+    startApp();
   }, []);
 
-  // Si hay un error fatal, mostrar pantalla de error
-  if (error) {
+  // Manejador de errores por componente
+  const handleComponentError = (component, error) => {
+    console.error(`Error en componente ${component}:`, error);
+    setHasError(true);
+    setErrorComponent(component);
+    setErrorMessage(error.message || `Error al inicializar ${component}`);
+  };
+
+  // Si ocurre un error durante la carga
+  if (hasError) {
     return (
-      <SafeAreaProvider>
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorTitle}>Oops! Algo salió mal</Text>
-          <Text style={styles.errorMessage}>
-            La aplicación ha encontrado un problema. Por favor, inténtalo de nuevo más tarde.
-          </Text>
-        </View>
-      </SafeAreaProvider>
+      <View style={styles.container}>
+        <Text style={styles.errorTitle}>Error al iniciar la aplicación</Text>
+        <Text style={styles.errorMessage}>
+          {errorComponent ? `Error en componente: ${errorComponent}` : ''}
+          {"\n"}
+          {errorMessage || 'Por favor, reinicie la aplicación'}
+        </Text>
+        <Button 
+          title="Reintentar" 
+          onPress={() => {
+            setHasError(false);
+            setErrorComponent('');
+            setErrorMessage('');
+            setInitStage(0);
+            setTimeout(() => setInitStage(1), 500);
+          }} 
+        />
+      </View>
     );
   }
 
-  // Si todavía estamos cargando después de mucho tiempo, mostrar pantalla de carga
-  if (loading) {
+  // Renderizado progresivo de componentes
+  if (initStage < 1) {
+    return (
+      <View style={styles.container}>
+        <ActivityIndicator size="large" color="#fff3e5" />
+        <Text style={styles.loadingText}>Iniciando Workproof...</Text>
+      </View>
+    );
+  }
+
+  // Nivel 1: SafeAreaProvider
+  if (initStage < 2) {
     return (
       <SafeAreaProvider>
         <View style={styles.container}>
-          <Text style={styles.title}>Workproof</Text>
-          <Text style={styles.subtitle}>Cargando...</Text>
+          <ActivityIndicator size="large" color="#fff3e5" />
+          <Text style={styles.loadingText}>Preparando interfaz...</Text>
         </View>
       </SafeAreaProvider>
     );
   }
 
-  return (
-    <ThemeProvider>
+  // Nivel 2: ThemeProvider
+  if (initStage < 3) {
+    return (
       <SafeAreaProvider>
-        <LanguageProvider>
-          <LanguageWrapper>
-            <LocationTrackingProvider>
-              <AuthProvider>
-                <NavigationContainer>
-                  <AppNavigator />
-                </NavigationContainer>
-              </AuthProvider>
-            </LocationTrackingProvider>
-          </LanguageWrapper>
-        </LanguageProvider>
+        <ThemeProvider>
+          <View style={styles.container}>
+            <ActivityIndicator size="large" color="#fff3e5" />
+            <Text style={styles.loadingText}>Configurando tema...</Text>
+          </View>
+        </ThemeProvider>
       </SafeAreaProvider>
-    </ThemeProvider>
-  );
+    );
+  }
+
+  // Nivel 3: NavigationContainer
+  if (initStage < 4) {
+    return (
+      <SafeAreaProvider>
+        <ThemeProvider>
+          <NavigationContainer
+            fallback={<ActivityIndicator size="large" color="#fff3e5" />}
+            onReady={() => console.log('Navigation container is ready')}
+          >
+            <View style={styles.container}>
+              <ActivityIndicator size="large" color="#fff3e5" />
+              <Text style={styles.loadingText}>Configurando navegación...</Text>
+            </View>
+          </NavigationContainer>
+        </ThemeProvider>
+      </SafeAreaProvider>
+    );
+  }
+
+  // Nivel 4: LanguageProvider
+  if (initStage < 5) {
+    return (
+      <SafeAreaProvider>
+        <ThemeProvider>
+          <NavigationContainer fallback={<ActivityIndicator size="large" color="#fff3e5" />}>
+            <LanguageProvider>
+              <View style={styles.container}>
+                <ActivityIndicator size="large" color="#fff3e5" />
+                <Text style={styles.loadingText}>Configurando idioma...</Text>
+              </View>
+            </LanguageProvider>
+          </NavigationContainer>
+        </ThemeProvider>
+      </SafeAreaProvider>
+    );
+  }
+
+  // Nivel 5: LocationTrackingProvider (el más problemático en TestFlight)
+  if (initStage < 6) {
+    try {
+      return (
+        <SafeAreaProvider>
+          <ThemeProvider>
+            <NavigationContainer fallback={<ActivityIndicator size="large" color="#fff3e5" />}>
+              <LanguageProvider>
+                <LocationTrackingProvider>
+                  <View style={styles.container}>
+                    <ActivityIndicator size="large" color="#fff3e5" />
+                    <Text style={styles.loadingText}>Configurando seguimiento...</Text>
+                  </View>
+                </LocationTrackingProvider>
+              </LanguageProvider>
+            </NavigationContainer>
+          </ThemeProvider>
+        </SafeAreaProvider>
+      );
+    } catch (error) {
+      handleComponentError('LocationTrackingProvider', error);
+      return (
+        <SafeAreaProvider>
+          <ThemeProvider>
+            <NavigationContainer fallback={<ActivityIndicator size="large" color="#fff3e5" />}>
+              <LanguageProvider>
+                <View style={styles.container}>
+                  <Text style={styles.errorTitle}>Error en ubicación</Text>
+                  <Text style={styles.errorMessage}>No se pudo inicializar el servicio de ubicación</Text>
+                  <Button title="Reintentar" onPress={() => setInitStage(0)} />
+                </View>
+              </LanguageProvider>
+            </NavigationContainer>
+          </ThemeProvider>
+        </SafeAreaProvider>
+      );
+    }
+  }
+
+  // Nivel 6: App completa con providers controlados por interruptores
+  try {
+    let jsxContent = <AppNavigator />;
+
+    // Envolver con AuthProvider si está habilitado
+    if (ENABLE_AUTH_PROVIDER) {
+      jsxContent = <AuthProvider>{jsxContent}</AuthProvider>;
+    }
+
+    // Envolver con LocationTrackingProvider si está habilitado
+    if (ENABLE_LOCATION_PROVIDER) {
+      jsxContent = <LocationTrackingProvider>{jsxContent}</LocationTrackingProvider>;
+    }
+
+    // Envolver con LanguageProvider si está habilitado
+    if (ENABLE_LANGUAGE_PROVIDER) {
+      jsxContent = <LanguageProvider>{jsxContent}</LanguageProvider>;
+    }
+
+    // NavigationContainer es necesario siempre
+    jsxContent = (
+      <NavigationContainer
+        fallback={<ActivityIndicator size="large" color="#fff3e5" />}
+        onStateChange={() => console.log('Navigation state changed')}
+      >
+        {jsxContent}
+      </NavigationContainer>
+    );
+
+    // Envolver con ThemeProvider si está habilitado
+    if (ENABLE_THEME_PROVIDER) {
+      jsxContent = <ThemeProvider>{jsxContent}</ThemeProvider>;
+    }
+
+    // SafeAreaProvider es necesario siempre
+    return <SafeAreaProvider>{jsxContent}</SafeAreaProvider>;
+  } catch (error) {
+    // Última línea de defensa si todo lo demás falla
+    handleComponentError('App Completa', error);
+    return (
+      <SafeAreaProvider>
+        <View style={styles.container}>
+          <Text style={styles.errorTitle}>Error inesperado</Text>
+          <Text style={styles.errorMessage}>{error.message || 'Se ha producido un error inesperado'}</Text>
+          <Button title="Reintentar" onPress={() => setInitStage(0)} />
+        </View>
+      </SafeAreaProvider>
+    );
+  }
 };
 
+// Estilos para las pantallas de carga y error
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#282828',
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#fff3e5',
-    marginBottom: 10,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#fff3e5',
-  },
-  errorContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: '#2e2e2e',
     padding: 20,
-    backgroundColor: '#282828',
+  },
+  loadingText: {
+    color: '#fff3e5',
+    fontSize: 18,
+    marginTop: 10,
   },
   errorTitle: {
-    fontSize: 22,
-    fontWeight: 'bold',
     color: '#fff3e5',
-    marginBottom: 15,
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 10,
   },
   errorMessage: {
-    fontSize: 16,
-    textAlign: 'center',
     color: '#fff3e5',
+    textAlign: 'center',
     marginBottom: 20,
-  },
+  }
 });
 
 export default App;

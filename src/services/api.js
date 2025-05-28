@@ -55,19 +55,12 @@ export const fetchWithRetry = async (url, options, maxRetries = null) => {
   }
 };
 
-// Helper function to get auth header with timeout de seguridad
+// Helper function to get auth header
 export const getAuthHeader = async () => {
   try {
-    // Usar timeout de seguridad para evitar que AsyncStorage se bloquee
-    const tokenPromise = AsyncStorage.getItem('token');
-    const timeoutPromise = new Promise(resolve => {
-      setTimeout(() => resolve(null), 3000); // 3 segundos máximo
-    });
-    
-    const token = await Promise.race([tokenPromise, timeoutPromise]);
+    const token = await AsyncStorage.getItem('token');
     return token ? { 'Authorization': `Bearer ${token}` } : {};
   } catch (error) {
-    console.warn('Error obteniendo token para header:', error);
     return {};
   }
 };
@@ -134,12 +127,27 @@ export const login = async (username, password) => {
               const responseData = JSON.parse(xhr.responseText);
               resolve(responseData);
             } catch (e) {
-              reject(new Error('Error al procesar respuesta de login'));
+              reject(new Error('ERROR_PROCESSING_RESPONSE'));
+            }
+          } else if (xhr.status === 403) {
+            // Código de error para usuario desactivado
+            try {
+              const errorData = JSON.parse(xhr.responseText);
+              reject(new Error(errorData.message || 'USER_DISABLED'));
+            } catch (e) {
+              reject(new Error('USER_DISABLED'));
             }
           } else if (xhr.status === 404) {
-            reject(new Error('Usuario no encontrado'));
+            reject(new Error('USER_NOT_FOUND'));
+          } else if (xhr.status === 401) {
+            reject(new Error('INCORRECT_PASSWORD'));
           } else {
-            reject(new Error(`Error en login: ${xhr.status} ${xhr.statusText}`));
+            try {
+              const errorData = JSON.parse(xhr.responseText);
+              reject(new Error(errorData.message || `SERVER_ERROR_${xhr.status}`));
+            } catch (e) {
+              reject(new Error(`CONNECTION_ERROR_${xhr.status}`));
+            }
           }
         }
       };
@@ -154,6 +162,14 @@ export const login = async (username, password) => {
       xhr.setRequestHeader('Accept', 'application/json');
       xhr.send(JSON.stringify({ username, password }));
     });
+    
+    // Verificar si el usuario está activo
+    if (loginResult.user && loginResult.user.isActive === false) {
+      return {
+        success: false,
+        error: 'Este usuario ha sido desactivado. Por favor, contacte al administrador.'
+      };
+    }
     
     // Si hay token, lo guardamos en AsyncStorage
     if (loginResult.token) {
@@ -230,170 +246,89 @@ export const register = async (username, password, email) => {
   }
 };
 
-// Function to verify if token is valid - Versión mejorada con múltiples capas de protección
+// Function to verify if token is valid
 export const checkToken = async () => {
   try {
-    // Establecer un timeout global para toda la operación
-    return await Promise.race([
-      _checkTokenInternal(),
-      new Promise(resolve => {
-        // Si todo falla, asumimos que no estamos autenticados después de 8 segundos
-        setTimeout(() => resolve({ valid: false, timedOut: true }), 8000);
-      })
-    ]);
-  } catch (error) {
-    console.warn('Error crítico en checkToken:', error);
-    return { valid: false, error: 'Error crítico al verificar token' };
-  }
-};
-
-// Implementación interna de checkToken con manejo detallado de errores
-const _checkTokenInternal = async () => {
-  try {
-    // Obtener token con timeout de seguridad
-    const tokenPromise = AsyncStorage.getItem('token');
-    const tokenTimeout = new Promise(resolve => setTimeout(() => resolve(null), 3000));
-    const token = await Promise.race([tokenPromise, tokenTimeout]);
+    const token = await AsyncStorage.getItem('token');
     
-    // Si no hay token, no estamos autenticados
     if (!token) {
-      console.log('No se encontró token en el almacenamiento local');
-      return { valid: false, reason: 'no-token' };
+      return { valid: false };
     }
     
-    // Primero intentamos obtener el usuario del almacenamiento local para respuesta rápida
+    // Primero intentamos obtener el usuario del almacenamiento local
     try {
-      const userPromise = AsyncStorage.getItem('user');
-      const userTimeout = new Promise(resolve => setTimeout(() => resolve(null), 2000));
-      const userString = await Promise.race([userPromise, userTimeout]);
-      
+      const userString = await AsyncStorage.getItem('user');
       if (userString) {
-        try {
-          const user = JSON.parse(userString);
-          console.log('Usuario encontrado en almacenamiento local:', user.username);
-          
-          // Verificar el token en segundo plano sin bloquear la UI
-          setTimeout(async () => {
-            try {
-              // No esperamos la respuesta para no bloquear
-              console.log('Verificando token en segundo plano...');
-              const headers = await getAuthHeader();
-              fetch(`${getApiUrl()}/api/auth/check-token`, {
-                method: 'GET',
-                headers: headers,
-                timeout: 30000 // 30 segundos
-              }).then(async (response) => {
-                if (!response.ok) {
-                  console.warn('Token inválido según verificación en segundo plano');
-                  await AsyncStorage.removeItem('token');
-                  await AsyncStorage.removeItem('user');
-                } else {
-                  console.log('Token validado en segundo plano');
-                  // Actualizar datos del usuario si es necesario
-                  const data = await response.json();
-                  if (data && data.user) {
-                    await AsyncStorage.setItem('user', JSON.stringify(data.user));
-                  }
-                }
-              }).catch(e => {
-                console.warn('Error en verificación de token en segundo plano:', e);
-              });
-            } catch (bgError) {
-              console.warn('Error en verificación de token en segundo plano:', bgError);
-            }
-          }, 100);
-          
-          // Devolver inmediatamente con los datos del usuario local
-          return { valid: true, user, fromCache: true };
-        } catch (parseError) {
-          console.warn('Error al parsear datos de usuario en caché:', parseError);
-          // Continuar con la verificación desde el servidor
-        }
+        const user = JSON.parse(userString);
+        
+        // Intentamos verificar el token en segundo plano, pero no esperamos la respuesta
+        // Esto evita que la aplicación se quede cargando si hay problemas de red
+        fetch(`${getApiUrl()}/api/auth/check-token`, {
+          method: 'GET',
+          headers: await getAuthHeader()
+        }).then(async (response) => {
+          if (!response.ok) {
+            await AsyncStorage.removeItem('token');
+            await AsyncStorage.removeItem('user');
+          }
+        }).catch(e => {
+          // Manejo silencioso de errores
+        });
+        
+        // Retornamos inmediatamente con los datos del usuario
+        return { valid: true, user };
       }
-    } catch (storageError) {
-      console.warn('Error al acceder al almacenamiento local:', storageError);
-      // Continuar con la verificación desde el servidor
+    } catch (e) {
+      // Manejo silencioso de errores
     }
     
-    console.log('No se encontró usuario en caché, verificando con el servidor...');
+    // Si no tenemos datos del usuario en el almacenamiento, intentamos obtenerlos del servidor
     
-    // Si no hay datos en caché o son inválidos, verificar con el servidor
+    // Establecemos un timeout para la solicitud
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 12000); // 12 segundos máximo
+    const timeoutId = setTimeout(() => controller.abort(), getTimeout()); // Timeout según la plataforma
     
     try {
-      const headers = await getAuthHeader();
-      console.log('Enviando solicitud de verificación al servidor...');
-      
       const response = await fetch(`${getApiUrl()}/api/auth/check-token`, {
         method: 'GET',
-        headers: headers,
+        headers: await getAuthHeader(),
         signal: controller.signal
       });
       
       clearTimeout(timeoutId);
-      console.log('Respuesta recibida del servidor:', response.status);
       
       if (!response.ok) {
-        console.warn('Token inválido según el servidor:', response.status);
-        // Limpiar datos de autenticación
         await AsyncStorage.removeItem('token');
         await AsyncStorage.removeItem('user');
-        return { valid: false, reason: 'invalid-token' };
+        return { valid: false };
       }
       
-      // Procesar respuesta exitosa
       const data = await response.json();
-      console.log('Datos de usuario recibidos del servidor');
       
-      // Guardar datos actualizados del usuario
-      if (data && data.user) {
-        await AsyncStorage.setItem('user', JSON.stringify(data.user));
-        return { valid: true, user: data.user, fromServer: true };
-      } else {
-        console.warn('Respuesta del servidor no contiene datos de usuario');
-        return { valid: false, reason: 'no-user-data' };
+      // Guardar datos del usuario
+      await AsyncStorage.setItem('user', JSON.stringify(data.user));
+      
+      return data;
+    } catch (error) {
+      if (error.name === 'AbortError') {
+        // Asumimos que el token es válido temporalmente
+        return { valid: true, user: { username: 'Usuario' }, offline: true };
       }
-    } catch (fetchError) {
-      clearTimeout(timeoutId);
-      console.warn('Error al verificar token con el servidor:', fetchError);
-      
-      // Si es un error de timeout o red, intentar usar datos locales como fallback
-      if (fetchError.name === 'AbortError' || fetchError.message.includes('network')) {
-        console.log('Error de red o timeout, intentando usar datos locales como fallback');
-        try {
-          const fallbackUserString = await AsyncStorage.getItem('user');
-          if (fallbackUserString) {
-            const fallbackUser = JSON.parse(fallbackUserString);
-            return { 
-              valid: true, 
-              user: fallbackUser, 
-              offline: true, 
-              reason: 'network-error-fallback' 
-            };
-          }
-        } catch (fallbackError) {
-          console.warn('Error al usar fallback local:', fallbackError);
-        }
-      }
-      
-      // En caso de fallo completo, crear un usuario mínimo para permitir que la app inicie
-      return { 
-        valid: true, 
-        user: { username: 'Usuario', isOfflineMode: true }, 
-        offline: true,
-        reason: 'complete-failure-fallback' 
-      };
+      throw error;
     }
   } catch (error) {
-    console.error('Error general en verificación de token:', error);
-    // Último recurso: usuario offline con datos mínimos
-    return { 
-      valid: true, 
-      user: { username: 'Usuario', isOfflineMode: true }, 
-      offline: true,
-      error: error.message 
-    };
+    // Si hay un error, intentamos usar los datos del usuario almacenados localmente
+    try {
+      const userString = await AsyncStorage.getItem('user');
+      if (userString) {
+        const user = JSON.parse(userString);
+        return { valid: true, user, offline: true };
+      }
+    } catch (e) {
+      // Manejo silencioso de errores
+    }
+    
+    return { valid: false, error: error.message };
   }
 };
 
@@ -2144,6 +2079,76 @@ export const deleteTaskTemplate = async (templateId) => {
     };
     
     const response = await fetchWithRetry(`${getApiUrl()}/api/task-templates/${templateId}`, options);
+    
+    // Si la respuesta no es exitosa, lanzamos un error
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || `Error ${response.status}: ${response.statusText}`);
+    }
+    
+    // Procesamos la respuesta
+    const responseData = await response.json();
+    
+    return responseData;
+  } catch (error) {
+    throw error;
+  }
+};
+
+/**
+ * Actualiza el estado de activación de un usuario
+ * @param {string} userId - ID del usuario a actualizar
+ * @param {boolean} isActive - Nuevo estado de activación
+ * @returns {Promise<Object>} - Usuario actualizado
+ */
+export const updateUserStatus = async (userId, isActive) => {
+  try {
+    // Obtenemos el token de autenticación
+    let token;
+    try {
+      token = await AsyncStorage.getItem('token');
+    } catch (storageError) {
+      throw new Error('No se pudo acceder al token de autenticación');
+    }
+    
+    if (!token) {
+      throw new Error('No hay token de autenticación disponible');
+    }
+    
+    // Primero obtenemos los datos actuales del usuario
+    const currentUser = await getUserById(userId);
+    if (!currentUser) {
+      throw new Error('Usuario no encontrado');
+    }
+    
+    // Creamos un objeto con los datos actualizados
+    const updatedUserData = {
+      ...currentUser,
+      isActive: isActive
+    };
+    
+    // Establecemos un timeout para la solicitud
+    const options = {
+      method: 'PUT', // Algunos backends usan PATCH en lugar de PUT
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify(updatedUserData)
+    };
+    
+    // Intentamos con la ruta principal primero
+    let response;
+    try {
+      response = await fetchWithRetry(`${getApiUrl()}/api/users/${userId}`, options);
+    } catch (error) {
+      // Si falla, intentamos con una ruta alternativa
+      try {
+        response = await fetchWithRetry(`${getApiUrl()}/api/auth/update-user/${userId}`, options);
+      } catch (innerError) {
+        throw new Error('No se pudo actualizar el usuario. Error de red.');
+      }
+    }
     
     // Si la respuesta no es exitosa, lanzamos un error
     if (!response.ok) {

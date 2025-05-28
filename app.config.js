@@ -1,15 +1,5 @@
-// Configuración segura de variables de entorno
-const getEnvVar = (name, defaultValue) => {
-  try {
-    return process.env[name] || defaultValue;
-  } catch (error) {
-    console.warn(`Error al acceder a ${name}, usando valor por defecto`, error);
-    return defaultValue;
-  }
-};
-
-// URL por defecto del backend de Heroku
-const DEFAULT_API_URL = 'https://managetime-backend-48f256c2dfe5.herokuapp.com/api';
+// Cargar variables de entorno
+import 'dotenv/config';
 
 // Configuración de Expo
 module.exports = {
@@ -24,35 +14,36 @@ module.exports = {
     backgroundColor: "#282828"
   },
   updates: {
+    url: "https://u.expo.dev/b1d4e758-f8ad-47d6-b479-dd1edcf9b380",
     fallbackToCacheTimeout: 0
   },
   assetBundlePatterns: [
     "**/*"
   ],
-  ios: {
-    supportsTablet: true,
-    bundleIdentifier: "com.workproof.app",
-    buildNumber: "8",
-    infoPlist: {
-      ITSAppUsesNonExemptEncryption: false,
-      NSPhotoLibraryUsageDescription: "Esta aplicación requiere acceso a tu biblioteca de fotos para permitirte subir imágenes de verificación de trabajo y ubicación.",
-      NSMicrophoneUsageDescription: "Esta aplicación requiere acceso al micrófono para funciones de comunicación con el equipo de trabajo.",
-      NSSpeechRecognitionUsageDescription: "Esta aplicación requiere acceso al reconocimiento de voz para permitir comandos por voz en situaciones donde el uso manual no es posible.",
-      NSLocationWhenInUseUsageDescription: "Tu ubicación es utilizada para verificar que estás dentro del área de trabajo asignada y registrar tus actividades.",
-      NSLocationAlwaysAndWhenInUseUsageDescription: "Esta aplicación requiere acceso continuo a tu ubicación para verificar tu presencia en el área de trabajo asignada.",
-      NSCameraUsageDescription: "Esta aplicación utiliza la cámara para documentar la verificación de trabajo.",
-      NSBluetoothAlwaysUsageDescription: "Esta aplicación puede utilizar Bluetooth para detectar la proximidad a dispositivos relevantes en el sitio de trabajo.",
-      NSCalendarsUsageDescription: "Esta aplicación puede acceder a tu calendario para programar tareas y recordatorios."
-    },
-    requireFullScreen: true
-  },
   android: {
     adaptiveIcon: {
       foregroundImage: "./assets/icon.png",
       backgroundColor: "#282828"
     },
     softwareKeyboardLayoutMode: "pan",
-    package: "com.workproof.app"
+    package: "com.workproof.app",
+    runtimeVersion: "1.0.0"
+  },
+  ios: {
+    supportsTablet: true,
+    bundleIdentifier: "com.workproof.app",
+    buildNumber: "6",
+    runtimeVersion: {
+      policy: "appVersion"
+    },
+    infoPlist: {
+      ITSAppUsesNonExemptEncryption: false,
+      NSPhotoLibraryUsageDescription: "Esta aplicación requiere acceso a tu biblioteca de fotos para permitirte subir imágenes de verificación de trabajo y ubicación.",
+      NSMicrophoneUsageDescription: "Esta aplicación requiere acceso al micrófono para funciones de comunicación con el equipo de trabajo.",
+      NSSpeechRecognitionUsageDescription: "Esta aplicación requiere acceso al reconocimiento de voz para permitir comandos por voz en situaciones donde el uso manual no es posible.",
+      NSLocationWhenInUseUsageDescription: "Tu ubicación es utilizada para verificar que estás dentro del área de trabajo asignada y registrar tus actividades.",
+      NSLocationAlwaysAndWhenInUseUsageDescription: "Esta aplicación requiere acceso continuo a tu ubicación para verificar tu presencia en el área de trabajo asignada."
+    }
   },
   web: {
     favicon: "./assets/favicon.png"
@@ -60,8 +51,8 @@ module.exports = {
   extra: {
     // Configuración para diferentes entornos
     
-    // Usar valor por defecto si la variable de entorno no está disponible
-    apiUrl: getEnvVar('API_URL', DEFAULT_API_URL),
+    // Usar exclusivamente la variable de entorno
+    apiUrl: `${process.env.API_URL}/api`,
 
     // Tiempo de espera para solicitudes API (en milisegundos)
     apiTimeout: 60000,

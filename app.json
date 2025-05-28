@@ -8,8 +8,7 @@
     "backgroundColor": "#282828",
     "primaryColor": "#fff3e5",
     "userInterfaceStyle": "light",
-    "newArchEnabled": false,
-    "jsEngine": "hermes",
+    "newArchEnabled": true,
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
