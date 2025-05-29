@@ -4,7 +4,6 @@ import { AuthProvider } from './src/context/AuthContext';
 import { LanguageProvider } from './src/context/LanguageContext';
 import { ThemeProvider } from './src/context/ThemeContext';
 import { LocationTrackingProvider } from './src/context/LocationTrackingContext';
-import { IdleTimeProvider } from './src/context/IdleTimeContext';
 import AppNavigator from './src/navigation/AppNavigator';
 import { NavigationContainer } from '@react-navigation/native';
 import { Platform, LogBox, Text, View, StyleSheet, Button, ActivityIndicator, Alert, ScrollView } from 'react-native';
@@ -16,7 +15,6 @@ const ENABLE_THEME_PROVIDER = true;          // Tema (colores, estilos)
 const ENABLE_LANGUAGE_PROVIDER = true;       // Idioma
 const ENABLE_LOCATION_PROVIDER = true;       // Ubicación (más problemático)
 const ENABLE_AUTH_PROVIDER = true;           // Autenticación
-const ENABLE_IDLE_TIME_PROVIDER = true;      // Seguimiento de tiempo de inactividad
 
 // Ignorar todas las advertencias en producción para evitar que una advertencia interrumpa la app
 if (!__DEV__) {
@@ -256,19 +254,14 @@ const App = () => {
   try {
     let jsxContent = <AppNavigator />;
 
-    // Envolver con LocationTrackingProvider si está habilitado
-    if (ENABLE_LOCATION_PROVIDER) {
-      jsxContent = <LocationTrackingProvider>{jsxContent}</LocationTrackingProvider>;
-    }
-
     // Envolver con AuthProvider si está habilitado
     if (ENABLE_AUTH_PROVIDER) {
       jsxContent = <AuthProvider>{jsxContent}</AuthProvider>;
     }
 
-    // Envolver con IdleTimeProvider si está habilitado - debe ir DESPUÉS de Auth y Location
-    if (ENABLE_IDLE_TIME_PROVIDER) {
-      jsxContent = <IdleTimeProvider>{jsxContent}</IdleTimeProvider>;
+    // Envolver con LocationTrackingProvider si está habilitado
+    if (ENABLE_LOCATION_PROVIDER) {
+      jsxContent = <LocationTrackingProvider>{jsxContent}</LocationTrackingProvider>;
     }
 
     // Envolver con LanguageProvider si está habilitado

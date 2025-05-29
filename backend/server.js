@@ -15,7 +15,6 @@ const reportRoutes = require('./src/routes/report.routes');
 const taskReportRoutes = require('./src/routes/taskReport.routes');
 const savedLocationRoutes = require('./src/routes/savedLocation.routes');
 const notificationRoutes = require('./src/routes/notification.routes');
-const idleTimeRoutes = require('./src/routes/idle-time.routes');
 // Importar rutas de plantillas de tareas
 const taskTemplateRoutes = require('./src/routes/taskTemplateRoutes.js');
 
@@ -72,7 +71,6 @@ app.use('/api/task-reports', taskReportRoutes);
 app.use('/api/saved-locations', savedLocationRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/task-templates', taskTemplateRoutes);
-app.use('/api/idle-time', idleTimeRoutes);
 
 // Ruta de prueba para verificar que el servidor está funcionando
 app.get('/', (req, res) => {

@@ -140,17 +140,6 @@ export const translations = {
     unavailable: 'Unavailable',
     availableSince: 'Available since',
     
-    // Idle time tracking
-    productivityStats: 'Productivity Statistics',
-    activeOnTask: 'Active on task',
-    idle: 'Idle',
-    productive: 'Productive',
-    total: 'Total',
-    userMarkedAvailable: 'User marked as available',
-    userMarkedUnavailable: 'User marked as unavailable',
-    unknownTask: 'Unknown task',
-    autoTrackingInfo: 'Your productivity is being tracked automatically. Idle time counts when you are not within the radius of any task.',
-    
     // Admin panel translations
     adminDashboard: 'Admin Dashboard',
     welcomeAdmin: 'Welcome, Admin',
@@ -871,21 +860,10 @@ export const translations = {
     activityDuration: 'Duración',
     activityTask: 'Tarea Asociada',
     
-    // Estado de disponibilidad
+    // Availability status
     available: 'Disponible',
     unavailable: 'No disponible',
     availableSince: 'Disponible desde',
-    
-    // Seguimiento de tiempo inactivo
-    productivityStats: 'Estadísticas de Productividad',
-    activeOnTask: 'Activo en tarea',
-    idle: 'Inactivo',
-    productive: 'Productivo',
-    total: 'Total',
-    userMarkedAvailable: 'Usuario marcado como disponible',
-    userMarkedUnavailable: 'Usuario marcado como no disponible',
-    unknownTask: 'Tarea desconocida',
-    autoTrackingInfo: 'Tu productividad se está rastreando automáticamente. El tiempo de inactividad cuenta cuando no estás dentro del radio de ninguna tarea.',
     
     // Admin panel translations
     adminDashboard: 'Panel de Administración',

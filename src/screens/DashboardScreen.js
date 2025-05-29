@@ -13,9 +13,7 @@ import {
 } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
-import { useIdleTime } from '../context/IdleTimeContext';
 import LocationComponent from '../components/LocationComponent';
-import IdleTimeStats from '../components/IdleTimeStats';
 import * as api from '../services/api';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -30,7 +28,6 @@ const { width, height } = Dimensions.get('window');
 const DashboardScreen = ({ navigation }) => {
   const { user, logout } = useAuth();
   const { t } = useLanguage();
-  const { tracking, startTracking, stopTracking, isInTaskRadius } = useIdleTime();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -265,9 +262,6 @@ const DashboardScreen = ({ navigation }) => {
           transparentContainer={true}
         />
       </View>
-
-      {/* Idle Time Stats Card - Siempre visible para usuarios autenticados */}
-      <IdleTimeStats />
 
       {/* Pending tasks Card */}
       <View style={{
