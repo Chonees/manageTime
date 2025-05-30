@@ -465,8 +465,16 @@ exports.updateTask = async (req, res) => {
         // Registrar timestamps para cambios de estado específicos
         if (status === 'on_site') {
           // Cuando el usuario llega al sitio, registrar que ya está en el lugar
-          // El temporizador se detendrá en el cliente, pero mantenemos el timeLimitSet
           console.log(`🌍 Usuario ha llegado al sitio de la tarea ${task._id}`);
+          
+          // Si es un usuario común (no admin) que llega al radio de la tarea
+          if (!req.user.isAdmin) {
+            // Marcar la tarea como completada automáticamente
+            task.completed = true;
+            // Establecer el timeLimitSet a null para que no se elimine cuando expire
+            task.timeLimitSet = null;
+            console.log(`✅ Usuario común llegó al radio: tarea ${task._id} marcada como completada y timer anulado`);
+          }
         } else if (status === 'on_the_way') {
           task.acceptedAt = new Date();
           // Si la tarea tiene límite de tiempo, comenzar a contar desde que el usuario está en camino
