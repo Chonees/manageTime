@@ -88,7 +88,7 @@ exports.getRecentActivity = async (req, res) => {
       ...recentLocations.map(location => ({
         id: location._id.toString(),
         type: 'location',
-        action: location.type === 'start' ? 'started_working' : 'stopped_working',
+        action: location.type === 'start' ? 'location_enter' : 'location_exit',
         username: location.userId ? location.userId.username : 'Usuario desconocido',
         title: location.locationName || 'Unknown Location',
         timestamp: location.timestamp,

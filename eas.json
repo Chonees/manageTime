@@ -20,6 +20,27 @@
         "withoutCredentials": true
       }
     },
+    "diagnostic": {
+      "distribution": "internal",
+      "ios": {
+        "simulator": false,
+        "buildConfiguration": "Debug",
+        "resourceClass": "m-medium"
+      },
+      "android": {
+        "buildType": "apk",
+        "gradleCommand": ":app:assembleDebug"
+      },
+      "env": {
+        "EXPO_DEBUG": "true",
+        "EXTRA_PACKAGER_ARGS": "--sourcemap-output sourcemap.json"
+      },
+      "channel": "diagnostic",
+      "developmentClient": false,
+      "cache": {
+        "disabled": true
+      }
+    },
     "production": {
       "autoIncrement": true
     }

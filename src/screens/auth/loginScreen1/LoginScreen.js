@@ -44,7 +44,22 @@ const LoginScreen = ({ navigation }) => {
       const result = await login(normalizedEmail, password);
       
       if (!result || !result.success) {
-        const errorMessage = result?.error || t('pleaseTryAgain');
+        // Convertir códigos de error a mensajes traducidos
+        let errorMessage = result?.error || t('pleaseTryAgain');
+        
+        // Manejar los códigos de error que devuelve la API
+        if (errorMessage.includes('USER_DISABLED')) {
+          errorMessage = t('userDisabled') || 'Este usuario ha sido desactivado. Por favor, contacte al administrador.';
+        } else if (errorMessage.includes('USER_NOT_FOUND')) {
+          errorMessage = t('userNotFound') || 'Usuario no encontrado. Revise sus credenciales.';
+        } else if (errorMessage.includes('INCORRECT_PASSWORD')) {
+          errorMessage = t('incorrectPassword') || 'Contraseña incorrecta. Por favor, inténtelo de nuevo.';
+        } else if (errorMessage.includes('CONNECTION_ERROR')) {
+          errorMessage = t('connectionError') || 'Error de conexión. Verifique su conexión a internet.';
+        } else if (errorMessage.includes('SERVER_ERROR')) {
+          errorMessage = t('serverError') || 'Error en el servidor. Por favor, inténtelo más tarde.';
+        }
+        
         console.log('Login fallido:', errorMessage);
         setError(errorMessage);
         Alert.alert(t('loginError'), errorMessage);

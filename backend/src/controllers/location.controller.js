@@ -124,8 +124,8 @@ exports.startWork = async (req, res) => {
     await location.save();
     
     // También crear una actividad para que aparezca en el panel de administrador
-    // Si es un punto de seguimiento, usar location_check, si no, usar clock_in (Disponible)
-    const activityType = type === 'tracking' ? 'location_check' : 'clock_in';
+    // Siempre usamos location_check para el seguimiento de ubicación
+    const activityType = 'location_check';
     const activityMessage = type === 'tracking' ? 'Punto de seguimiento registrado' : 'Disponible';
     
     const activity = new Activity({
@@ -183,7 +183,7 @@ exports.endWork = async (req, res) => {
     // También crear una actividad para que aparezca en el panel de administrador
     const activity = new Activity({
       userId: req.user._id,
-      type: 'clock_out',
+      type: 'location_check',
       message: 'No disponible',
       metadata: {
         latitude,
@@ -441,10 +441,10 @@ exports.saveBatchLocations = async (req, res) => {
       let activityType, activityMessage;
       
       if (loc.type === 'start') {
-        activityType = 'clock_in';
+        activityType = 'location_check';
         activityMessage = 'Disponible';
       } else if (loc.type === 'end') {
-        activityType = 'clock_out';
+        activityType = 'location_check';
         activityMessage = 'No disponible';
       } else { // tracking
         activityType = 'location_check';

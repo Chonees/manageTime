@@ -127,12 +127,27 @@ export const login = async (username, password) => {
               const responseData = JSON.parse(xhr.responseText);
               resolve(responseData);
             } catch (e) {
-              reject(new Error('Error al procesar respuesta de login'));
+              reject(new Error('ERROR_PROCESSING_RESPONSE'));
+            }
+          } else if (xhr.status === 403) {
+            // Código de error para usuario desactivado
+            try {
+              const errorData = JSON.parse(xhr.responseText);
+              reject(new Error(errorData.message || 'USER_DISABLED'));
+            } catch (e) {
+              reject(new Error('USER_DISABLED'));
             }
           } else if (xhr.status === 404) {
-            reject(new Error('Usuario no encontrado'));
+            reject(new Error('USER_NOT_FOUND'));
+          } else if (xhr.status === 401) {
+            reject(new Error('INCORRECT_PASSWORD'));
           } else {
-            reject(new Error(`Error en login: ${xhr.status} ${xhr.statusText}`));
+            try {
+              const errorData = JSON.parse(xhr.responseText);
+              reject(new Error(errorData.message || `SERVER_ERROR_${xhr.status}`));
+            } catch (e) {
+              reject(new Error(`CONNECTION_ERROR_${xhr.status}`));
+            }
           }
         }
       };
@@ -147,6 +162,14 @@ export const login = async (username, password) => {
       xhr.setRequestHeader('Accept', 'application/json');
       xhr.send(JSON.stringify({ username, password }));
     });
+    
+    // Verificar si el usuario está activo
+    if (loginResult.user && loginResult.user.isActive === false) {
+      return {
+        success: false,
+        error: 'Este usuario ha sido desactivado. Por favor, contacte al administrador.'
+      };
+    }
     
     // Si hay token, lo guardamos en AsyncStorage
     if (loginResult.token) {
@@ -1785,7 +1808,7 @@ export const addSimpleVoiceNote = async (taskId, text, token) => {
       },
       body: JSON.stringify({ 
         text, 
-        type: 'voice_note',
+        type: 'NOTES', // Actualizado para usar el nuevo tipo
         timestamp: new Date().toISOString()
       })
     };
@@ -2056,6 +2079,76 @@ export const deleteTaskTemplate = async (templateId) => {
     };
     
     const response = await fetchWithRetry(`${getApiUrl()}/api/task-templates/${templateId}`, options);
+    
+    // Si la respuesta no es exitosa, lanzamos un error
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || `Error ${response.status}: ${response.statusText}`);
+    }
+    
+    // Procesamos la respuesta
+    const responseData = await response.json();
+    
+    return responseData;
+  } catch (error) {
+    throw error;
+  }
+};
+
+/**
+ * Actualiza el estado de activación de un usuario
+ * @param {string} userId - ID del usuario a actualizar
+ * @param {boolean} isActive - Nuevo estado de activación
+ * @returns {Promise<Object>} - Usuario actualizado
+ */
+export const updateUserStatus = async (userId, isActive) => {
+  try {
+    // Obtenemos el token de autenticación
+    let token;
+    try {
+      token = await AsyncStorage.getItem('token');
+    } catch (storageError) {
+      throw new Error('No se pudo acceder al token de autenticación');
+    }
+    
+    if (!token) {
+      throw new Error('No hay token de autenticación disponible');
+    }
+    
+    // Primero obtenemos los datos actuales del usuario
+    const currentUser = await getUserById(userId);
+    if (!currentUser) {
+      throw new Error('Usuario no encontrado');
+    }
+    
+    // Creamos un objeto con los datos actualizados
+    const updatedUserData = {
+      ...currentUser,
+      isActive: isActive
+    };
+    
+    // Establecemos un timeout para la solicitud
+    const options = {
+      method: 'PUT', // Algunos backends usan PATCH en lugar de PUT
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify(updatedUserData)
+    };
+    
+    // Intentamos con la ruta principal primero
+    let response;
+    try {
+      response = await fetchWithRetry(`${getApiUrl()}/api/users/${userId}`, options);
+    } catch (error) {
+      // Si falla, intentamos con una ruta alternativa
+      try {
+        response = await fetchWithRetry(`${getApiUrl()}/api/auth/update-user/${userId}`, options);
+      } catch (innerError) {
+        throw new Error('No se pudo actualizar el usuario. Error de red.');
+      }
+    }
     
     // Si la respuesta no es exitosa, lanzamos un error
     if (!response.ok) {

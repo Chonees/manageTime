@@ -14,15 +14,28 @@ module.exports = {
     backgroundColor: "#282828"
   },
   updates: {
+    url: "https://u.expo.dev/b1d4e758-f8ad-47d6-b479-dd1edcf9b380",
     fallbackToCacheTimeout: 0
   },
   assetBundlePatterns: [
     "**/*"
   ],
+  android: {
+    adaptiveIcon: {
+      foregroundImage: "./assets/icon.png",
+      backgroundColor: "#282828"
+    },
+    softwareKeyboardLayoutMode: "pan",
+    package: "com.workproof.app",
+    runtimeVersion: "1.0.0"
+  },
   ios: {
     supportsTablet: true,
     bundleIdentifier: "com.workproof.app",
     buildNumber: "6",
+    runtimeVersion: {
+      policy: "appVersion"
+    },
     infoPlist: {
       ITSAppUsesNonExemptEncryption: false,
       NSPhotoLibraryUsageDescription: "Esta aplicación requiere acceso a tu biblioteca de fotos para permitirte subir imágenes de verificación de trabajo y ubicación.",
@@ -31,14 +44,6 @@ module.exports = {
       NSLocationWhenInUseUsageDescription: "Tu ubicación es utilizada para verificar que estás dentro del área de trabajo asignada y registrar tus actividades.",
       NSLocationAlwaysAndWhenInUseUsageDescription: "Esta aplicación requiere acceso continuo a tu ubicación para verificar tu presencia en el área de trabajo asignada."
     }
-  },
-  android: {
-    adaptiveIcon: {
-      foregroundImage: "./assets/icon.png",
-      backgroundColor: "#282828"
-    },
-    softwareKeyboardLayoutMode: "pan",
-    package: "com.workproof.app"
   },
   web: {
     favicon: "./assets/favicon.png"

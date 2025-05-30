@@ -75,6 +75,12 @@ export const translations = {
     errorRejectingTask: 'Error rejecting task',
     taskHasTimeLimit: 'This task has a time limit of {{minutes}} minutes',
     
+    // Task status translations - nuevos estados más precisos
+    waiting_for_acceptance: 'Waiting for acceptance',
+    on_the_way: 'On the way',
+    on_site: 'On site',
+    completed: 'Completed',
+    
     // Activity type translations
     locationEnter: 'Location Entry',
     locationExit: 'Location Exit',
@@ -790,9 +796,15 @@ export const translations = {
     timeLimit: 'Límite de tiempo',
     minutes: 'minutos',
     taskRejected: 'Tarea Rechazada',
-    taskRejectedMessage: 'Ha rechazado esta tarea y ha sido deshabilitada.',
+    taskRejectedMessage: 'Has rechazado esta tarea y ha sido desactivada.',
     errorRejectingTask: 'Error al rechazar la tarea',
     taskHasTimeLimit: 'Esta tarea tiene un límite de tiempo de {{minutes}} minutos',
+    
+    // Task status translations - nuevos estados más precisos
+    waiting_for_acceptance: 'Esperando aceptación',
+    on_the_way: 'En camino',
+    on_site: 'En el sitio',
+    completed: 'Completada',
     
     // Activity type translations
     locationEnter: 'Entrada a Ubicación',

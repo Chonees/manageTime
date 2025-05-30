@@ -59,6 +59,14 @@ const registerTaskActivity = async (userId, taskId, type, taskData) => {
           rejectedAt: new Date().toISOString()
         };
         break;
+      case 'task_on_site':
+        message = `Llegada al sitio de la tarea "${taskData.title}"`;
+        metadata = { 
+          title: taskData.title,
+          arrivedAt: new Date().toISOString(),
+          status: 'on_site'
+        };
+        break;
       default:
         message = `Acción realizada en tarea "${taskData.title}"`;
     }
@@ -126,7 +134,7 @@ exports.createTask = async (req, res) => {
       userId: assignedUserId,
       completed: false,
       handsFreeMode: handsFreeMode === true, // Asegurar que se guarde como booleano
-      status: status || 'pending', // Usar el status proporcionado o 'pending' por defecto
+      status: status || 'waiting_for_acceptance', // Usar el status proporcionado o 'waiting_for_acceptance' por defecto
       keywords: keywords || '' // Guardar las palabras clave específicas para activación por voz
     };
     
@@ -239,7 +247,7 @@ exports.createAssignedTask = async (req, res) => {
       userId: userId,
       completed: false,
       handsFreeMode: handsFreeMode === true, // Asegurar que se guarde como booleano
-      status: status || 'pending', // Usar el status proporcionado o 'pending' por defecto
+      status: status || 'waiting_for_acceptance', // Usar el status proporcionado o 'waiting_for_acceptance' por defecto
       keywords: keywords || '' // Guardar las palabras clave específicas para activación por voz
     };
     
@@ -445,23 +453,40 @@ exports.updateTask = async (req, res) => {
     if (handsFreeMode !== undefined) task.handsFreeMode = handsFreeMode === true; // Asegurar que se guarde como booleano
     
     // Manejar cambios de estado
+    let statusChanged = false;
     if (status !== undefined) {
       const oldStatus = task.status;
-      task.status = status;
       
-      // Registrar timestamps para cambios de estado específicos
-      if (status === 'in-progress' || status === 'in_progress') {
-        task.acceptedAt = new Date();
-      } else if (status === 'accepted') {
-        task.acceptedAt = new Date();
-        // Si la tarea tiene límite de tiempo, comenzar a contar desde que se acepta
-        if (task.timeLimit && !task.timeLimitSet) {
-          task.timeLimitSet = new Date();
-          console.log(`⏱️ Iniciando temporizador para tarea ${task._id} al ser aceptada: ${task.timeLimitSet}`);
+      // Verificar si el estado realmente cambió
+      if (oldStatus !== status) {
+        statusChanged = true;
+        task.status = status;
+        
+        // Registrar timestamps para cambios de estado específicos
+        if (status === 'on_site') {
+          // Cuando el usuario llega al sitio, registrar que ya está en el lugar
+          console.log(`🌍 Usuario ha llegado al sitio de la tarea ${task._id}`);
+          
+          // Si es un usuario común (no admin) que llega al radio de la tarea
+          if (!req.user.isAdmin) {
+            // SOLO detener el temporizador (no marcar como completada)
+            task.timeLimitSet = null;
+            console.log(`✅ Usuario común llegó al radio: temporizador de tarea ${task._id} detenido`);
+          }
+        } else if (status === 'on_the_way') {
+          task.acceptedAt = new Date();
+          // Si la tarea tiene límite de tiempo, comenzar a contar desde que el usuario está en camino
+          if (task.timeLimit && !task.timeLimitSet) {
+            task.timeLimitSet = new Date();
+            console.log(`⏱️ Iniciando temporizador para tarea ${task._id} al estar en camino: ${task.timeLimitSet}`);
+          }
+        } else if (status === 'waiting_for_acceptance') {
+          // Reset de los campos si la tarea vuelve a estado inicial
+          task.acceptedAt = null;
+          task.timeLimitSet = null;
         }
-      } else if (status === 'rejected') {
-        task.rejected = true;
-        task.rejectedAt = new Date();
+      } else {
+        console.log(`⚠️ Estado de tarea ${task._id} no cambió (sigue siendo ${status}). No se registrará actividad duplicada.`);
       }
     }
     
@@ -531,15 +556,21 @@ exports.updateTask = async (req, res) => {
         notificationTitle = 'Tarea reactivada';
         notificationBody = `La tarea "${task.title}" ha sido reactivada`;
       }
-    } else if (status !== undefined) {
-      // Registrar actividades específicas para cambios de estado
-      if (status === 'in-progress' || status === 'in_progress' || status === 'accepted') {
-        console.log(`Registrando tarea aceptada: ${task._id}`);
+    } else if (status !== undefined && statusChanged) {
+      // Solo registrar actividades si el estado realmente cambió
+      if (status === 'on_the_way') {
+        console.log(`Registrando actividad de tarea en camino: ${task._id}`);
         activity = await registerTaskActivity(req.user._id, task._id, 'task_accept', populatedTask);
         notificationType = 'task_accept';
         notificationTitle = 'Tarea aceptada';
-        notificationBody = `La tarea "${task.title}" ha sido aceptada`;
-      } else if (status === 'rejected') {
+        notificationBody = `La tarea "${task.title}" ha sido aceptada y está en camino`;
+      } else if (status === 'on_site') {
+        console.log(`Registrando actividad de tarea en sitio: ${task._id}`);
+        activity = await registerTaskActivity(req.user._id, task._id, 'task_on_site', populatedTask);
+        notificationType = 'task_on_site';
+        notificationTitle = 'Llegada al sitio';
+        notificationBody = `El usuario ha llegado al sitio de la tarea "${task.title}"`;
+      } else if (status === 'waiting_for_acceptance') {
         console.log(`Registrando tarea rechazada: ${task._id}`);
         activity = await registerTaskActivity(req.user._id, task._id, 'task_reject', populatedTask);
         notificationType = 'task_reject';
@@ -912,7 +943,7 @@ exports.addSimpleVoiceNote = async (req, res) => {
   try {
     // Extraer datos de la petición
     const { taskId } = req.params;
-    const { text, type, keyword } = req.body;
+    const { text, type, keyword, latitude, longitude, accuracy } = req.body;
     const userId = req.user._id || req.user.id;
     
     console.log(`[SIMPLE VOICE NOTE] Recibida petición para añadir nota a tarea ${taskId}`);
@@ -960,13 +991,17 @@ exports.addSimpleVoiceNote = async (req, res) => {
     const activity = new Activity({
       userId,
       taskId: taskObjectId,
-      type: type || 'voice_note',
+      type: 'NOTES', // Ahora siempre guardaremos como NOTES
       message: keyword || text, // Usar la palabra clave si está disponible, si no usar el texto completo
       metadata: {
         source: 'voice_assistant',
         timestamp: new Date().toISOString(),
         fullText: text, // Guardar el texto completo en metadatos
-        keyword: keyword // Guardar la palabra clave en metadatos
+        keyword: keyword, // Guardar la palabra clave en metadatos
+        // Guardar coordenadas si están disponibles
+        latitude: latitude ? Number(latitude) : undefined,
+        longitude: longitude ? Number(longitude) : undefined,
+        accuracy: accuracy ? Number(accuracy) : undefined
       },
       createdAt: new Date()
     });

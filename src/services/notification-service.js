@@ -1,7 +1,7 @@
 import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getApiUrl, getAdminActivities } from './api';
 import { Platform } from 'react-native';
+import { getApiBaseUrl } from './platform-config';
 
 // Import fetchWithRetry directly to avoid circular dependencies
 const fetchWithRetry = async (url, options, maxRetries = 3, delay = 1000) => {

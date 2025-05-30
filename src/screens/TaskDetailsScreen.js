@@ -23,6 +23,7 @@ import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import VoiceListener from '../components/VoiceListener'; // Importar el componente de escucha de voz
 import TaskConfirmationModal from '../components/TaskConfirmationModal'; // Importar modal de confirmación
+import TaskTimer from '../components/TaskTimer'; // Importar el nuevo componente de temporizador
 
 const TaskDetailsScreen = ({ route, navigation }) => {
   const { taskId } = route.params;
@@ -35,6 +36,7 @@ const TaskDetailsScreen = ({ route, navigation }) => {
   const [assignedUser, setAssignedUser] = useState(null);
   const [userLocation, setUserLocation] = useState(null);
   const [isWithinRadius, setIsWithinRadius] = useState(false);
+  const [hasLoggedOnSite, setHasLoggedOnSite] = useState(false); // Estado para controlar si ya se ha registrado la llegada
   const [taskStarted, setTaskStarted] = useState(false);
   const [locationWatcher, setLocationWatcher] = useState(null);
   const [isLocationTracking, setIsLocationTracking] = useState(false);
@@ -43,11 +45,51 @@ const TaskDetailsScreen = ({ route, navigation }) => {
   const [isSubmittingActivity, setIsSubmittingActivity] = useState(false);
   const [taskActivities, setTaskActivities] = useState([]);
   const [spokenKeywords, setSpokenKeywords] = useState([]); // Nuevo estado para palabras clave ya pronunciadas
-  const [remainingTime, setRemainingTime] = useState(null); // Estado para seguir el tiempo restante
+  // Ya no necesitamos el estado remainingTime, se maneja en el componente TaskTimer
   const [showTaskConfirmation, setShowTaskConfirmation] = useState(false); // Estado para mostrar el modal de confirmación
   const [confirmationLoading, setConfirmationLoading] = useState(false); // Estado para indicar carga durante la confirmación
   const [hasShownConfirmation, setHasShownConfirmation] = useState(false); // Estado para controlar si ya se mostró la confirmación
-  const timerIntervalRef = React.useRef(null); // Referencia para el intervalo del timer
+  // Ya no necesitamos timerIntervalRef, se maneja en el componente TaskTimer
+
+  // Función para manejar cuando el tiempo expira
+  const handleTimeExpired = () => {
+    console.log('Tiempo expirado para la tarea:', task?.title);
+    
+    if (!task || !task._id) {
+      console.error('No se puede manejar la expiración de tiempo: tarea no disponible');
+      return;
+    }
+    
+    // Registrar una actividad sobre el vencimiento del tiempo
+    submitActivity('time_expired', {
+      message: 'Tiempo límite expirado para esta tarea. La tarea será eliminada , habalar con su administrador .'
+    });
+    
+    // Guardar en AsyncStorage que el tiempo ha expirado para esta tarea
+    AsyncStorage.setItem(`task_${task._id}_expired`, 'true')
+      .then(() => {
+        console.log(`Guardado estado de expiración para tarea ${task._id}`);
+        return AsyncStorage.setItem(`task_${task._id}_expired_at`, new Date().toISOString());
+      })
+      .catch(error => {
+        console.error('Error al guardar estado de expiración:', error);
+      });
+    
+    // Mostrar una alerta al usuario y eliminar la tarea cuando confirme
+    Alert.alert(
+      t('timeExpired') || 'Tiempo Expirado',
+      t('timeExpiredMessage') || 'El tiempo asignado para completar esta tarea ha terminado. La tarea será eliminada.',
+      [
+        { 
+          text: t('ok') || 'OK',
+          onPress: () => {
+            // Borrar la tarea cuando el tiempo expira
+            handleDeleteTask(true); // Pasamos true para indicar que es una eliminación automática
+          }
+        }
+      ]
+    );
+  };
 
   useEffect(() => {
     loadTaskDetails();
@@ -57,525 +99,327 @@ const TaskDetailsScreen = ({ route, navigation }) => {
         // En versiones recientes de Expo Location, la suscripción tiene un método remove
         locationSubscription.remove();
       }
-      
-      // Limpiar el intervalo del temporizador cuando el componente se desmonte
-      if (timerIntervalRef.current) {
-        clearInterval(timerIntervalRef.current);
-      }
     };
   }, [taskId]);
 
-  // Efecto para iniciar el temporizador solo cuando la tarea está aceptada o en progreso
+  // Efecto para iniciar el temporizador solo cuando la tarea está en camino o en el sitio
   useEffect(() => {
-    if (task) {
+    let isActive = true; // Flag para evitar actualizaciones de estado si el componente se desmonta
+
+    const setupTimer = async () => {
+      if (!task) return;
+
+      // Iniciar tracking de ubicación
       startLocationTracking();
       
+      // Almacenar el estado de la tarea en AsyncStorage para persistencia
+      try {
+        await AsyncStorage.setItem(`task_${task._id}_status`, task.status);
+        if (task.status === 'on_site') {
+          await AsyncStorage.setItem(`task_${task._id}_started`, 'true');
+        }
+      } catch (error) {
+        console.error('Error guardando estado de tarea:', error);
+      }
+
       // Mostrar el temporizador si la tarea tiene límite de tiempo
       if (task.timeLimit) {
-        // Si la tarea está aceptada o en progreso y tiene timeLimitSet, iniciar el timer
-        if ((task.status === 'accepted' || task.status === 'in-progress' || task.status === 'in_progress') && 
-             task.timeLimitSet) {
-          console.log(`Iniciando temporizador para tarea ${task._id} con estado ${task.status}`);
-          startTaskTimer();
+        console.log(`⏰ Verificando temporizador para tarea ${task._id} con estado ${task.status}`, {
+          timeLimit: task.timeLimit,
+          timeLimitSet: task.timeLimitSet,
+          isOnTheWay: task.status === 'on_the_way',
+          isOnSite: task.status === 'on_site'
+        });
+        
+        // Si la tarea está en camino o en el sitio y tiene timeLimitSet, iniciar el timer
+        if ((task.status === 'on_the_way' || task.status === 'on_site') && task.timeLimitSet) {
+          console.log(`✅ Condiciones válidas para iniciar temporizador con estado ${task.status}`);
           
-          // Si la tarea está en progreso, establecer taskStarted en true
-          if ((task.status === 'in-progress' || task.status === 'in_progress') && !taskStarted) {
+          // Al recargar la pantalla, guardar estado "started" si estamos en el sitio
+          if (task.status === 'on_site' && !taskStarted && isActive) {
+            console.log('🔄 Marcando tarea como iniciada porque está en sitio');
             setTaskStarted(true);
+          }
+          
+          try {
+            // Intentar recuperar el tiempo final guardado del AsyncStorage
+            const storedEndTime = await AsyncStorage.getItem(`task_${task._id}_end_time`);
+            console.log(`📄 Resultado de buscar tiempo almacenado:`, {
+              storedEndTime,
+              hasValue: !!storedEndTime,
+              isActive
+            });
+            
+            if (storedEndTime && isActive) {
+              console.log(`📝 Recuperado tiempo final almacenado: ${storedEndTime}`);
+              // Usar el tiempo final almacenado en lugar de recalcular
+              startTaskTimer(parseInt(storedEndTime, 10));
+            } else if (isActive) {
+              console.log('🔄 Calculando nuevo tiempo final basado en timeLimitSet');
+              startTaskTimer();
+            }
+          } catch (error) {
+            console.error('❌ Error al recuperar tiempo almacenado:', error);
+            if (isActive) startTaskTimer();
           }
         } 
         // Si solo tiene timeLimit pero aún no está aceptada o no tiene timeLimitSet, mostrar el timer estático
-        else {
+        else if (isActive) {
           // Mostrar el tiempo completo (sin contar)
           const timeLimitMs = task.timeLimit * 60 * 1000; // Convertir minutos a milisegundos
           setRemainingTime(timeLimitMs);
         }
       }
-    }
+    };
+
+    setupTimer();
+    
+    // Función de limpieza que se ejecuta cuando el componente se desmonta o cuando cambia task
+    return () => {
+      isActive = false; // Evitar actualizaciones de estado si el componente se desmonta
+      // No eliminamos el temporizador aquí, ya que queremos que continúe cuando volvamos
+      // La limpieza final se hace en el useEffect principal que depende de taskId
+    };
   }, [task]);
 
   // Efecto para mostrar automáticamente el modal de confirmación
   useEffect(() => {
     // Mostrar automáticamente el modal de confirmación para usuarios normales
-    // cuando se carga una tarea que no está en progreso ni completada
+    // cuando se carga una tarea que está esperando aceptación
     if (
       task && 
       !user.isAdmin && 
       !hasShownConfirmation && 
-      task.status === 'pending' && 
+      (task.status === 'waiting_for_acceptance') && 
       !task.completed
     ) {
+      console.log('⚠️ Mostrando modal de confirmación para tarea:', taskId);
       // Pequeño delay para asegurar que la interfaz ya está renderizada
       const timer = setTimeout(() => {
         setShowTaskConfirmation(true);
       }, 500);
       
       return () => clearTimeout(timer);
+    } else if (task) {
+      console.log('ℹ️ No se muestra confirmación. Estado actual:', { 
+        taskId: taskId,
+        status: task.status, 
+        isAdmin: user?.isAdmin, 
+        hasShownConfirmation, 
+        isCompleted: task.completed 
+      });
+      
+      // El backend ya debe estar utilizando exclusivamente los nuevos estados
     }
-  }, [task, user, hasShownConfirmation]);
+  }, [task, user, hasShownConfirmation, taskId]);
 
   // Efecto para comprobar si esta tarea ya ha sido confirmada anteriormente
   useEffect(() => {
     // Función para verificar si esta tarea ya ha sido confirmada
     const checkTaskConfirmation = async () => {
       try {
-        if (taskId) {
-          // Obtener la lista de tareas confirmadas de AsyncStorage
-          const confirmedTasksString = await AsyncStorage.getItem('confirmedTasks');
-          const confirmedTasks = confirmedTasksString ? JSON.parse(confirmedTasksString) : [];
-          
-          // Verificar si esta tarea está en la lista
-          if (confirmedTasks.includes(taskId)) {
-            console.log(`Tarea ${taskId} ya fue confirmada anteriormente`);
-            setHasShownConfirmation(true);
-          }
+        // Obtener estado guardado de confirmación para esta tarea
+        const confirmedTasksJson = await AsyncStorage.getItem('confirmedTasks');
+        const confirmedTasks = confirmedTasksJson ? JSON.parse(confirmedTasksJson) : [];
+        
+        // Verificar si esta tarea ya está en la lista de confirmadas
+        if (confirmedTasks.includes(taskId)) {
+          console.log(`Tarea ${taskId} ya ha sido confirmada anteriormente`);
+          setHasShownConfirmation(true);
+        } else {
+          console.log(`Tarea ${taskId} aún no ha sido confirmada`);
+          setHasShownConfirmation(false);
         }
       } catch (error) {
-        console.error('Error verificando estado de confirmación de tarea:', error);
+        console.error('Error al verificar confirmación de tarea:', error);
+        // Si hay error, seguimos mostrando el modal por seguridad
+        setHasShownConfirmation(false);
       }
     };
     
     checkTaskConfirmation();
   }, [taskId]);
 
-  // Función para iniciar el temporizador de la tarea
-  const startTaskTimer = () => {
-    if (!task) {
-      console.log("No se puede iniciar el temporizador: tarea no disponible");
-      return;
-    }
-    
-    // Verificar si la tarea tiene tiempo límite (puede ser número o string)
-    const timeLimitValue = task.timeLimit ? 
-      (typeof task.timeLimit === 'string' ? Number(task.timeLimit) : task.timeLimit) : null;
-    
-    if (!timeLimitValue) {
-      console.log("No se encontró campo timeLimit en la tarea");
-      return;
-    }
-    
-    // Verificar si hay una fecha de inicio del temporizador
-    if (!task.timeLimitSet) {
-      console.log("No se encontró fecha de inicio del temporizador");
-      return;
-    }
-    
-    console.log(`Iniciando temporizador: Límite de ${timeLimitValue} minutos, establecido en ${task.timeLimitSet}`);
-    
-    // Limpiar cualquier temporizador existente
-    if (timerIntervalRef.current) {
-      clearInterval(timerIntervalRef.current);
-    }
-    
-    // Calcular el tiempo restante en milisegundos
-    const timeLimitMs = timeLimitValue * 60 * 1000; // Convertir minutos a milisegundos
-    const startTime = new Date(task.timeLimitSet).getTime();
-    const endTime = startTime + timeLimitMs;
-    const currentTime = new Date().getTime();
-    
-    console.log(`Temporizador: Inicio ${new Date(startTime).toLocaleString()}, Fin ${new Date(endTime).toLocaleString()}, Ahora ${new Date(currentTime).toLocaleString()}`);
-    
-    // Si ya se pasó el tiempo límite, retirar la tarea inmediatamente
-    if (currentTime >= endTime) {
-      console.log("El tiempo ya expiró, retirando tarea...");
-      handleTimeExpired();
-      return;
-    }
-    
-    // Establecer el tiempo restante inicial
-    const initialRemainingTime = endTime - currentTime;
-    console.log(`Tiempo restante inicial: ${formatRemainingTime(initialRemainingTime)}`);
-    setRemainingTime(initialRemainingTime);
-    
-    // Actualizar el tiempo restante cada segundo
-    timerIntervalRef.current = setInterval(() => {
-      const now = new Date().getTime();
-      const timeLeft = endTime - now;
+  // Efecto para cambiar el estado cuando el usuario entra en el radio de la tarea
+  useEffect(() => {
+    // Verificar si el usuario entró al radio y hay un temporizador activo
+    if (isWithinRadius && task?.timeLimit && task?.timeLimitSet) {
+      console.log('USUARIO ENTRÓ AL RADIO - CAMBIANDO ESTADO A ON_SITE');
       
-      if (timeLeft <= 0) {
-        // Tiempo agotado
-        clearInterval(timerIntervalRef.current);
-        setRemainingTime(0);
-        handleTimeExpired();
-      } else {
-        setRemainingTime(timeLeft);
-      }
-    }, 1000);
-  };
-  
-  // Función para manejar cuando el tiempo se agota
-  const handleTimeExpired = async () => {
-    try {
-      // Notificar al usuario que el tiempo se ha agotado
-      Alert.alert(
-        t('timeExpired') || 'Tiempo Agotado',
-        t('taskRemovedDueToTimeLimit') || 'Esta tarea ha sido eliminada porque se acabó el tiempo asignado.',
-        [{ text: t('ok') || 'OK' }]
-      );
+      // Primero actualizar el estado local inmediatamente
+      setTask({
+        ...task,
+        timeLimitSet: null,
+        status: 'on_site' // Cambiar al estado "en el sitio"
+      });
       
-      // Eliminar la tarea directamente
-      await api.deleteTask(taskId);
+      // Ya no necesitamos limpiar el temporizador aquí, eso se maneja en el componente TaskTimer
+      // El componente TaskTimer detectará el cambio en task.timeLimitSet
       
-      // Regresar a la pantalla anterior
-      navigation.goBack();
-    } catch (error) {
-      console.error('Error al eliminar tarea por tiempo expirado:', error);
-    }
-  };
-  
-  // Función para formatear el tiempo restante en formato hh:mm:ss
-  const formatRemainingTime = (ms) => {
-    if (ms === null) return '';
-    
-    const totalSeconds = Math.floor(ms / 1000);
-    const hours = Math.floor(totalSeconds / 3600);
-    const minutes = Math.floor((totalSeconds % 3600) / 60);
-    const seconds = totalSeconds % 60;
-    
-    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-  };
-
-  const startLocationTracking = async () => {
-    try {
-      // Verify task has location data before starting tracking
-      if (!task?.location?.coordinates || task.location.coordinates.length !== 2) {
-        console.error('Cannot start location tracking: Task is missing valid coordinates');
-        Alert.alert(
-          t('error'),
-          t('taskMissingLocation'),
-          [{ text: t('ok') }]
-        );
-        return;
-      }
-      
-      console.log(t('startingLocationTracking'));
-      
-      // Request permissions first
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        console.error(t('locationPermissionDenied'));
-        Alert.alert(
-          t('error'),
-          t('locationPermissionDenied'),
-          [{ text: t('ok') }]
-        );
-        return;
-      }
-      
-      // Try multiple approaches to get location
-      let initialLocation = null;
-      
-      try {
-        // First try with high accuracy
-        console.log('Trying high accuracy location...');
-        initialLocation = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.BestForNavigation,
-          maximumAge: 1000,
-          timeout: 10000
-        });
-        console.log('Successfully got high accuracy location');
-      } catch (highAccError) {
-        console.error('High accuracy location failed:', highAccError);
+      // Luego actualizar en el backend
+      api.updateTask(taskId, { 
+        timeLimitSet: null, // Eliminar la fecha de inicio del temporizador
+        status: 'on_site' // Cambiar al estado "en el sitio"
+      }).then(updatedTask => {
+        console.log('Tarea actualizada en backend: temporizador desactivado y estado cambiado a ON_SITE');
         
-        try {
-          // Try with balanced accuracy
-          console.log('Trying balanced accuracy location...');
-          initialLocation = await Location.getCurrentPositionAsync({
-            accuracy: Location.Accuracy.Balanced,
-            maximumAge: 5000,
-            timeout: 15000
+        // Registrar actividad de llegada al sitio si no estaba en ese estado previamente
+        if (task.status !== 'on_site') {
+          submitActivity('task_on_site', {
+            message: 'Llegada al sitio de la tarea'
           });
-          console.log('Successfully got balanced accuracy location');
-        } catch (balancedError) {
-          console.error('Balanced accuracy location failed:', balancedError);
-          
-          try {
-            // Try with low accuracy
-            console.log('Trying low accuracy location...');
-            initialLocation = await Location.getCurrentPositionAsync({
-              accuracy: Location.Accuracy.Low,
-              maximumAge: 10000,
-              timeout: 20000
-            });
-            console.log('Successfully got low accuracy location');
-          } catch (lowAccError) {
-            console.error('All location attempts failed:', lowAccError);
-            
-            // Try to use device's last known location
-            try {
-              console.log('Trying to get last known position from device...');
-              const lastKnownPosition = await Location.getLastKnownPositionAsync();
-              if (lastKnownPosition) {
-                console.log('Using last known position from device');
-                initialLocation = lastKnownPosition;
-              } else {
-                console.log('No last known position available on device');
-                throw new Error('No last known position available');
-              }
-            } catch (lastKnownError) {
-              console.error('Failed to get last known position:', lastKnownError);
-              
-              // Last resort - try to use stored location from AsyncStorage
-              try {
-                console.log('Trying to retrieve stored location from AsyncStorage...');
-                const storedLocationString = await AsyncStorage.getItem('lastKnownLocation');
-                if (storedLocationString) {
-                  const storedLocation = JSON.parse(storedLocationString);
-                  console.log('Using stored location:', storedLocation);
-                  
-                  // Create a location object in the format expected
-                  initialLocation = {
-                    coords: storedLocation.coords,
-                    timestamp: new Date(storedLocation.timestamp).getTime()
-                  };
-                }
-              } catch (storageError) {
-                console.error('Failed to retrieve stored location:', storageError);
-              }
-            }
-          }
         }
+      }).catch(error => {
+        console.error('Error al actualizar la tarea:', error);
+      });
+    }
+  }, [isWithinRadius, task]);
+
+  useEffect(() => {
+    if (isWithinRadius && task && task.status !== 'on_site' && !hasLoggedOnSite) {
+      console.log('⚠️ Usuario dentro del radio pero la tarea no está en estado "on_site"');
+      
+      // Si la tarea no está completada y no está en estado "on_site", actualizar estado
+      if (!task.completed) {
+        console.log('📱 Actualizando tarea a estado "on_site"');
+        api.updateTask(task._id, { status: 'on_site' })
+          .then(updatedTask => {
+            console.log('✅ Tarea actualizada a estado on_site:', updatedTask);
+            setTask(updatedTask);
+            setHasLoggedOnSite(true); // Marcar que ya se ha registrado la llegada
+            console.log('🔄 hasLoggedOnSite establecido a TRUE para evitar registros duplicados');
+          })
+          .catch(error => {
+            console.error('❌ Error al actualizar tarea a on_site:', error);
+          });
       }
-      
-      if (initialLocation) {
-      console.log(t('initialLocationReading'));
-      setUserLocation(initialLocation.coords);
-      checkIfWithinTaskRadius(initialLocation.coords);
-      
-        // Store successful location for future use
-        try {
-          await AsyncStorage.setItem('lastKnownLocation', JSON.stringify({
-            coords: initialLocation.coords,
-            timestamp: new Date().toISOString()
-          }));
-        } catch (storageError) {
-          console.warn('Could not save last known location:', storageError);
-        }
-      } else {
-        console.error('Failed to get any location');
-        Alert.alert(
-          t('error'),
-          t('locationServicesHelp'),
-          [{ text: t('ok') }]
-        );
-      }
-      
-      // Set up continuous tracking with more robust options
-      console.log(t('settingUpLocationTracking'));
-      
-      const watchOptions = {
-          accuracy: Location.Accuracy.BestForNavigation,
-        distanceInterval: 5,
-        timeInterval: 3000,
-        mayShowUserSettingsDialog: true
-      };
-      
-      console.log('Watch position options:', watchOptions);
-      
-      const subscription = await Location.watchPositionAsync(
-        watchOptions,
-        (locationUpdate) => {
-          console.log(t('locationUpdateReceived'));
-          console.log(t('locationCoordinates', {
-            lat: locationUpdate.coords.latitude.toFixed(6),
-            lng: locationUpdate.coords.longitude.toFixed(6),
-            accuracy: Math.round(locationUpdate.coords.accuracy)
-          }));
-          
-          setUserLocation(locationUpdate.coords);
-          checkIfWithinTaskRadius(locationUpdate.coords);
-          
-          // Update stored location
-          try {
-            AsyncStorage.setItem('lastKnownLocation', JSON.stringify({
-              coords: locationUpdate.coords,
-              timestamp: new Date().toISOString()
-            }));
-          } catch (storageError) {
-            console.warn('Could not update stored location:', storageError);
-          }
-        }
-      );
-      
-      setIsLocationTracking(true);
-      setLocationSubscription(subscription);
-      console.log(t('locationTrackingStarted'));
-    } catch (error) {
-      console.error(`${t('locationTrackingError').replace('${error}', error.message)}`);
-      Alert.alert(
-        t('error'),
-        t('locationTrackingError').replace('${error}', error.message),
-        [{ text: t('ok') }]
-      );
     }
-  };
+  }, [isWithinRadius, task, hasLoggedOnSite]);
 
-  const checkIfWithinTaskRadius = (userCoords) => {
-    console.log(t('radiusCheckDivider'));
-    
-    // Skip check if task isn't loaded yet
-    if (!task) {
-      console.log('Task data not loaded yet, skipping radius check');
-      return;
-    }
-    
-    console.log(t('checkingTaskRadius', { taskId: task._id }));
-    
-    // Validate task has location data
-    if (!task?.location?.coordinates || task.location.coordinates.length !== 2) {
-      console.error(t('taskMissingCoordinates', { location: JSON.stringify(task?.location) }));
-      setIsWithinRadius(false);
-      return;
-    }
-    
-    // Get task data
-    const taskCoords = {
-      latitude: task.location.coordinates[1],
-      longitude: task.location.coordinates[0]
-    };
-    
-    const taskRadius = task.radius || 0.1; // Default to 0.1km if not specified
-    console.log(t('taskPosition', { position: JSON.stringify(taskCoords) }));
-    console.log(t('taskRadius', { radius: taskRadius }));
-    console.log(t('userPosition', { position: JSON.stringify(userCoords) }));
-    
-    // Calculate distance
-    const distanceInKm = calculateDistance(
-      userCoords.latitude, 
-      userCoords.longitude, 
-      taskCoords.latitude, 
-      taskCoords.longitude
-    );
-    
-    const distanceInMeters = distanceInKm * 1000;
-    console.log(t('distanceToTask', { 
-      km: distanceInKm.toFixed(6), 
-      meters: distanceInMeters.toFixed(2) 
-    }));
-    
-    // Check if within radius - compare kilometers to kilometers since radius is in km
-    const withinRadius = distanceInKm <= taskRadius;
-    
-    if (withinRadius) {
-      console.log(t('withinTaskRadius', { 
-        distance: distanceInMeters.toFixed(0),
-        taskTitle: task.title
-      }));
-    } else {
-      console.log(t('outsideTaskRadius', { 
-        distance: distanceInMeters.toFixed(0),
-        taskTitle: task.title,
-        radius: taskRadius * 1000 // Convert to meters for log display
-      }));
-    }
-    
-    // Only update state if value changed to avoid rerenders
-    if (isWithinRadius !== withinRadius) {
-      console.log(t('updatingRadiusState', { 
-        from: isWithinRadius.toString(), 
-        to: withinRadius.toString() 
-      }));
-      setIsWithinRadius(withinRadius);
-    }
-    console.log(t('radiusCheckDivider'));
-  };
+// La función startTaskTimer ya no es necesaria, se maneja en el componente TaskTimer
 
-  const calculateDistance = (lat1, lon1, lat2, lon2) => {
-    const R = 6371; // Radius of the Earth in km
-    const dLat = (lat2 - lat1) * Math.PI / 180;
-    const dLon = (lon2 - lon1) * Math.PI / 180;
-    
-    const a = 
-      Math.sin(dLat/2) * Math.sin(dLat/2) +
-      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
-      Math.sin(dLon/2) * Math.sin(dLon/2);
-    
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-    const distance = R * c; // Distance in km
-    
-    return distance;
-  };
+// La función formatRemainingTime ya no es necesaria, se maneja en el componente TaskTimer
 
-  const loadTaskDetails = async () => {
-    setLoading(true);
-    
+// ...
+
+const loadTaskDetails = async () => {
+  setLoading(true);
+  
+  try {
+    // Primero intentar recuperar el estado del temporizador guardado
+    let storedEndTime = null;
     try {
-      // Intentar cargar los detalles de la tarea desde la API
-      console.log(`Intentando cargar tarea desde: ${api.baseUrl}/api/tasks/${taskId}`);
+      storedEndTime = await AsyncStorage.getItem(`task_${taskId}_end_time`);
+      const timerActive = await AsyncStorage.getItem(`task_${taskId}_timer_active`);
+      console.log(`⏰ Estado del temporizador recuperado:`, {
+        taskId,
+        storedEndTime,
+        timerActive
+      });
+    } catch (storageError) {
+      console.error('Error al recuperar estado del temporizador:', storageError);
+    }
+    
+    // Intentar cargar los detalles de la tarea desde la API
+    console.log(`Intentando cargar tarea desde: ${api.baseUrl}/api/tasks/${taskId}`);
+    
+    const taskDetails = await api.getTaskById(taskId);
+    console.log('TASK DETAILS LOADED FROM API:', JSON.stringify(taskDetails, null, 2));
+    
+    // Comprobación detallada de campos
+    if (!taskDetails.timeLimit) {
+      console.log('No se encontró campo timeLimit en la tarea');
+    } else {
+      console.log(`Campo timeLimit encontrado: ${taskDetails.timeLimit} minutos`);
+    }
+    
+    if (!taskDetails.timeLimitSet) {
+      console.log('No se encontró campo timeLimitSet en la tarea');
+    } else {
+      console.log(`Campo timeLimitSet encontrado: ${taskDetails.timeLimitSet}`);
+    }
+    
+    // Forzar la conversión de timeLimit a número si es string
+    if (taskDetails.timeLimit && typeof taskDetails.timeLimit === 'string') {
+      taskDetails.timeLimit = Number(taskDetails.timeLimit);
+      console.log('Campo timeLimit convertido a número:', taskDetails.timeLimit);
+    }
+    
+    // Si la tarea tiene límite de tiempo pero no tiene timeLimitSet, establecerlo (para cualquier estado)
+    if (taskDetails.timeLimit && !taskDetails.timeLimitSet) {
+      console.log('⚠️ La tarea está en camino/sitio pero no tiene timeLimitSet, intentando recuperar del servidor');
       
-      const taskDetails = await api.getTaskById(taskId);
-      console.log('TASK DETAILS LOADED FROM API:', JSON.stringify(taskDetails, null, 2));
-      
-      // Comprobación detallada de campos
-      if (!taskDetails.timeLimit) {
-        console.log('No se encontró campo timeLimit en la tarea');
-      } else {
-        console.log(`Campo timeLimit encontrado: ${taskDetails.timeLimit} minutos`);
-      }
-      
-      if (!taskDetails.timeLimitSet) {
-        console.log('No se encontró campo timeLimitSet en la tarea');
-      } else {
-        console.log(`Campo timeLimitSet encontrado: ${taskDetails.timeLimitSet}`);
-      }
-      
-      // Forzar la conversión de timeLimit a número si es string
-      if (taskDetails.timeLimit && typeof taskDetails.timeLimit === 'string') {
-        taskDetails.timeLimit = Number(taskDetails.timeLimit);
-        console.log('Campo timeLimit convertido a número:', taskDetails.timeLimit);
-      }
-      
-      // Si no hay timeLimitSet pero sí hay timeLimit, establecerlo ahora
-      if (taskDetails.timeLimit && !taskDetails.timeLimitSet) {
-        console.log('Estableciendo timeLimitSet ya que no estaba presente');
+      // Intentamos actualizar la tarea para establecer timeLimitSet si es necesario
+      try {
+        const updatedTask = await api.updateTask(taskId, { 
+          status: taskDetails.status,
+          timeLimitSet: new Date().toISOString() 
+        });
+        if (updatedTask && updatedTask.timeLimitSet) {
+          taskDetails.timeLimitSet = updatedTask.timeLimitSet;
+          console.log('✅ TimeLimitSet actualizado en el servidor:', taskDetails.timeLimitSet);
+        }
+      } catch (updateError) {
+        console.error('❌ Error al actualizar timeLimitSet en el servidor:', updateError);
+        // Establecer localmente como último recurso
         taskDetails.timeLimitSet = new Date().toISOString();
       }
-      
-      // Verificar ubicación
-      if (taskDetails.location) {
-        console.log(`Ubicación encontrada: ${JSON.stringify(taskDetails.location)}`);
-      } else {
-        console.log('No se encontró ubicación en la tarea');
-      }
-      
-      setTask(taskDetails);
-      
-      // Cargar ubicación - usamos userLocation en lugar de taskLocation
-      if (taskDetails.location && taskDetails.location.coordinates) {
-        const [longitude, latitude] = taskDetails.location.coordinates;
-        
-        if (latitude !== 0 && longitude !== 0) {
-          // Actualizar la ubicación inicial del usuario con la ubicación de la tarea
-          // Solo para fines de inicialización, se actualizará con la posición real del dispositivo
-          setUserLocation({
-            latitude,
-            longitude,
-            accuracy: 0, // Valor predeterminado
-          });
-        }
-      }
-    } catch (error) {
-      console.error('Error cargando detalles de la tarea:', error);
-      setError(error.message || t('errorLoadingTask'));
-    } finally {
-      setLoading(false);
     }
-  };
-
-  const toggleComplete = async () => {
-    if (!task) return;
     
-    try {
-      const updatedTask = await api.updateTask(taskId, { completed: !task.completed });
-      setTask(updatedTask);
-      Alert.alert(
-        t('success'),
-        task.completed ? t('taskMarkedIncomplete') : t('taskMarkedComplete')
-      );
-    } catch (error) {
+    // Verificar ubicación
+    if (taskDetails.location) {
+      console.log(`Ubicación encontrada: ${JSON.stringify(taskDetails.location)}`);
+    } else {
+      console.log('No se encontró ubicación en la tarea');
+    }
+    
+    // Si la tarea está en estado on_site, asegurarnos de que taskStarted sea true
+    if (taskDetails.status === 'on_site') {
+      setTaskStarted(true);
+    }
+    
+    setTask(taskDetails);
+    
+    // Toda la lógica de temporizador se ha movido al componente TaskTimer
+    
+    // Cargar ubicación - usamos userLocation en lugar de taskLocation
+    if (taskDetails.location && taskDetails.location.coordinates) {
+      const [longitude, latitude] = taskDetails.location.coordinates;
+      
+      if (latitude !== 0 && longitude !== 0) {
+        // Actualizar la ubicación inicial del usuario con la ubicación de la tarea
+        // Solo para fines de inicialización, se actualizará con la posición real del dispositivo
+        setUserLocation({
+          latitude,
+          longitude,
+          accuracy: 0, // Valor predeterminado
+        });
+      }
+    }
+  } catch (error) {
+    console.error('Error cargando detalles de la tarea:', error);
+    setError(error.message || t('errorLoadingTask'));
+  } finally {
+    setLoading(false);
+  }
+};
+
+// Función para marcar la tarea como completada o no completada
+const toggleComplete = async () => {
+  if (!task) return;
+  
+  try {
+    const updatedTask = await api.updateTask(taskId, { completed: !task.completed });
+    setTask(updatedTask);
+    Alert.alert(
+      t('success'),
+      task.completed ? t('taskMarkedIncomplete') : t('taskMarkedComplete')
+    );
+  } catch (error) {
       console.error('Error updating task:', error);
       Alert.alert(t('error'), t('errorUpdatingTask'));
-    }
-  };
+  }
+};
 
   const handleStartTask = async () => {
     if (!isWithinRadius) {
@@ -597,9 +441,9 @@ const TaskDetailsScreen = ({ route, navigation }) => {
       // Establecer la fecha de inicio del temporizador
       const now = new Date().toISOString();
       
-      // Update task status to in-progress
+      // Update task status to on_site (en el sitio)
       const updatedTask = await api.updateTask(taskId, { 
-        status: 'in-progress',
+        status: 'on_site',
         timeLimitSet: now  // Establecer explícitamente la fecha de inicio del temporizador
       });
       
@@ -614,8 +458,7 @@ const TaskDetailsScreen = ({ route, navigation }) => {
         setConfirmationLoading(false);
       }
 
-      // Iniciar manualmente el temporizador
-      startTaskTimer();
+      // El temporizador se iniciará automáticamente en el componente TaskTimer
       
       Alert.alert(t('success'), t('taskStarted'));
     } catch (error) {
@@ -630,11 +473,14 @@ const TaskDetailsScreen = ({ route, navigation }) => {
       // Primero asegurarse de detener el modo manos libres
       setTaskStarted(false);
       
-      // Luego actualizar la tarea en el backend
-      const updatedTask = await api.updateTask(taskId, { 
-        status: 'completed',
-        completed: true 
-      });
+      // Ya no es necesario detener el temporizador manualmente, se manejará en el componente TaskTimer
+    
+    // Actualizar la tarea en el backend
+    const updatedTask = await api.updateTask(taskId, { 
+      status: 'completed', // Mantener status 'completed' como estaba
+      completed: true,
+      timeLimitSet: null // Eliminar la fecha de inicio del temporizador
+    });
       setTask(updatedTask);
 
       // Si la tarea tenía handsFreeMode, registrar que se ha desactivado
@@ -649,14 +495,31 @@ const TaskDetailsScreen = ({ route, navigation }) => {
     }
   };
 
-  const handleDeleteTask = async () => {
-    // Verificar si el usuario es administrador
-    if (!user?.isAdmin) {
+  const handleDeleteTask = async (isAutomatic = false) => {
+    // Si no es eliminación automática, verificar si el usuario es administrador
+    if (!isAutomatic && !user?.isAdmin) {
       console.error('Permiso denegado: Solo los administradores pueden eliminar tareas');
       Alert.alert(t('permissionDenied'), t('adminOnlyDeleteTasks'));
       return;
     }
 
+    // Si es una eliminación automática (por tiempo expirado), omitimos la confirmación
+    if (isAutomatic) {
+      try {
+        console.log('Eliminando tarea automáticamente por tiempo expirado:', taskId);
+        // Eliminar la tarea - el backend registrará la actividad automáticamente
+        await api.deleteTask(taskId);
+        
+        // Volver a la pantalla anterior sin notificación adicional (ya se mostró la notificación de tiempo expirado)
+        navigation.goBack();
+      } catch (error) {
+        console.error('Error eliminando tarea automáticamente:', error);
+        Alert.alert(t('error'), t('errorDeletingTask'));
+      }
+      return;
+    }
+
+    // Si no es automática, mostramos el diálogo de confirmación normal
     Alert.alert(
       t('confirmDelete'),
       t('confirmDeleteTaskMessage'),
@@ -686,6 +549,145 @@ const TaskDetailsScreen = ({ route, navigation }) => {
     );
   };
 
+  // Función para iniciar el seguimiento de ubicación
+  const startLocationTracking = async () => {
+    console.log('Iniciando seguimiento de ubicación...');
+    
+    if (isLocationTracking) {
+      console.log('El seguimiento de ubicación ya está activo');
+      return;
+    }
+    
+    try {
+      // Solicitar permisos de ubicación
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      
+      if (status !== 'granted') {
+        console.error('Permiso de ubicación denegado');
+        Alert.alert(t('error'), t('locationPermissionDenied'));
+        return;
+      }
+      
+      // Obtener la ubicación actual
+      const currentLocation = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Highest
+      });
+      
+      // Actualizar la ubicación del usuario
+      setUserLocation({
+        latitude: currentLocation.coords.latitude,
+        longitude: currentLocation.coords.longitude,
+        accuracy: currentLocation.coords.accuracy
+      });
+      
+      // Verificar si el usuario está dentro del radio de la tarea
+      checkIfWithinTaskRadius(currentLocation.coords);
+      
+      // Iniciar seguimiento continuo de ubicación
+      const subscription = await Location.watchPositionAsync(
+        {
+          accuracy: Location.Accuracy.Highest,
+          timeInterval: 5000,  // Actualizar cada 5 segundos
+          distanceInterval: 10  // O cuando se mueva 10 metros
+        },
+        (location) => {
+          console.log('Nueva ubicación recibida:', JSON.stringify(location.coords));
+          
+          // Actualizar la ubicación del usuario
+          setUserLocation({
+            latitude: location.coords.latitude,
+            longitude: location.coords.longitude,
+            accuracy: location.coords.accuracy
+          });
+          
+          // Verificar si el usuario está dentro del radio de la tarea
+          checkIfWithinTaskRadius(location.coords);
+        }
+      );
+      
+      // Guardar la suscripción para poder cancelarla después
+      setLocationSubscription(subscription);
+      setIsLocationTracking(true);
+      console.log('Seguimiento de ubicación iniciado con éxito');
+    } catch (error) {
+      console.error('Error al iniciar seguimiento de ubicación:', error);
+      Alert.alert(t('error'), t('errorStartingLocationTracking'));
+    }
+  };
+  
+  // Función para verificar si el usuario está dentro del radio de la tarea
+  const checkIfWithinTaskRadius = (userCoords) => {
+    if (!task || !task.location || !task.location.coordinates || !task.radius) {
+      console.log('No se puede verificar radio: faltan datos de ubicación o radio de la tarea');
+      return;
+    }
+    
+    const [taskLongitude, taskLatitude] = task.location.coordinates;
+    const taskRadiusMeters = task.radius * 1000; // Convertir km a metros
+    
+    // Calcular distancia entre usuario y tarea (fórmula de Haversine)
+    const distanceInMeters = getDistanceFromLatLonInM(
+      userCoords.latitude,
+      userCoords.longitude,
+      taskLatitude,
+      taskLongitude
+    );
+    
+    const withinRadius = distanceInMeters <= taskRadiusMeters;
+    console.log(`Distancia al punto de la tarea: ${distanceInMeters.toFixed(2)}m, Radio: ${taskRadiusMeters}m, Dentro del radio: ${withinRadius}`);
+    
+    // Actualizar estado solo si hay un cambio
+    if (withinRadius !== isWithinRadius) {
+      setIsWithinRadius(withinRadius);
+      
+      // Si acaba de entrar al radio y la tarea está en estado 'on_the_way', actualizarla a 'on_site'
+      if (withinRadius && task.status === 'on_the_way' && !hasLoggedOnSite) {
+        console.log('Usuario entró al radio y la tarea está en camino - actualizando a "en el sitio"');
+        api.updateTask(task._id, { status: 'on_site' })
+          .then(updatedTask => {
+            console.log('Tarea actualizada a estado "en el sitio":', updatedTask);
+            
+            // Verificar si se detuvo el temporizador (para usuarios comunes)
+            if (updatedTask.timeLimitSet === null && !user.isAdmin) {
+              console.log('✅ Temporizador detenido automáticamente por llegada al radio');
+              // Limpiar datos del temporizador en AsyncStorage
+              AsyncStorage.removeItem(`task_${task._id}_end_time`);
+              AsyncStorage.removeItem(`task_${task._id}_timer_active`);
+            }
+            
+            setTask(updatedTask);
+            setHasLoggedOnSite(true);
+            
+            // Registrar actividad de llegada al sitio
+            submitActivity('task_on_site', {
+              message: 'Llegada al sitio de la tarea'
+            });
+          })
+          .catch(error => {
+            console.error('Error al actualizar estado de tarea:', error);
+          });
+      }
+    }
+  };
+  
+  // Función auxiliar para calcular distancias (fórmula de Haversine)
+  const getDistanceFromLatLonInM = (lat1, lon1, lat2, lon2) => {
+    const R = 6371000; // Radio de la Tierra en metros
+    const dLat = deg2rad(lat2 - lat1);
+    const dLon = deg2rad(lon2 - lon1); 
+    const a = 
+      Math.sin(dLat/2) * Math.sin(dLat/2) +
+      Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) * 
+      Math.sin(dLon/2) * Math.sin(dLon/2); 
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
+    const distance = R * c;
+    return distance;
+  };
+  
+  const deg2rad = (deg) => {
+    return deg * (Math.PI/180);
+  };
+  
   // Function to stop location tracking
   const stopLocationTracking = async () => {
     console.log(t('stoppingLocationTracking'));
@@ -698,7 +700,34 @@ const TaskDetailsScreen = ({ route, navigation }) => {
   };
 
   // Función para enviar una actividad relacionada con la tarea
-  const submitActivity = async () => {
+  const submitActivity = async (type = null, metadata = null) => {
+    // Si se proporcionan tipo y metadata, es una llamada interna (no del formulario)
+    if (type && metadata) {
+      console.log(`⭐ Enviando actividad de tipo ${type} con metadatos:`, metadata);
+      
+      try {
+        if (!task || !task._id) {
+          console.error('No se puede enviar actividad: tarea no disponible');
+          return;
+        }
+        
+        // Enviar la actividad directamente al backend usando saveActivity en lugar de addTaskActivity
+        await api.saveActivity({
+          taskId: task._id,
+          type,
+          message: metadata.message || 'Actividad registrada',
+          metadata
+        });
+        
+        console.log(`✅ Actividad de tipo ${type} enviada correctamente`);
+        return;
+      } catch (error) {
+        console.error(`Error al enviar actividad de tipo ${type}:`, error);
+        return;
+      }
+    }
+    
+    // Procesar actividad desde el formulario de entrada de texto
     console.log('⭐ INICIO submitActivity - texto ingresado:', activityInput);
     
     // Solo validación básica: no vacío
@@ -729,7 +758,7 @@ const TaskDetailsScreen = ({ route, navigation }) => {
       // Crear un objeto de nota exactamente igual al formato usado por VoiceListener
       const noteData = {
         text: inputText,
-        type: 'voice_note', // Usar el mismo tipo que las notas de voz
+        type: 'NOTES', // Actualizado al nuevo tipo que reemplaza a 'voice_note'
         timestamp: new Date().toISOString(),
         keyword: '', // Campo vacío pero incluido para mantener consistencia
         source: 'manual_input' // Identificar que es entrada manual
@@ -878,17 +907,41 @@ const TaskDetailsScreen = ({ route, navigation }) => {
   const handleAcceptTask = async () => {
     try {
       setConfirmationLoading(true);
+      console.log('Aceptando tarea con ID:', taskId);
       
-      // Actualizar el estado de la tarea a "accepted" (no "in-progress")
+      // Obtener la fecha actual para el inicio del temporizador
+      const now = new Date().toISOString();
+      
+      // Actualizar el estado de la tarea a "on_the_way" y establecer timeLimitSet
       const updatedTask = await api.updateTask(taskId, { 
-        status: 'accepted',
-        acceptedAt: new Date().toISOString()
+        status: 'on_the_way',
+        acceptedAt: now,
+        timeLimitSet: now  // Establecer el inicio del temporizador
       });
       
-      // La actividad se registra automáticamente en el backend
+      console.log('Tarea actualizada con éxito:', {
+        id: updatedTask._id,
+        status: updatedTask.status,
+        acceptedAt: updatedTask.acceptedAt,
+        timeLimitSet: updatedTask.timeLimitSet
+      });
       
-      // Actualizar estado local pero asegurarse de NO iniciar la tarea
-      setTask(updatedTask);
+      // Registrar actividad explícita de aceptación de tarea
+      submitActivity('task_accept', {
+        message: 'Tarea aceptada',
+        acceptedAt: now
+      });
+      
+      // Actualizar estado local inmediatamente para evitar inconsistencias
+      setTask({
+        ...task,
+        status: 'on_the_way',
+        acceptedAt: now,
+        timeLimitSet: now
+      });
+      
+      // Iniciar seguimiento de ubicación inmediatamente
+      startLocationTracking();
       
       // Marcar que ya se mostró la confirmación para que no vuelva a aparecer
       setHasShownConfirmation(true);
@@ -900,11 +953,16 @@ const TaskDetailsScreen = ({ route, navigation }) => {
       setShowTaskConfirmation(false);
       setConfirmationLoading(false);
       
+      // El temporizador se iniciará automáticamente en el componente TaskTimer al detectar el cambio de estado
+      
       // Notificar al usuario
       Alert.alert(
         t('taskAccepted') || 'Tarea aceptada',
         t('taskAcceptedMessage') || 'Has aceptado esta tarea. Puedes iniciarla cuando estés listo.'
       );
+      
+      // Recargar los detalles de la tarea desde el servidor para asegurar consistencia
+      loadTaskDetails();
     } catch (error) {
       console.error('Error aceptando tarea:', error);
       setConfirmationLoading(false);
@@ -1034,25 +1092,7 @@ const TaskDetailsScreen = ({ route, navigation }) => {
       </View>
       
       {/* Timer display section prominently positioned */}
-      {task && task.timeLimit > 0 && remainingTime !== null && (
-        <View style={[
-          styles.timerContainer, 
-          remainingTime < 300000 ? styles.timerWarning : null  // Rojo cuando quedan menos de 5 minutos
-        ]}>
-          <Ionicons name="timer-outline" size={24} color={remainingTime < 300000 ? "#FF5252" : "#fff3e5"} />
-          <Text style={[
-            styles.timerText, 
-            remainingTime < 300000 ? styles.timerTextWarning : null
-          ]}>
-            {formatRemainingTime(remainingTime)}
-          </Text>
-          <Text style={styles.timerLabel}>
-            {remainingTime < 300000 
-              ? (t('timeRunningOut') || '¡Tiempo agotándose!') 
-              : (t('timeRemaining') || 'Tiempo restante')}
-          </Text>
-        </View>
-      )}
+      <TaskTimer task={task} onTimeExpired={handleTimeExpired} />
       
       <ScrollView style={styles.container}>
         {/* Timer display section only if task has a time limit */}
@@ -1087,7 +1127,7 @@ const TaskDetailsScreen = ({ route, navigation }) => {
               </Text>
             </TouchableOpacity>
             <Text style={styles.taskStatus}>
-              {task.completed ? t('completed') : t('pending')}
+              {task.completed ? t('completed') : t(task.status)}
             </Text>
           </View>
           
@@ -1650,7 +1690,6 @@ const styles = StyleSheet.create({
     marginHorizontal: 10,
     borderWidth: 1,
     borderColor: 'rgba(255, 243, 229, 0.1)',
-
   },
   keywordsLabel: {
     fontSize: 16,
@@ -1668,33 +1707,9 @@ const styles = StyleSheet.create({
   },
   keyword: {
     fontSize: 14,
-
     color: 'rgba(255, 243, 229, 0.7)',
-
   },
-  timerContainer: {
-    backgroundColor: '#363636',
-    padding: 15,
-    marginBottom: 15,
-    borderRadius: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  timerText: {
-    color: '#fff3e5',
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginLeft: 10,
-  },
-  timerWarning: {
-    color: '#FF6B6B',
-  },
-  timerWarningText: {
-    color: '#FF6B6B',
-    fontSize: 14,
-    marginLeft: 10,
-  },
+  // Los estilos del temporizador se han movido al componente TaskTimer
 });
 
 export default TaskDetailsScreen;

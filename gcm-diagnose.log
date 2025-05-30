@@ -1,0 +1,176 @@
+﻿Diagnose log at 2025-05-29T16:34:49Z
+
+AppPath: C:\Program Files\Git\mingw64\bin\git-credential-manager.exe
+InstallDir: C:\Program Files\Git\mingw64\bin\
+Version: 2.6.1+786ab03440ddc82e807a97c0e540f5247e44cec6
+
+------------
+Diagnostic: Environment
+Skipped: False
+Success: True
+Exception: None
+Log:
+OSType: Windows
+OSVersion: 10.0 (build 26100)
+Reading environment variables... OK
+ Variables:
+HOMEPATH=\Users\Admin
+DriverData=C:\Windows\System32\Drivers\DriverData
+COMPUTERNAME=DESKTOP-ILGN9VB
+MSYSTEM=MINGW64
+CommonProgramFiles(x86)=C:\Program Files (x86)\Common Files
+LOGONSERVER=\\DESKTOP-ILGN9VB
+TMP=C:\Users\Admin\AppData\Local\Temp
+HOME=C:\Users\Admin
+PROCESSOR_REVISION=aa04
+PATHEXT=.COM;.EXE;.BAT;.CMD;.VBS;.VBE;.JS;.JSE;.WSF;.WSH;.MSC;.CPL
+GIT_ASKPASS=c:\Users\Admin\AppData\Local\Programs\Windsurf\resources\app\extensions\git\dist\askpass.sh
+GIT_EXEC_PATH=C:/Program Files/Git/mingw64/libexec/git-core
+TEMP=C:\Users\Admin\AppData\Local\Temp
+LOCALAPPDATA=C:\Users\Admin\AppData\Local
+PUBLIC=C:\Users\Public
+TERM=xterm-256color
+COLORTERM=truecolor
+USERDOMAIN=DESKTOP-ILGN9VB
+ProgramFiles(x86)=C:\Program Files (x86)
+Path=C:/Program Files/Git/mingw64/libexec/git-core;C:\Program Files\Git\mingw64\bin;C:\Program Files\Git\usr\bin;C:\Users\Admin\bin;C:\Windows\system32;C:\Windows;C:\Windows\System32\Wbem;C:\Windows\System32\WindowsPowerShell\v1.0\;C:\Windows\System32\OpenSSH\;C:\Program Files (x86)\NVIDIA Corporation\PhysX\Common;C:\Program Files\Git\cmd;C:\Program Files\nodejs\;C:\Users\Admin\AppData\Local\Programs\Python\Launcher\;C:\Users\Admin\AppData\Local\Microsoft\WindowsApps;C:\Users\Admin\AppData\Local\Programs\Windsurf\bin;C:\Users\Admin\AppData\Roaming\npm;C:\Program Files\heroku\bin
+TERM_PROGRAM=vscode
+PROCESSOR_LEVEL=6
+PROCESSOR_IDENTIFIER=Intel64 Family 6 Model 170 Stepping 4, GenuineIntel
+TMPDIR=C:\Users\Admin\AppData\Local\Temp
+VSCODE_GIT_ASKPASS_EXTRA_ARGS=
+TERM_PROGRAM_VERSION=1.99.1
+VSCODE_GIT_ASKPASS_MAIN=c:\Users\Admin\AppData\Local\Programs\Windsurf\resources\app\extensions\git\dist\askpass-main.js
+PSModulePath=C:\Users\Admin\Documents\WindowsPowerShell\Modules;C:\Program Files\WindowsPowerShell\Modules;C:\Windows\system32\WindowsPowerShell\v1.0\Modules
+NUMBER_OF_PROCESSORS=22
+FPS_BROWSER_USER_PROFILE_STRING=Default
+CommonProgramFiles=C:\Program Files (x86)\Common Files
+VSCODE_INJECTION=1
+VSCODE_GIT_IPC_HANDLE=\\.\pipe\vscode-git-ebe601bd89-sock
+CHROME_CRASHPAD_PIPE_NAME=\\.\pipe\crashpad_18200_IAHDKPGOTLQTSRAI
+PAGER=cat
+PLINK_PROTOCOL=ssh
+ProgramData=C:\ProgramData
+ProgramW6432=C:\Program Files
+ProgramFiles=C:\Program Files (x86)
+GIT_TRACE2_PARENT_SID=85875435-8913-4554-b1a1-28568549cd90
+VSCODE_GIT_ASKPASS_NODE=C:\Users\Admin\AppData\Local\Programs\Windsurf\Windsurf.exe
+SystemRoot=C:\Windows
+ORIGINAL_XDG_CURRENT_DESKTOP=undefined
+SESSIONNAME=Console
+CommonProgramW6432=C:\Program Files\Common Files
+ZES_ENABLE_SYSMAN=1
+RlsSvcPort=22112
+USERPROFILE=C:\Users\Admin
+USERDOMAIN_ROAMINGPROFILE=DESKTOP-ILGN9VB
+APPDATA=C:\Users\Admin\AppData\Roaming
+HOMEDRIVE=C:
+ACSetupSvcPort=23210
+EFC_8476=1
+USERNAME=Admin
+PROCESSOR_ARCHITEW6432=AMD64
+FPS_BROWSER_APP_PROFILE_STRING=Internet Explorer
+PROCESSOR_ARCHITECTURE=x86
+OS=Windows_NT
+ComSpec=C:\Windows\system32\cmd.exe
+SystemDrive=C:
+windir=C:\Windows
+LANG=en_US.UTF-8
+ALLUSERSPROFILE=C:\ProgramData
+
+
+------------
+Diagnostic: File system
+Skipped: False
+Success: True
+Exception: None
+Log:
+Temporary directory is 'C:\Users\Admin\AppData\Local\Temp\'...
+Checking basic file I/O...
+Writing to temporary file 'C:\Users\Admin\AppData\Local\Temp\72bb458f8285dd674cacade4'... OK
+Reading from temporary file 'C:\Users\Admin\AppData\Local\Temp\72bb458f8285dd674cacade4'... OK
+Deleting temporary file 'C:\Users\Admin\AppData\Local\Temp\72bb458f8285dd674cacade4'... OK
+Testing IFileSystem instance...
+UserHomePath: C:\Users\Admin
+UserDataDirectoryPath: C:\Users\Admin\.gcm
+GetCurrentDirectory(): C:\Users\Admin\Desktop\manageTime
+
+------------
+Diagnostic: Networking
+Skipped: False
+Success: False
+Exception:
+System.Net.Http.HttpRequestException: Error al enviar la solicitud. ---> System.Net.WebException: No se puede resolver el nombre remoto: 'example.com'
+   en System.Net.HttpWebRequest.EndGetResponse(IAsyncResult asyncResult)
+   en System.Net.Http.HttpClientHandler.GetResponseCallback(IAsyncResult ar)
+   --- Fin del seguimiento de la pila de la excepción interna ---
+   en System.Runtime.CompilerServices.TaskAwaiter.ThrowForNonSuccess(Task task)
+   en System.Runtime.CompilerServices.TaskAwaiter.HandleNonSuccessAndDebuggerNotification(Task task)
+   en System.Runtime.CompilerServices.TaskAwaiter`1.GetResult()
+   en GitCredentialManager.Diagnostics.NetworkingDiagnostic.<RunInternalAsync>d__4.MoveNext()
+--- Fin del seguimiento de la pila de la ubicación anterior donde se produjo la excepción ---
+   en System.Runtime.CompilerServices.TaskAwaiter.ThrowForNonSuccess(Task task)
+   en System.Runtime.CompilerServices.TaskAwaiter.HandleNonSuccessAndDebuggerNotification(Task task)
+   en System.Runtime.CompilerServices.TaskAwaiter`1.GetResult()
+   en GitCredentialManager.Diagnostics.Diagnostic.<RunAsync>d__6.MoveNext()
+Log:
+Checking networking and HTTP stack...
+Creating HTTP client... OK
+IsNetworkAvailable: True
+Sending HEAD request to http://example.com...Sending HEAD request to https://example.com... warning: HEAD request failed
+Sending HEAD request to http://httpforever.com...
+------------
+Diagnostic: Git
+Skipped: False
+Success: True
+Exception: None
+Log:
+Getting Git version... OK
+Git version is '2.49.0.windows.1'
+Locating current repository...Git repository at 'C:/Users/Admin/Desktop/manageTime/.git'
+ OK
+Listing all Git configuration... OK
+Git configuration:
+file:C:/Program Files/Git/etc/gitconfig	diff.astextplain.textconv=astextplain
+file:C:/Program Files/Git/etc/gitconfig	filter.lfs.clean=git-lfs clean -- %f
+file:C:/Program Files/Git/etc/gitconfig	filter.lfs.smudge=git-lfs smudge -- %f
+file:C:/Program Files/Git/etc/gitconfig	filter.lfs.process=git-lfs filter-process
+file:C:/Program Files/Git/etc/gitconfig	filter.lfs.required=true
+file:C:/Program Files/Git/etc/gitconfig	http.sslbackend=schannel
+file:C:/Program Files/Git/etc/gitconfig	core.autocrlf=true
+file:C:/Program Files/Git/etc/gitconfig	core.fscache=true
+file:C:/Program Files/Git/etc/gitconfig	core.symlinks=false
+file:C:/Program Files/Git/etc/gitconfig	pull.rebase=false
+file:C:/Program Files/Git/etc/gitconfig	credential.helper=manager
+file:C:/Program Files/Git/etc/gitconfig	credential.https://dev.azure.com.usehttppath=true
+file:C:/Program Files/Git/etc/gitconfig	init.defaultbranch=master
+file:C:/Users/Admin/.gitconfig	user.email=lucasbranchini196@gmail.com
+file:C:/Users/Admin/.gitconfig	user.name=chonees
+file:C:/Users/Admin/.gitconfig	safe.directory=D:/ProyectoNodos
+file:C:/Users/Admin/.gitconfig	credential.helper=wincred
+file:C:/Users/Admin/.gitconfig	credential.https://git.heroku.com.provider=generic
+file:.git/config	core.repositoryformatversion=0
+file:.git/config	core.filemode=false
+file:.git/config	core.bare=false
+file:.git/config	core.logallrefupdates=true
+file:.git/config	core.symlinks=false
+file:.git/config	core.ignorecase=true
+file:.git/config	remote.origin.url=https://github.com/Chonees/manageTime.git
+file:.git/config	remote.origin.fetch=+refs/heads/*:refs/remotes/origin/*
+file:.git/config	branch.main.remote=origin
+file:.git/config	branch.main.merge=refs/heads/main
+file:.git/config	branch.main.vscode-merge-base=origin/main
+file:.git/config	branch.develop.remote=origin
+file:.git/config	branch.develop.merge=refs/heads/develop
+file:.git/config	branch.develop.vscode-merge-base=origin/develop
+file:.git/config	remote.heroku.url=https://git.heroku.com/managetime-backend.git
+file:.git/config	remote.heroku.fetch=+refs/heads/*:refs/remotes/heroku/*
+file:.git/config	branch.new.vscode-merge-base=origin/develop
+file:.git/config	branch.new.remote=origin
+file:.git/config	branch.new.merge=refs/heads/new
+file:.git/config	branch.newthing.vscode-merge-base=origin/develop
+file:.git/config	branch.newthingg.vscode-merge-base=origin/develop
+file:.git/config	branch.newthingg.remote=origin
+file:.git/config	branch.newthingg.merge=refs/heads/newthingg
+
+

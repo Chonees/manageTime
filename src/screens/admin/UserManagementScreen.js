@@ -150,12 +150,26 @@ const UserManagementScreen = ({ navigation }) => {
 
   const toggleUserStatus = async (userId, isActive) => {
     try {
+      // Primero actualizamos la UI para feedback inmediato
       setUsers(users.map(user => 
         user._id === userId ? { ...user, isActive: !isActive } : user
       ));
       
-      Alert.alert(t('success'), t('userUpdated'));
+      // Luego enviamos la actualización al servidor
+      const newStatus = !isActive;
+      await api.updateUserStatus(userId, newStatus);
+      
+      // Mostramos mensaje de éxito
+      Alert.alert(
+        t('success'), 
+        newStatus ? t('userActivated') : t('userDeactivated')
+      );
     } catch (error) {
+      // En caso de error, revertimos el cambio en la UI
+      setUsers(users.map(user => 
+        user._id === userId ? { ...user, isActive: isActive } : user
+      ));
+      console.error('Error al actualizar estado del usuario:', error);
       Alert.alert(t('error'), t('errorUpdatingUser'));
     }
   };

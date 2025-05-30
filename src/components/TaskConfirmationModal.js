@@ -70,7 +70,7 @@ const TaskConfirmationModal = ({
                   style={[styles.button, styles.acceptButton]}
                   onPress={onAcceptWithoutStart}
                 >
-                  <Text style={styles.acceptButtonText}>{t('acceptOnly') || 'Aceptar'}</Text>
+                  <Text style={styles.acceptButtonText}>{'Aceptar'}</Text>
                 </TouchableOpacity>
               </>
             )}

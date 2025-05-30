@@ -30,8 +30,9 @@ exports.createActivity = async (req, res) => {
     const validTypes = [
       'location_enter', 'location_exit', 
       'task_complete', 'task_create', 'task_update', 'task_delete',
-      'started_working', 'stopped_working', 'clock_in', 'clock_out', 'task_activity',
-      'task_accept', 'task_reject', 'task_assign'
+      'task_activity',
+      'task_accept', 'task_reject', 'task_assign',
+      'NOTES' // Añadido soporte para notas
     ];
     
     if (!validTypes.includes(type)) {
@@ -69,7 +70,7 @@ exports.createActivity = async (req, res) => {
     // Enviar notificación push a administradores según el tipo de actividad
     try {
       // Enviar notificación para todos los tipos relevantes
-      if (['clock_in', 'clock_out', 'started_working', 'stopped_working', 'task_complete', 'location_enter', 'location_exit', 'task_activity'].includes(type)) {
+      if (['task_complete', 'location_enter', 'location_exit', 'task_activity'].includes(type)) {
         console.log(`Intentando enviar notificación para actividad tipo: ${type}`);
         
         const savedActivity = activity.toObject();
@@ -216,11 +217,14 @@ exports.getAllActivities = async (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const skip = (page - 1) * limit;
     
-    // Definir tipos de actividad a excluir
-    const excludedTypes = ['location_check']; 
+    // Ya no excluimos location_check para que aparezcan en el panel de admin
+    // const excludedTypes = ['location_check']; 
     
-    // Construir filtro para excluir tipos no deseados
-    const filter = { type: { $nin: excludedTypes } };
+    // No aplicamos filtro de exclusión por tipo
+    // const filter = { type: { $nin: excludedTypes } };
+    
+    // Filtro vacío para incluir todas las actividades
+    const filter = {};
     
     // Aplicar filtro de ordenación si existe
     const sort = req.query.sort || { createdAt: -1 };

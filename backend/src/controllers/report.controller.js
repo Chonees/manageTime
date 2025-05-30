@@ -124,7 +124,7 @@ exports.generateActivityExcelReport = async (req, res) => {
     // Filtrar por tipo de actividad
     if (activityType) {
       if (activityType === 'availability') {
-        filter.type = { $in: ['clock_in', 'clock_out', 'started_working', 'stopped_working'] };
+        filter.type = { $in: ['location_enter', 'location_exit'] }; // Cambiado a ubicaciones en lugar de disponibilidad
       } else if (activityType === 'tasks') {
         filter.type = { $in: ['task_create', 'task_update', 'task_complete', 'task_delete'] };
       } else if (activityType === 'locations') {
@@ -234,10 +234,10 @@ exports.generateActivityExcelReport = async (req, res) => {
         // Calcular estadísticas para el resumen
         const lastLogin = activities.find(a => a.type === 'login');
         const availableCount = activities.filter(a => 
-          a.type === 'clock_in' || a.type === 'started_working'
+          a.type === 'location_enter'
         ).length;
         const unavailableCount = activities.filter(a => 
-          a.type === 'clock_out' || a.type === 'stopped_working'
+          a.type === 'location_exit'
         ).length;
         const userCompletedTasks = activities.filter(a => 
           a.type === 'task_complete'
@@ -488,14 +488,9 @@ const getActivityInfo = async (activity) => {
     
     switch (activity.type) {
       case 'clock_in':
-      case 'started_working':
+      case 'clock_out':
         activityType = 'Disponible';
         description = 'Usuario marcó como disponible';
-        break;
-      case 'clock_out':
-      case 'stopped_working':
-        activityType = 'No disponible';
-        description = 'Usuario marcó como no disponible';
         break;
       case 'location_enter':
         activityType = 'Entrada a ubicación';
@@ -618,8 +613,8 @@ const createActivitySections = async (sheet, activities) => {
     
     // Agrupar actividades por tipo
     const availabilityActivities = activities.filter(a => 
-      a.type === 'clock_in' || a.type === 'clock_out' || 
-      a.type === 'started_working' || a.type === 'stopped_working'
+      
+      a.type === 'location_enter' || a.type === 'location_exit'
     );
     
     const locationActivities = activities.filter(a => 
@@ -633,8 +628,7 @@ const createActivitySections = async (sheet, activities) => {
     );
     
     const otherActivities = activities.filter(a => 
-      !['clock_in', 'clock_out', 'started_working', 'stopped_working',
-        'location_enter', 'location_exit',
+      !['location_enter', 'location_exit',
         'task_create', 'task_update', 'task_complete', 'task_delete', 'voice_note'
       ].includes(a.type)
     );
