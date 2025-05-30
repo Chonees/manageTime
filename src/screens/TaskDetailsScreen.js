@@ -646,6 +646,15 @@ const toggleComplete = async () => {
         api.updateTask(task._id, { status: 'on_site' })
           .then(updatedTask => {
             console.log('Tarea actualizada a estado "en el sitio":', updatedTask);
+            
+            // Verificar si se detuvo el temporizador (para usuarios comunes)
+            if (updatedTask.timeLimitSet === null && !user.isAdmin) {
+              console.log('✅ Temporizador detenido automáticamente por llegada al radio');
+              // Limpiar datos del temporizador en AsyncStorage
+              AsyncStorage.removeItem(`task_${task._id}_end_time`);
+              AsyncStorage.removeItem(`task_${task._id}_timer_active`);
+            }
+            
             setTask(updatedTask);
             setHasLoggedOnSite(true);
             
