@@ -241,8 +241,18 @@ const TaskTimer = ({ task, onTimeExpired }) => {
         else if (task.acceptedAt || ['accepted', 'on_the_way', 'on_site'].includes(task.status)) {
           console.log(`⏱ Iniciando temporizador para tarea aceptada con estado ${task.status}`);
           
+          // COMPROBACIÓN CRÍTICA: Si timeLimitSet es explícitamente null, significa que el temporizador debe detenerse
+          if (task.timeLimitSet === null) {
+            console.log('⛔ El temporizador ha sido detenido explícitamente (timeLimitSet = null)');
+            // Detener el temporizador
+            stopTaskTimer();
+            // Limpiar también cualquier tiempo guardado en AsyncStorage
+            AsyncStorage.removeItem(`task_${task._id}_end_time`);
+            AsyncStorage.removeItem(`task_${task._id}_timer_active`);
+            return;
+          }
           // Verificar que la tarea tenga timeLimitSet (establecido cuando se aceptó)
-          if (task.timeLimitSet && task.timeLimit) {
+          else if (task.timeLimitSet && task.timeLimit) {
             console.log('La tarea tiene timeLimitSet desde:', new Date(task.timeLimitSet).toLocaleString());
             startTaskTimer();
           } else if (task.timeLimit) {
