@@ -469,11 +469,9 @@ exports.updateTask = async (req, res) => {
           
           // Si es un usuario común (no admin) que llega al radio de la tarea
           if (!req.user.isAdmin) {
-            // Marcar la tarea como completada automáticamente
-            task.completed = true;
-            // Establecer el timeLimitSet a null para que no se elimine cuando expire
+            // SOLO detener el temporizador (no marcar como completada)
             task.timeLimitSet = null;
-            console.log(`✅ Usuario común llegó al radio: tarea ${task._id} marcada como completada y timer anulado`);
+            console.log(`✅ Usuario común llegó al radio: temporizador de tarea ${task._id} detenido`);
           }
         } else if (status === 'on_the_way') {
           task.acceptedAt = new Date();
