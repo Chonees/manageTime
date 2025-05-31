@@ -33,8 +33,11 @@ const DashboardScreen = ({ navigation }) => {
   const [refreshing, setRefreshing] = useState(false);
   const [position, setPosition] = useState(null);
   const [tasks, setTasks] = useState([]);
+  const [selectedTaskLocation, setSelectedTaskLocation] = useState(null);
   const theme = useTheme();
   
+  // Referencia para el componente de mapa
+  const mapRef = useRef(null);
   // Referencia para el intervalo de actualización de ubicación
   const locationUpdateIntervalRef = useRef(null);
   // Referencia para el intervalo de actualización de tareas
@@ -68,9 +71,9 @@ const DashboardScreen = ({ navigation }) => {
       const userTasks = await api.getUserTasks();
       console.log(`📋 Tareas recibidas del servidor: ${userTasks.length}`);
       
-      // Filtrar tareas pendientes
-      const pendingTasks = userTasks.filter(task => !task.completed).slice(0, 3);
-      console.log(`📝 Tareas pendientes filtradas: ${pendingTasks.length}`);
+      // Filtrar tareas pendientes (mostrar todas)
+      const pendingTasks = userTasks.filter(task => !task.completed);
+      console.log(`📋 Tareas pendientes filtradas: ${pendingTasks.length}`);
       
       // Actualizar siempre para asegurar que los cambios se reflejen
       console.log('🔄 Actualizando lista de tareas en pantalla');
@@ -90,9 +93,9 @@ const DashboardScreen = ({ navigation }) => {
       // Load pending tasks
       const userTasks = await api.getUserTasks();
       
-      // Filtrar tareas pendientes
-      const pendingTasks = userTasks.filter(task => !task.completed).slice(0, 3);
-      setTasks(pendingTasks); // Only show 3 pending tasks
+      // Filtrar tareas pendientes (mostrar todas)
+      const pendingTasks = userTasks.filter(task => !task.completed);
+      setTasks(pendingTasks); // Mostrar todas las tareas pendientes
       console.log(`📋 Dashboard cargado con ${pendingTasks.length} tareas pendientes`);
     } catch (error) {
       console.error('❌ Error cargando datos del dashboard:', error);
@@ -182,17 +185,53 @@ const DashboardScreen = ({ navigation }) => {
 
   // Función para obtener la ubicación actual
   const handleLocationChange = (location) => {
+    // Si hemos obtenido una ubicación válida
     if (location && location.coords) {
-      setPosition({
-        latitude: location.coords.latitude,
-        longitude: location.coords.longitude
+      setPosition(location);
+      
+      // Enviar actualización de ubicación
+      sendLocationUpdate(location.coords);
+    } else {
+      console.warn('Ubicación recibida inválida:', location);
+    }
+  };
+  
+  // Función para calcular la distancia entre dos puntos geográficos usando la fórmula de Haversine
+  const calculateDistance = (lat1, lon1, lat2, lon2) => {
+    const R = 6371; // Radio de la tierra en km
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+            Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    const distanceKm = R * c; // Distancia en km
+    const distanceMiles = distanceKm * 0.621371; // Convertir km a millas
+    return distanceMiles.toFixed(1); // Redondear a 1 decimal
+  };
+
+  // Función para centrar el mapa en la ubicación de una tarea
+  const centerMapOnTask = (task) => {
+    if (task && task.location && task.location.coordinates && task.location.coordinates.length === 2) {
+      // Las coordenadas en GeoJSON son [longitud, latitud]
+      const [longitude, latitude] = task.location.coordinates;
+      
+      // Actualizar el estado para mostrar el marcador de la tarea
+      setSelectedTaskLocation({
+        latitude,
+        longitude,
+        title: task.title,
+        description: task.locationName || `Radio: ${task.radius}km`,
+        taskId: task._id
       });
       
-      // Cada vez que cambia la ubicación, enviamos una actualización al servidor
-      sendLocationUpdate({
-        latitude: location.coords.latitude,
-        longitude: location.coords.longitude
-      });
+      console.log(`📍 Centrando mapa en tarea: ${task.title} - Coordenadas: ${latitude}, ${longitude}`);
+    } else {
+      Alert.alert(
+        t('locationError'),
+        t('taskHasNoLocation'),
+        [{ text: t('ok') }]
+      );
     }
   };
 
@@ -255,11 +294,13 @@ const DashboardScreen = ({ navigation }) => {
         
         {/* Map component */}
         <LocationComponent 
+          ref={mapRef}
           onLocationChange={handleLocationChange} 
           showWorkControls={false}
           mapOnly={true}
-          customHeight={240}
+          customHeight={400}
           transparentContainer={true}
+          taskLocation={selectedTaskLocation} // Pasar la ubicación de la tarea seleccionada
         />
       </View>
 
@@ -292,23 +333,76 @@ const DashboardScreen = ({ navigation }) => {
         {loading ? (
           <ActivityIndicator style={{padding: 15}} size="small" color="#fff3e5" />
         ) : tasks.length > 0 ? (
-          <View style={{paddingTop: 5, paddingBottom: 5}}>
+          <ScrollView 
+            style={{
+              paddingTop: 5, 
+              paddingBottom: 5,
+              maxHeight: 180, // Altura fija para la sección de tareas pendientes
+            }}
+            showsVerticalScrollIndicator={true}
+            indicatorStyle="white"
+            persistentScrollbar={true}
+            scrollIndicatorInsets={{ right: 1 }}
+            contentContainerStyle={{ paddingRight: 2 }}
+            // En Android, agregar este color que es el crema de la app
+            android_indicatorColor="#fff3e5"
+          >
             {tasks.map((task, index) => (
-              <TouchableOpacity 
+              <View 
                 key={task._id || index} 
                 style={{
                   paddingVertical: 12,
                   paddingHorizontal: 20,
-                  marginBottom: index === tasks.length - 1 ? 0 : 0
+                  marginBottom: index === tasks.length - 1 ? 0 : 0,
+                  flexDirection: 'row',
+                  justifyContent: 'space-between',
+                  alignItems: 'center'
                 }}
-                onPress={() => navigation.navigate('TaskDetails', { taskId: task._id })}
               >
-                <Text style={{fontSize: 16, fontWeight: '500', color: '#fff3e5'}}>
-                  {task.title}
-                </Text>
-              </TouchableOpacity>
+                <TouchableOpacity
+                  style={{ flex: 1 }}
+                  onPress={() => navigation.navigate('TaskDetails', { taskId: task._id })}
+                >
+                  <Text style={{fontSize: 16, fontWeight: '500', color: '#fff3e5'}}>
+                    {task.title}
+                  </Text>
+                </TouchableOpacity>
+                
+                {/* Botón para mostrar la tarea en el mapa con la distancia */}
+                <TouchableOpacity
+                  style={{
+                    padding: 8,
+                    backgroundColor: theme.colors.primary,
+                    borderRadius: 8,
+                    marginLeft: 10,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: 80, // Ancho fijo para todos los botones
+                    height: 36 // Alto fijo para todos los botones
+                  }}
+                  onPress={() => centerMapOnTask(task)}
+                >
+                  <Ionicons name="location" size={16} color={theme.colors.text.dark} />
+                  {position && position.coords && task.location && task.location.coordinates && (
+                    <Text style={{
+                      color: theme.colors.text.dark,
+                      marginLeft: 4,
+                      fontSize: 12,
+                      fontWeight: 'bold'
+                    }}>
+                      {calculateDistance(
+                        position.coords.latitude,
+                        position.coords.longitude,
+                        task.location.coordinates[1],
+                        task.location.coordinates[0]
+                      )} mi
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              </View>
             ))}
-          </View>
+          </ScrollView>
         ) : (
           <Text style={{textAlign: 'center', fontSize: 16, paddingVertical: 20, color: '#fff3e5'}}>
             {t('noPendingTasks')}

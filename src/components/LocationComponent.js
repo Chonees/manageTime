@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, forwardRef, useImperativeHandle, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Dimensions, Alert, Platform } from 'react-native';
 import * as Location from 'expo-location';
-import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
+import MapView, { Marker, PROVIDER_GOOGLE, Circle } from 'react-native-maps';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { useLocationTracking } from '../context/LocationTrackingContext';
@@ -9,13 +9,14 @@ import * as api from '../services/api';
 import { mapConfig } from '../services/platform-config';
 import VerificationPrompt from './VerificationPrompt';
 
-const LocationComponent = ({ 
+const LocationComponent = forwardRef(({ 
   onLocationChange, 
   showWorkControls = false, 
   mapOnly = false,
   customHeight,
-  transparentContainer = false
-}) => {
+  transparentContainer = false,
+  taskLocation = null
+}, ref) => {
   const { user } = useAuth();
   const { t } = useLanguage();
   const { startTracking, stopTracking } = useLocationTracking();
@@ -28,6 +29,24 @@ const LocationComponent = ({
   const [mapError, setMapError] = useState(false);
   const [useNativeDriver, setUseNativeDriver] = useState(false);
   const [mapKey, setMapKey] = useState(1); // Clave para forzar re-renderizado del mapa
+  
+  // Referencia al componente de mapa
+  const mapRef = useRef(null);
+  
+  // Exponer métodos al componente padre
+  useImperativeHandle(ref, () => ({
+    // Método para centrar el mapa en una ubicación específica
+    centerOnLocation: (latitude, longitude) => {
+      if (mapRef.current && latitude && longitude) {
+        mapRef.current.animateToRegion({
+          latitude,
+          longitude,
+          latitudeDelta: 0.005,
+          longitudeDelta: 0.005
+        }, 1000); // Duración de la animación en ms
+      }
+    }
+  }));
 
   const getLocation = async () => {
     setLoading(true);
@@ -83,45 +102,18 @@ const LocationComponent = ({
       if (!currentLocation.coords || 
           typeof currentLocation.coords.latitude !== 'number' || 
           typeof currentLocation.coords.longitude !== 'number') {
-        throw new Error(t('invalidCoordinates'));
+        throw new Error('Invalid location data');
       }
       
       setLocation(currentLocation);
       
-      // Notify parent component about location update
       if (onLocationChange) {
         onLocationChange(currentLocation);
       }
-    } catch (error) {
-      console.error('Location error:', error);
-      setErrorMsg(t('locationError') + ': ' + (error.message || t('unknownError')));
       
-      // Intentar con una precisión menor si falla
-      if (error.message && (error.message.includes('timeout') || error.message.includes('location'))) {
-        try {
-          console.log('Intentando con precisión menor...');
-          const lowAccuracyLocation = await Location.getCurrentPositionAsync({
-            accuracy: Location.Accuracy.Low,
-            timeout: 10000
-          });
-          
-          if (lowAccuracyLocation && 
-              lowAccuracyLocation.coords && 
-              typeof lowAccuracyLocation.coords.latitude === 'number' && 
-              typeof lowAccuracyLocation.coords.longitude === 'number') {
-            
-            console.log('Ubicación obtenida con precisión menor:', JSON.stringify(lowAccuracyLocation.coords));
-            setLocation(lowAccuracyLocation);
-            setErrorMsg(null);
-            
-            if (onLocationChange) {
-              onLocationChange(lowAccuracyLocation);
-            }
-          }
-        } catch (fallbackError) {
-          console.error('Error en fallback de ubicación:', fallbackError);
-        }
-      }
+    } catch (error) {
+      console.error('Error getting location:', error);
+      setErrorMsg(t('locationError'));
     } finally {
       setLoading(false);
     }
@@ -134,33 +126,32 @@ const LocationComponent = ({
     
     const setupLocation = async () => {
       try {
-        // Obtener la ubicación inicial
+        // First get a single location update
         await getLocation();
         
-        // Configurar actualizaciones de ubicación en tiempo real
-        if (isMounted) {
-          // Importar la configuración de la plataforma
-          const { getPlatformConfig, getPlatformOptions } = require('../services/platform-config');
-          const locationConfig = getPlatformConfig('location');
-          const platformOptions = getPlatformOptions('location');
+        if (!isMounted) return;
+        
+        // Then start watching for location updates
+        if (Platform.OS === 'web') {
+          // On web, watching position might not work as expected, so we just get position periodically
+          const intervalId = setInterval(() => {
+            if (isMounted) {
+              getLocation();
+            }
+          }, 60000); // every minute
           
-          // Opciones para la suscripción de ubicación
-          const watchOptions = {
-            accuracy: Location.Accuracy[Platform.OS === 'android' ? 'Balanced' : 'BestForNavigation'],
-            distanceInterval: Platform.OS === 'android' ? 5 : 10, // Metros
-            timeInterval: Platform.OS === 'android' ? 5000 : 10000, // Milisegundos
-            ...platformOptions
-          };
-          
-          console.log('Configurando watch position con opciones:', JSON.stringify(watchOptions));
-          
+          return () => clearInterval(intervalId);
+        } else {
+          // On native, we can use the watchPosition API
           locationSubscription = await Location.watchPositionAsync(
-            watchOptions,
+            {
+              accuracy: Location.Accuracy.Balanced,
+              distanceInterval: 10,
+              timeInterval: 60000 // Update at most once per minute
+            },
             (newLocation) => {
               if (isMounted) {
-                console.log('Nueva ubicación recibida (watch):', JSON.stringify(newLocation.coords));
                 setLocation(newLocation);
-                
                 if (onLocationChange) {
                   onLocationChange(newLocation);
                 }
@@ -169,7 +160,10 @@ const LocationComponent = ({
           );
         }
       } catch (error) {
-        console.error('Error al configurar la ubicación:', error);
+        console.error('Error setting up location:', error);
+        if (isMounted) {
+          setErrorMsg(t('locationError'));
+        }
       }
     };
     
@@ -185,37 +179,34 @@ const LocationComponent = ({
   }, []);
 
   // Función para obtener de nuevo la ubicación
-  const handleRefreshLocation = async () => {
-    await getLocation();
+  const handleRefreshLocation = () => {
+    getLocation();
   };
-
+  
   // Handler for map ready event
   const onMapReady = () => {
-    console.log('Mapa cargado correctamente');
+    console.log('Map is ready');
     setMapReady(true);
     setMapError(false);
   };
-
+  
   // Handler for map error event
   const onMapError = (error) => {
     console.error('Map error:', error);
     setMapError(true);
-    
-    // Si hay un error con el mapa, intentamos cambiar el driver
-    setUseNativeDriver(prev => !prev);
-    
-    // Forzar re-renderizado del mapa después de un error
-    setTimeout(() => {
-      setMapKey(prevKey => prevKey + 1);
-    }, 500);
+    if (Platform.OS === 'android') {
+      setUseNativeDriver(true);
+      // Try to reload the map with native driver
+      setTimeout(() => {
+        setMapKey(prev => prev + 1);
+      }, 500);
+    }
   };
   
   // Función para reintentar cargar el mapa
   const retryMap = () => {
-    console.log('Reintentando cargar el mapa...');
     setMapError(false);
-    setUseNativeDriver(prev => !prev); // Alternar entre modos
-    setMapKey(prevKey => prevKey + 1); // Forzar re-renderizado
+    setMapKey(prev => prev + 1);
   };
 
   // Renderizado condicional según el estado del componente
@@ -226,9 +217,14 @@ const LocationComponent = ({
         transparentContainer ? null : styles.containerBackground
       ]}>
         <Text style={styles.errorText}>{errorMsg}</Text>
-        <TouchableOpacity onPress={getLocation} style={styles.refreshButton}>
-          <Text style={styles.refreshButtonText}>{t('requestLocationPermission')}</Text>
+        <TouchableOpacity onPress={handleRefreshLocation} style={styles.refreshButton}>
+          <Text style={styles.refreshButtonText}>{t('refreshLocation')}</Text>
         </TouchableOpacity>
+        
+        {/* Add permission explanation if needed */}
+        <View style={styles.permissionContainer}>
+          <Text style={styles.permissionText}>{t('locationPermissionExplanation')}</Text>
+        </View>
       </View>
     );
   }
@@ -238,10 +234,10 @@ const LocationComponent = ({
       <View style={[
         styles.container, 
         transparentContainer ? null : styles.containerBackground,
-        { alignItems: 'center', justifyContent: 'center' }
+        { justifyContent: 'center', alignItems: 'center' }
       ]}>
         <ActivityIndicator size="large" color="#fff3e5" />
-        <Text style={styles.loadingText}>{t('gettingLocation')}</Text>
+        <Text style={styles.loadingText}>{t('loadingLocation')}</Text>
       </View>
     );
   }
@@ -252,7 +248,7 @@ const LocationComponent = ({
         styles.container, 
         transparentContainer ? null : styles.containerBackground
       ]}>
-        <Text style={styles.errorText}>{errorMsg || t('noLocationData')}</Text>
+        <Text style={styles.errorText}>{t('noLocationData')}</Text>
         <TouchableOpacity onPress={handleRefreshLocation} style={styles.refreshButton}>
           <Text style={styles.refreshButtonText}>{t('refreshLocation')}</Text>
         </TouchableOpacity>
@@ -260,8 +256,13 @@ const LocationComponent = ({
     );
   }
 
-  // Map region configuration based on user's location
-  const mapRegion = {
+  // Determinar la región del mapa basado en la ubicación del usuario o la tarea seleccionada
+  const mapRegion = taskLocation ? {
+    latitude: taskLocation.latitude,
+    longitude: taskLocation.longitude,
+    latitudeDelta: 0.005, // Zoom level
+    longitudeDelta: 0.005, // Zoom level
+  } : {
     latitude: location.coords.latitude,
     longitude: location.coords.longitude,
     latitudeDelta: 0.005, // Zoom level
@@ -284,6 +285,7 @@ const LocationComponent = ({
           </View>
         ) : (
           <MapView
+            ref={mapRef}
             key={`map-${mapKey}`}
             style={styles.map}
             region={mapRegion}
@@ -304,6 +306,7 @@ const LocationComponent = ({
             animateToRegion={false}
             liteMode={useNativeDriver}
           >
+            {/* Marcador de la ubicación del usuario */}
             {location && location.coords && typeof location.coords.latitude === 'number' && typeof location.coords.longitude === 'number' && (
               <Marker
                 coordinate={{
@@ -313,6 +316,33 @@ const LocationComponent = ({
                 title={t('yourLocation')}
                 description={`${location.coords.latitude.toFixed(6)}, ${location.coords.longitude.toFixed(6)}`}
               />
+            )}
+            
+            {/* Marcador y círculo de la tarea seleccionada */}
+            {taskLocation && (
+              <>
+                <Marker
+                  coordinate={{
+                    latitude: taskLocation.latitude,
+                    longitude: taskLocation.longitude,
+                  }}
+                  title={taskLocation.title || t('taskLocation')}
+                  description={taskLocation.description || ''}
+                  pinColor="#FFD700" /* Color dorado para distinguirlo */
+                />
+                {taskLocation.radius && (
+                  <Circle
+                    center={{
+                      latitude: taskLocation.latitude,
+                      longitude: taskLocation.longitude,
+                    }}
+                    radius={(taskLocation.radius || 0.1) * 1000} /* Radio en metros (convertir de km) */
+                    fillColor="rgba(255, 215, 0, 0.2)"
+                    strokeColor="rgba(255, 215, 0, 0.5)"
+                    strokeWidth={2}
+                  />
+                )}
+              </>
             )}
           </MapView>
         )}
@@ -330,6 +360,7 @@ const LocationComponent = ({
       {!mapError ? (
         <View style={styles.mapContainer}>
           <MapView
+            ref={mapRef}
             key={`map-${mapKey}`}
             style={styles.map}
             region={mapRegion}
@@ -350,6 +381,7 @@ const LocationComponent = ({
             animateToRegion={false}
             liteMode={useNativeDriver}
           >
+            {/* Marcador de la ubicación del usuario */}
             {location && location.coords && typeof location.coords.latitude === 'number' && typeof location.coords.longitude === 'number' && (
               <Marker
                 coordinate={{
@@ -359,6 +391,33 @@ const LocationComponent = ({
                 title={t('yourLocation')}
                 description={`${location.coords.latitude.toFixed(6)}, ${location.coords.longitude.toFixed(6)}`}
               />
+            )}
+            
+            {/* Marcador y círculo de la tarea seleccionada */}
+            {taskLocation && (
+              <>
+                <Marker
+                  coordinate={{
+                    latitude: taskLocation.latitude,
+                    longitude: taskLocation.longitude,
+                  }}
+                  title={taskLocation.title || t('taskLocation')}
+                  description={taskLocation.description || ''}
+                  pinColor="#FFD700" /* Color dorado para distinguirlo */
+                />
+                {taskLocation.radius && (
+                  <Circle
+                    center={{
+                      latitude: taskLocation.latitude,
+                      longitude: taskLocation.longitude,
+                    }}
+                    radius={(taskLocation.radius || 0.1) * 1000} /* Radio en metros (convertir de km) */
+                    fillColor="rgba(255, 215, 0, 0.2)"
+                    strokeColor="rgba(255, 215, 0, 0.5)"
+                    strokeWidth={2}
+                  />
+                )}
+              </>
             )}
           </MapView>
         </View>
@@ -383,7 +442,7 @@ const LocationComponent = ({
       </View>
     </View>
   );
-};
+});
 
 const styles = StyleSheet.create({
   container: {
@@ -451,6 +510,17 @@ const styles = StyleSheet.create({
     color: '#fff3e5',
     fontSize: 14,
     fontWeight: '500',
+  },
+  permissionContainer: {
+    marginTop: 15,
+    padding: 10,
+    backgroundColor: 'rgba(0, 0, 0, 0.2)',
+    borderRadius: 8,
+  },
+  permissionText: {
+    color: '#fff3e5',
+    fontSize: 14,
+    textAlign: 'center',
   },
 });
 

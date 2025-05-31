@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   View, 
   Text, 
@@ -18,12 +18,12 @@ import { useLanguage } from '../context/LanguageContext';
 import { getApiUrl } from '../services/platform-config';
 import * as api from '../services/api';
 import { Ionicons } from '@expo/vector-icons';
-import MapView, { Marker, Circle } from 'react-native-maps';
 import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import VoiceListener from '../components/VoiceListener'; // Importar el componente de escucha de voz
 import TaskConfirmationModal from '../components/TaskConfirmationModal'; // Importar modal de confirmación
 import TaskTimer from '../components/TaskTimer'; // Importar el nuevo componente de temporizador
+import LocationComponent from '../components/LocationComponent'; // Importar el componente de ubicación
 
 const TaskDetailsScreen = ({ route, navigation }) => {
   const { taskId } = route.params;
@@ -50,6 +50,9 @@ const TaskDetailsScreen = ({ route, navigation }) => {
   const [confirmationLoading, setConfirmationLoading] = useState(false); // Estado para indicar carga durante la confirmación
   const [hasShownConfirmation, setHasShownConfirmation] = useState(false); // Estado para controlar si ya se mostró la confirmación
   // Ya no necesitamos timerIntervalRef, se maneja en el componente TaskTimer
+  
+  // Referencia al componente de ubicación
+  const locationComponentRef = useRef(null);
 
   // Función para manejar cuando el tiempo expira
   const handleTimeExpired = () => {
@@ -1038,6 +1041,36 @@ const toggleComplete = async () => {
     }
   };
 
+  useEffect(() => {
+    loadTaskDetails();
+    loadTaskActivities();
+    
+    // Verificar si el temporizador debe estar corriendo
+    setupTimer();
+    
+    return () => {
+      // Limpiar cualquier suscripción de ubicación cuando se desmonte el componente
+      if (locationSubscription) {
+        locationSubscription.remove();
+      }
+      
+      // Detenemos el seguimiento de ubicación al salir
+      stopLocationTracking();
+    };
+  }, []);
+  
+  // Efecto para centrar el mapa en la ubicación de la tarea cuando se carga
+  useEffect(() => {
+    if (task && task.location && task.location.coordinates && 
+        task.location.coordinates.length === 2 && locationComponentRef.current) {
+      // Centrar el mapa en la ubicación de la tarea
+      locationComponentRef.current.centerOnLocation(
+        task.location.coordinates[1], // latitude
+        task.location.coordinates[0]  // longitude
+      );
+    }
+  }, [task, locationComponentRef.current]);
+
   if (loading) {
     return (
       <View style={styles.centerContainer}>
@@ -1184,45 +1217,18 @@ const toggleComplete = async () => {
         {hasLocation && (
           <View style={styles.mapContainer}>
             <Text style={styles.mapLabel}>{t('taskLocation')}:</Text>
-            <MapView
-              style={styles.map}
-              initialRegion={{
+            <LocationComponent
+              ref={locationComponentRef}
+              mapOnly={true}
+              customHeight={200}
+              taskLocation={{
                 latitude: task.location.coordinates[1],
                 longitude: task.location.coordinates[0],
-                latitudeDelta: 0.02,
-                longitudeDelta: 0.02,
+                title: task.title,
+                description: task.description,
+                radius: task.radius
               }}
-            >
-              <Marker
-                coordinate={{
-                  latitude: task.location.coordinates[1],
-                  longitude: task.location.coordinates[0],
-                }}
-                title={task.title}
-              />
-              {task.radius && (
-                <Circle
-                  center={{
-                    latitude: task.location.coordinates[1],
-                    longitude: task.location.coordinates[0],
-                  }}
-                  radius={task.radius * 1000} // Convert km to meters for map display
-                  strokeWidth={2}
-                  strokeColor={'#1877F2'} // Color azul de Facebook
-                  fillColor={'rgba(24, 119, 242, 0.2)'} // Color azul de Facebook con transparencia
-                />
-              )}
-              {userLocation && (
-                <Marker
-                  coordinate={{
-                    latitude: userLocation.latitude,
-                    longitude: userLocation.longitude,
-                  }}
-                  title={t('yourLocation')}
-                  pinColor="#4CAF50"
-                />
-              )}
-            </MapView>
+            />
             <Text style={styles.locationName}>
               {task.locationName || `${task.location.coordinates[1]}, ${task.location.coordinates[0]}`}
             </Text>
@@ -1236,6 +1242,42 @@ const toggleComplete = async () => {
             ) : (
               <Text style={styles.outsideRadius}>{t('outsideTaskRadius')}</Text>
             )}
+            
+            {/* Botón para abrir la ubicación en mapas nativos */}
+            <TouchableOpacity 
+              style={styles.directionsButton}
+              onPress={openInMaps}
+            >
+              <Ionicons name="navigate-outline" size={20} color="#fff" style={styles.buttonIcon} />
+              <Text style={styles.directionsButtonText}>
+                {t('navigateToHere') || 'Navigate to here'}
+              </Text>
+            </TouchableOpacity>
+            
+            {/* Botón de iniciar/finalizar tarea integrado en el contenedor de mapa */}
+            <View style={styles.mapActionButtonContainer}>
+              {!taskStarted ? (
+                <TouchableOpacity 
+                  style={[
+                    styles.startButton,
+                    !isWithinRadius && styles.disabledButton
+                  ]}
+                  disabled={!isWithinRadius || task.completed}
+                  onPress={handleStartTask}
+                >
+                  <Ionicons name="play" size={20} color="#fff" style={styles.buttonIcon} />
+                  <Text style={styles.startButtonText}>{t('startTask')}</Text>
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity 
+                  style={styles.endButton}
+                  onPress={handleEndTask}
+                >
+                  <Ionicons name="stop" size={20} color="#fff" style={styles.buttonIcon} />
+                  <Text style={styles.endButtonText}>{t('endTask')}</Text>
+                </TouchableOpacity>
+              )}
+            </View>
             
             {/* Botón para abrir la ubicación en mapas nativos */}
             <TouchableOpacity 
