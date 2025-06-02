@@ -466,7 +466,24 @@ exports.getNearbyTasks = async (req, res) => {
 // Actualizar una tarea
 exports.updateTask = async (req, res) => {
   try {
-    const { title, description, completed, location, radius, locationName, handsFreeMode, status } = req.body;
+    const { 
+      title, 
+      description, 
+      completed, 
+      location, 
+      radius, 
+      locationName, 
+      handsFreeMode, 
+      status,
+      // Añadir los campos que faltaban
+      fileNumber,
+      keywords,
+      timeLimit,
+      userId,
+      userIds
+    } = req.body;
+    
+    console.log('Actualizando tarea con datos:', JSON.stringify(req.body, null, 2));
     
     // Buscar la tarea
     const task = await Task.findById(req.params.id);
@@ -487,6 +504,34 @@ exports.updateTask = async (req, res) => {
     if (description !== undefined) task.description = description;
     if (completed !== undefined) task.completed = completed;
     if (handsFreeMode !== undefined) task.handsFreeMode = handsFreeMode === true; // Asegurar que se guarde como booleano
+    
+    // Actualizar campos que faltaban
+    if (fileNumber !== undefined) {
+      console.log(`Actualizando fileNumber: ${task.fileNumber} -> ${fileNumber}`);
+      task.fileNumber = fileNumber;
+    }
+    
+    if (keywords !== undefined) {
+      console.log(`Actualizando keywords: ${task.keywords} -> ${keywords}`);
+      task.keywords = keywords;
+    }
+    
+    if (timeLimit !== undefined) {
+      console.log(`Actualizando timeLimit: ${task.timeLimit} -> ${timeLimit}`);
+      // Asegurar que timeLimit es un número
+      task.timeLimit = typeof timeLimit === 'string' ? Number(timeLimit) : timeLimit;
+    }
+    
+    // Actualizar asignación de usuarios si se proporcionan
+    if (userId !== undefined) {
+      console.log(`Actualizando userId: ${task.userId} -> ${userId}`);
+      task.userId = userId;
+    }
+    
+    if (userIds !== undefined && Array.isArray(userIds)) {
+      console.log(`Actualizando userIds: ${task.userIds} -> ${userIds}`);
+      task.userIds = userIds;
+    }
     
     // Manejar cambios de estado
     let statusChanged = false;
