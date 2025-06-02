@@ -23,7 +23,8 @@ const TaskForm = ({
   initialData = {}, 
   onSubmit, 
   isEditing = false,
-  formTitle = 'Add Task' 
+  formTitle = 'Add Task',
+  showUserSelector
 }) => {
   const { user } = useAuth();
   const { t } = useLanguage();
@@ -345,6 +346,24 @@ const TaskForm = ({
         placeholderTextColor="#a8a8a8"
       />
       
+      {/* Botón para seleccionar usuarios (solo para administradores) */}
+      {user?.isAdmin && (
+        <View style={styles.sectionContainer}>
+          <Text style={styles.sectionTitle}>{t('assignUsers') || 'Asignar usuarios'}</Text>
+          <TouchableOpacity 
+            style={styles.userSelectorButton}
+            onPress={() => showUserSelector && showUserSelector()}
+          >
+            <Ionicons name="people" size={20} color="#fff" style={styles.buttonIcon} />
+            <Text style={styles.userSelectorButtonText}>
+              {selectedUserIds.length > 0 ? 
+                `${t('assignedUsers') || 'Usuarios asignados'}: ${selectedUserIds.length}` : 
+                t('selectUsers') || 'Seleccionar usuarios'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
+      
       {/* Campo para tiempo límite (solo para administradores) */}
       {user?.isAdmin && (
         <View style={styles.timeLimitContainer}>
@@ -498,15 +517,38 @@ const TaskForm = ({
 
 const styles = StyleSheet.create({
   formContainer: {
-    padding: 16,
+    padding: 15,
     backgroundColor: '#2e2e2e',
   },
   formTitle: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: 'bold',
-    color: '#fff3e5',
     marginBottom: 20,
+    color: '#fff3e5',
     textAlign: 'center'
+  },
+  sectionContainer: {
+    marginBottom: 15,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    marginBottom: 8,
+    color: '#fff3e5',
+  },
+  userSelectorButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 243, 229, 0.2)',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 10,
+  },
+  buttonIcon: {
+    marginRight: 10,
+  },
+  userSelectorButtonText: {
+    color: '#fff3e5',
+    fontSize: 16,
   },
   inputContainer: {
     marginBottom: 15,
