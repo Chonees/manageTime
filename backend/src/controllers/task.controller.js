@@ -108,9 +108,13 @@ try {
 // Crear una nueva tarea
 exports.createTask = async (req, res) => {
   try {
-    const { title, description, userId, timeLimit, location, radius, locationName, handsFreeMode, status, keywords } = req.body;
+    const { title, description, userId, timeLimit, location, radius, locationName, handsFreeMode, status, keywords, fileNumber } = req.body;
     
     console.log('Datos completos recibidos para crear tarea:', JSON.stringify(req.body, null, 2));
+    
+    if (!fileNumber) {
+      return res.status(400).json({ message: 'El número de archivo es requerido' });
+    }
     
     if (!title) {
       return res.status(400).json({ message: 'El título de la tarea es requerido' });
@@ -129,6 +133,7 @@ exports.createTask = async (req, res) => {
     
     // Crear nueva tarea
     const taskData = {
+      fileNumber,
       title,
       description,
       userId: assignedUserId,
@@ -226,10 +231,15 @@ exports.createAssignedTask = async (req, res) => {
       status, 
       keywords,
       timeLimit,  
-      timeLimitSet  
+      timeLimitSet,
+      fileNumber
     } = req.body;
     
     console.log('Admin creando tarea asignada con datos:', req.body);
+    
+    if (!fileNumber) {
+      return res.status(400).json({ message: 'El número de archivo es requerido' });
+    }
     
     if (!title) {
       return res.status(400).json({ message: 'El título de la tarea es requerido' });
@@ -258,6 +268,7 @@ exports.createAssignedTask = async (req, res) => {
     
     // Crear nueva tarea asignada a los usuarios especificados
     const taskData = {
+      fileNumber,
       title,
       description,
       userId: assignedUserIds[0], // Para compatibilidad, usamos el primer usuario

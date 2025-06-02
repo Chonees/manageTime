@@ -1,6 +1,11 @@
 const mongoose = require('mongoose');
 
 const taskSchema = new mongoose.Schema({
+  fileNumber: {
+    type: String,
+    required: true,
+    trim: true
+  },
   title: {
     type: String,
     required: true,
