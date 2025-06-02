@@ -324,6 +324,9 @@ export const translations = {
     selectedUser: 'Selected User',
     assignUser: 'Assign User',
     taskTitleRequired: 'Task title is required',
+    fileNumber: 'File Number',
+    enterFileNumber: 'Enter file number',
+    fileNumberRequired: 'File number is required',
     success: 'Success',
     total: 'Total',
     loadingTasks: 'Loading tasks...',
@@ -859,6 +862,9 @@ export const translations = {
     activityCoordinates: 'Coordenadas',
     activityDuration: 'Duración',
     activityTask: 'Tarea Asociada',
+    fileNumber: 'Número de archivo',
+    enterFileNumber: 'Ingrese el número de archivo',
+    fileNumberRequired: 'Se requiere ingresar un número de archivo',
     
     // Availability status
     available: 'Disponible',

@@ -11,7 +11,8 @@ import {
   StatusBar,
   SafeAreaView,
   Linking,
-  Platform
+  Platform,
+  Modal
 } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
@@ -24,6 +25,7 @@ import VoiceListener from '../components/VoiceListener'; // Importar el componen
 import TaskConfirmationModal from '../components/TaskConfirmationModal'; // Importar modal de confirmación
 import TaskTimer from '../components/TaskTimer'; // Importar el nuevo componente de temporizador
 import LocationComponent from '../components/LocationComponent'; // Importar el componente de ubicación
+import TaskForm from '../components/TaskForm'; // Importar el componente de formulario de tareas
 
 const TaskDetailsScreen = ({ route, navigation }) => {
   const { taskId } = route.params;
@@ -49,7 +51,11 @@ const TaskDetailsScreen = ({ route, navigation }) => {
   const [showTaskConfirmation, setShowTaskConfirmation] = useState(false); // Estado para mostrar el modal de confirmación
   const [confirmationLoading, setConfirmationLoading] = useState(false); // Estado para indicar carga durante la confirmación
   const [hasShownConfirmation, setHasShownConfirmation] = useState(false); // Estado para controlar si ya se mostró la confirmación
-  // Ya no necesitamos timerIntervalRef, se maneja en el componente TaskTimer
+  const [showEditModal, setShowEditModal] = useState(false); // Estados para el modal de edición
+  const [isUpdatingTask, setIsUpdatingTask] = useState(false); // Estado para indicar cuando se está actualizando la tarea
+  const [showUserSelector, setShowUserSelector] = useState(false);
+  const [activeUsers, setActiveUsers] = useState([]);
+  const [selectedUserIds, setSelectedUserIds] = useState([]); 
   
   // Referencia al componente de ubicación
   const locationComponentRef = useRef(null);
@@ -96,6 +102,11 @@ const TaskDetailsScreen = ({ route, navigation }) => {
 
   useEffect(() => {
     loadTaskDetails();
+    
+    // Si el usuario es administrador, cargar la lista de usuarios activos
+    if (user?.isAdmin) {
+      loadActiveUsers();
+    }
 
     return () => {
       if (locationSubscription) {
@@ -104,6 +115,32 @@ const TaskDetailsScreen = ({ route, navigation }) => {
       }
     };
   }, [taskId]);
+  
+  // Función para cargar usuarios activos
+  const loadActiveUsers = async () => {
+    try {
+      const users = await api.getUsers();
+      // Filtrar solo usuarios activos y no administradores
+      setActiveUsers(users.filter(user => user.isActive && !user.isAdmin));
+      console.log('Usuarios activos cargados:', users.length);
+    } catch (error) {
+      console.error('Error al cargar usuarios activos:', error);
+    }
+  };
+  
+  // Función para seleccionar o deseleccionar un usuario
+  const selectUser = (userId) => {
+    setSelectedUserIds(prevSelected => {
+      if (prevSelected.includes(userId)) {
+        // Si ya está seleccionado, deseleccionarlo
+        return prevSelected.filter(id => id !== userId);
+      } else {
+        // Limitar a 2 usuarios como máximo
+        const newSelection = [...prevSelected, userId].slice(0, 2);
+        return newSelection;
+      }
+    });
+  };
 
   // Efecto para iniciar el temporizador solo cuando la tarea está en camino o en el sitio
   useEffect(() => {
@@ -285,16 +322,22 @@ const TaskDetailsScreen = ({ route, navigation }) => {
       // Si la tarea no está completada y no está en estado "on_site", actualizar estado
       if (!task.completed) {
         console.log('📱 Actualizando tarea a estado "on_site"');
-        api.updateTask(task._id, { status: 'on_site' })
-          .then(updatedTask => {
-            console.log('✅ Tarea actualizada a estado on_site:', updatedTask);
-            setTask(updatedTask);
-            setHasLoggedOnSite(true); // Marcar que ya se ha registrado la llegada
-            console.log('🔄 hasLoggedOnSite establecido a TRUE para evitar registros duplicados');
-          })
-          .catch(error => {
-            console.error('❌ Error al actualizar tarea a on_site:', error);
-          });
+        try {
+          api.updateTask(task._id, { status: 'on_site' })
+            .then(updatedTask => {
+              console.log('✅ Tarea actualizada a estado on_site:', updatedTask);
+              setTask(updatedTask);
+              setHasLoggedOnSite(true); // Marcar que ya se ha registrado la llegada
+              console.log('🔄 hasLoggedOnSite establecido a TRUE para evitar registros duplicados');
+            })
+            .catch(error => {
+              console.error('❌ Error al actualizar tarea a on_site:', error);
+              Alert.alert(t('error') || 'Error', t('errorUpdatingTask') || 'Error al actualizar tarea a on_site');
+            });
+        } catch (error) {
+          console.error('❌❌ Error crítico al actualizar tarea a on_site:', error);
+          Alert.alert(t('error') || 'Error', `Error al actualizar tarea: ${error.message}`);
+        }
       }
     }
   }, [isWithinRadius, task, hasLoggedOnSite]);
@@ -815,6 +858,7 @@ const toggleComplete = async () => {
     }
   };
 
+  // Cargar actividades de la tarea
   const loadTaskActivities = async () => {
     try {
       const activities = await api.getTaskActivities(taskId);
@@ -826,6 +870,44 @@ const toggleComplete = async () => {
     }
   };
 
+  
+  // Función para editar la tarea actual (solo administradores)
+  const handleEditTask = async (updatedTaskData) => {
+    if (!user?.isAdmin) {
+      Alert.alert(t('error'), t('adminPermissionRequired'));
+      return;
+    }
+    
+    try {
+      setIsUpdatingTask(true);
+      
+      console.log('Datos recibidos del formulario para actualizar:', JSON.stringify(updatedTaskData, null, 2));
+      
+      // Ahora el backend ha sido actualizado para manejar todos los campos
+      // Podemos enviar los datos directamente sin modificaciones
+      const updatedTask = await api.updateTask(task._id, updatedTaskData);
+      
+      console.log('Respuesta del servidor:', JSON.stringify(updatedTask, null, 2));
+      
+      // Actualizar el estado de la tarea con los datos actualizados
+      setTask(updatedTask);
+      
+      // Cerrar el modal de edición
+      setShowEditModal(false);
+      
+      // Mostrar mensaje de éxito
+      Alert.alert(t('success'), t('taskUpdatedSuccessfully'));
+      
+      // Refrescar los detalles de la tarea para obtener la versión más reciente del servidor
+      loadTaskDetails();
+    } catch (error) {
+      console.error('Error al actualizar la tarea:', error);
+      Alert.alert(t('error'), t('errorUpdatingTask'));
+    } finally {
+      setIsUpdatingTask(false);
+    }
+  };
+  
   // Cargar actividades cuando se carga la tarea
   useEffect(() => {
     if (task && task._id) {
@@ -1031,7 +1113,7 @@ const toggleComplete = async () => {
         .catch(err => {
           console.error('Error al abrir la aplicación de mapas:', err);
           Alert.alert(
-            t('error') || 'Error', 
+            t('error') || 'Error',
             t('cannotOpenMaps') || 'No se pudo abrir la aplicación de mapas'
           );
         });
@@ -1040,24 +1122,6 @@ const toggleComplete = async () => {
       Alert.alert(t('error') || 'Error', t('mapError') || 'Error al abrir mapas');
     }
   };
-
-  useEffect(() => {
-    loadTaskDetails();
-    loadTaskActivities();
-    
-    // Verificar si el temporizador debe estar corriendo
-    setupTimer();
-    
-    return () => {
-      // Limpiar cualquier suscripción de ubicación cuando se desmonte el componente
-      if (locationSubscription) {
-        locationSubscription.remove();
-      }
-      
-      // Detenemos el seguimiento de ubicación al salir
-      stopLocationTracking();
-    };
-  }, []);
   
   // Efecto para centrar el mapa en la ubicación de la tarea cuando se carga
   useEffect(() => {
@@ -1172,6 +1236,15 @@ const toggleComplete = async () => {
               <Ionicons name="trash-outline" size={24} color="#e74c3c" />
             </TouchableOpacity>
           )}
+          {user?.isAdmin && task && (
+            <TouchableOpacity 
+              style={styles.editButton}
+              onPress={() => setShowEditModal(true)}
+            >
+              <Ionicons name="create-outline" size={20} color="#fff" style={styles.buttonIcon} />
+              <Text style={styles.editButtonText}>{t('editTask')}</Text>
+            </TouchableOpacity>
+          )}
         </View>
         
         <View style={styles.titleContainer}>
@@ -1202,12 +1275,12 @@ const toggleComplete = async () => {
             </View>
           </View>
           
-          {(user?.isAdmin || task.userId === user?._id) && (
+          {(user?.isAdmin || (task.userId && task.userId === user?._id)) && (
             <View style={styles.infoSection}>
               <Text style={styles.infoLabel}>{t('assignedTo')}:</Text>
               <Text style={styles.value}>
                 {assignedUser ? assignedUser.username : 
-                 (typeof task.userId === 'object' && task.userId.username) ? task.userId.username : 
+                 (task.userId && typeof task.userId === 'object' && task.userId.username) ? task.userId.username : 
                  t('noUserAssigned')}
               </Text>
             </View>
@@ -1250,43 +1323,7 @@ const toggleComplete = async () => {
             >
               <Ionicons name="navigate-outline" size={20} color="#fff" style={styles.buttonIcon} />
               <Text style={styles.directionsButtonText}>
-                {t('navigateToHere') || 'Navigate to here'}
-              </Text>
-            </TouchableOpacity>
-            
-            {/* Botón de iniciar/finalizar tarea integrado en el contenedor de mapa */}
-            <View style={styles.mapActionButtonContainer}>
-              {!taskStarted ? (
-                <TouchableOpacity 
-                  style={[
-                    styles.startButton,
-                    !isWithinRadius && styles.disabledButton
-                  ]}
-                  disabled={!isWithinRadius || task.completed}
-                  onPress={handleStartTask}
-                >
-                  <Ionicons name="play" size={20} color="#fff" style={styles.buttonIcon} />
-                  <Text style={styles.startButtonText}>{t('startTask')}</Text>
-                </TouchableOpacity>
-              ) : (
-                <TouchableOpacity 
-                  style={styles.endButton}
-                  onPress={handleEndTask}
-                >
-                  <Ionicons name="stop" size={20} color="#fff" style={styles.buttonIcon} />
-                  <Text style={styles.endButtonText}>{t('endTask')}</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-            
-            {/* Botón para abrir la ubicación en mapas nativos */}
-            <TouchableOpacity 
-              style={styles.directionsButton}
-              onPress={openInMaps}
-            >
-              <Ionicons name="navigate-outline" size={20} color="#fff" style={styles.buttonIcon} />
-              <Text style={styles.directionsButtonText}>
-                {t('navigateToHere') || 'Navigate to here'}
+                {t('navigateToHere') || 'Navegar hasta aquí'}
               </Text>
             </TouchableOpacity>
             
@@ -1383,6 +1420,131 @@ const toggleComplete = async () => {
           isLoading={confirmationLoading}
         />
       )}
+      
+      {/* Modal para editar tarea */}
+      <Modal
+        visible={showEditModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowEditModal(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>{t('editTask')}</Text>
+              <TouchableOpacity onPress={() => setShowEditModal(false)}>
+                <Ionicons name="close" size={24} color="#fff3e5" />
+              </TouchableOpacity>
+            </View>
+            
+            {/* Botón para seleccionar usuarios */}
+            {user?.isAdmin && (
+              <TouchableOpacity 
+                style={styles.userSelectorButton}
+                onPress={() => {
+                  // Inicializar usuarios seleccionados basado en la tarea actual
+                  if (task?.userIds && Array.isArray(task.userIds) && task.userIds.length > 0) {
+                    setSelectedUserIds(task.userIds);
+                  } else if (task?.userId) {
+                    setSelectedUserIds([task.userId]);
+                  } else {
+                    setSelectedUserIds([]);
+                  }
+                  setShowUserSelector(true);
+                }}
+              >
+                <Ionicons name="people" size={20} color="#fff" style={styles.buttonIcon} />
+                <Text style={styles.userSelectorButtonText}>
+                  {t('assignUsers') || 'Asignar usuarios'}
+                </Text>
+              </TouchableOpacity>
+            )}
+            
+            {task && (
+              <TaskForm 
+                isEditing={true} 
+                initialData={{...task, userIds: selectedUserIds.length > 0 ? selectedUserIds : (Array.isArray(task.userIds) ? task.userIds : [])}}
+                onSubmit={(updatedTaskData) => {
+                  // Asegurarnos de que los usuarios seleccionados se incluyan en los datos
+                  const finalData = {
+                    ...updatedTaskData,
+                    userIds: selectedUserIds.length > 0 ? selectedUserIds : (Array.isArray(task.userIds) ? task.userIds : [])
+                  };
+                  handleEditTask(finalData);
+                }}
+                isSubmitting={isUpdatingTask}
+              />
+            )}
+          </View>
+        </View>
+      </Modal>
+      
+      {/* Modal para seleccionar usuarios activos */}
+      <Modal
+        visible={showUserSelector}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowUserSelector(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>{t('selectUsers') || 'Seleccionar usuarios'}</Text>
+              <TouchableOpacity onPress={() => setShowUserSelector(false)}>
+                <Ionicons name="close" size={24} color="#fff3e5" />
+              </TouchableOpacity>
+            </View>
+            
+            <ScrollView style={styles.userList}>
+              {activeUsers.length > 0 ? (
+                activeUsers.map(activeUser => (
+                  <TouchableOpacity
+                    key={activeUser._id}
+                    style={[
+                      styles.userItem,
+                      selectedUserIds.includes(activeUser._id) && styles.selectedUserItem
+                    ]}
+                    onPress={() => selectUser(activeUser._id)}
+                  >
+                    <View style={styles.userItemContent}>
+                      <View style={styles.userIcon}>
+                        <Ionicons
+                          name="person-circle"
+                          size={40}
+                          color={selectedUserIds.includes(activeUser._id) ? '#4CAF50' : '#fff3e5'}
+                        />
+                      </View>
+                      <View style={styles.userInfo}>
+                        <Text style={styles.userName}>{activeUser.name || activeUser.username || 'Usuario'}</Text>
+                        <Text style={styles.userEmail}>{activeUser.email || 'Sin email'}</Text>
+                      </View>
+                      {selectedUserIds.includes(activeUser._id) && (
+                        <Ionicons name="checkmark-circle" size={24} color="#4CAF50" />
+                      )}
+                    </View>
+                  </TouchableOpacity>
+                ))
+              ) : (
+                <Text style={styles.noUsersText}>{t('noActiveUsers') || 'No hay usuarios activos disponibles'}</Text>
+              )}
+            </ScrollView>
+            
+            <View style={styles.userSelectorFooter}>
+              <Text style={styles.selectedCountText}>
+                {selectedUserIds.length} {t('usersSelected') || 'usuario(s) seleccionado(s)'}
+              </Text>
+              <TouchableOpacity
+                style={styles.confirmSelectionButton}
+                onPress={() => setShowUserSelector(false)}
+              >
+                <Text style={styles.confirmSelectionButtonText}>
+                  {t('confirm') || 'Confirmar'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -1752,6 +1914,129 @@ const styles = StyleSheet.create({
     color: 'rgba(255, 243, 229, 0.7)',
   },
   // Los estilos del temporizador se han movido al componente TaskTimer
+  editButton: {
+    backgroundColor: '#007BFF',
+    padding: 12,
+    borderRadius: 15,
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginBottom: 15,
+    marginHorizontal: 10,
+  },
+  editButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    width: '95%',
+    maxHeight: '90%',
+    backgroundColor: '#2e2e2e',
+    borderRadius: 10,
+    padding: 20,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 15,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 243, 229, 0.2)',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#fff3e5',
+  },
+  // Estilos para selector de usuarios
+  userSelectorButton: {
+    backgroundColor: '#4A90E2',
+    padding: 12,
+    borderRadius: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 15,
+    marginHorizontal: 10,
+  },
+  userSelectorButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  userList: {
+    maxHeight: 300,
+  },
+  userItem: {
+    padding: 12,
+    borderRadius: 10,
+    marginBottom: 8,
+    backgroundColor: '#1c1c1c',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 243, 229, 0.1)',
+  },
+  selectedUserItem: {
+    borderColor: '#4CAF50',
+    borderWidth: 1,
+    backgroundColor: 'rgba(76, 175, 80, 0.1)',
+  },
+  userItemContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  userIcon: {
+    marginRight: 10,
+  },
+  userInfo: {
+    flex: 1,
+  },
+  userName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#fff3e5',
+  },
+  userEmail: {
+    fontSize: 14,
+    color: 'rgba(255, 243, 229, 0.7)',
+  },
+  noUsersText: {
+    color: '#fff3e5',
+    textAlign: 'center',
+    padding: 20,
+    fontSize: 16,
+  },
+  userSelectorFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 15,
+    paddingTop: 15,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 243, 229, 0.1)',
+  },
+  selectedCountText: {
+    color: '#fff3e5',
+    fontSize: 14,
+  },
+  confirmSelectionButton: {
+    backgroundColor: '#4CAF50',
+    padding: 10,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  confirmSelectionButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
 });
 
 export default TaskDetailsScreen;
