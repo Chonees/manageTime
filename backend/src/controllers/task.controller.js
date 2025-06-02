@@ -702,9 +702,9 @@ exports.updateTask = async (req, res) => {
         const activityObj = activity.toObject ? activity.toObject() : activity;
         if (!activityObj.metadata) activityObj.metadata = {};
         
-        // Añadir información adicional para la notificación
-        activityObj.metadata.username = req.user.username;
-        activityObj.metadata.title = task.title;
+        // Añadir información adicional para la notificación - verificar que req.user existe
+        activityObj.metadata.username = req.user && req.user.username ? req.user.username : 'Usuario';
+        activityObj.metadata.title = task.title || 'Tarea sin título';
         
         // Notificar SOLO a los administradores (no al propietario, ya fue notificado arriba si corresponde)
         await notificationUtil.notifyAdminActivity(activityObj, false);
