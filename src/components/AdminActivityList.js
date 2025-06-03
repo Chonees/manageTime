@@ -324,7 +324,7 @@ const AdminActivityList = () => {
       case 'location_exit':
         return '#f44336'; // Rojo
       case 'location_check':
-        return '#42a5f5'; // Azul claro
+        return '#1976d2'; // Azul oscuro pastel
       case 'task_complete':
         return '#4CAF50'; // Azul
       case 'task_create':
@@ -804,7 +804,7 @@ const AdminActivityList = () => {
       </Modal>
     );
   };
-
+  
   // Renderizar los botones de filtro
   const renderFilterButtons = () => {
     return (
@@ -830,52 +830,6 @@ const AdminActivityList = () => {
               ]}
             >
               {t('allActivities')}
-            </Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity
-            style={[styles.filterButton, filterType === 'login' && styles.filterButtonActive, { marginTop: 4 }]}
-            onPress={() => {
-              setFilterType('login');
-              setTimeFilter(null); // Limpiar filtro de hora al cambiar de tipo
-            }}
-          >
-            <Ionicons
-              name="log-in-outline"
-              size={Math.min(width * 0.05, 18)}
-              color={filterType === 'login' ? '#2e2e2e' : '#fff3e5'}
-              style={{ marginRight: 4 }}
-            />
-            <Text
-              style={[
-                styles.filterButtonText,
-                filterType === 'login' && styles.filterButtonTextActive
-              ]}
-            >
-              {t('logins')}
-            </Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity
-            style={[styles.filterButton, filterType === 'task' && styles.filterButtonActive]}
-            onPress={() => {
-              setFilterType('task');
-              setTimeFilter(null); // Limpiar filtro de hora al cambiar de tipo
-            }}
-          >
-            <Ionicons
-              name="checkmark-circle-outline"
-              size={Math.min(width * 0.05, 18)}
-              color={filterType === 'task' ? '#2e2e2e' : '#fff3e5'}
-              style={{ marginRight: 4 }}
-            />
-            <Text
-              style={[
-                styles.filterButtonText,
-                filterType === 'task' && styles.filterButtonTextActive
-              ]}
-            >
-              {t('tasks')}
             </Text>
           </TouchableOpacity>
           
@@ -1032,7 +986,7 @@ const AdminActivityList = () => {
           ListEmptyComponent={
             loading ? (
               <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color="#4A90E2" />
+                <ActivityIndicator size="large" color="#fff3e5" />
                 <Text style={styles.loadingText}>{t('loading')}</Text>
               </View>
             ) : (
@@ -1047,9 +1001,9 @@ const AdminActivityList = () => {
                 <Text style={styles.loadMoreButtonText}>{t('loadMore')}</Text>
               </TouchableOpacity>
             ) : pagination.currentPage > 1 && loading ? (
-              <View style={styles.loadingMoreContainer}>
-                <ActivityIndicator size="small" color="#4A90E2" />
-                <Text style={styles.loadingMoreText}>{t('loadingMore')}</Text>
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color="#fff3e5" />
+                <Text style={styles.loadingText}>{t('loading')}</Text>
               </View>
             ) : null
           }
@@ -1071,7 +1025,7 @@ const AdminActivityList = () => {
           ListEmptyComponent={
             loading ? (
               <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color="#4A90E2" />
+                <ActivityIndicator size="large" color="#fff3e5" />
                 <Text style={styles.loadingText}>{t('loading')}</Text>
               </View>
             ) : (
@@ -1086,9 +1040,9 @@ const AdminActivityList = () => {
                 <Text style={styles.loadMoreButtonText}>{t('loadMore')}</Text>
               </TouchableOpacity>
             ) : pagination.currentPage > 1 && loading ? (
-              <View style={styles.loadingMoreContainer}>
-                <ActivityIndicator size="small" color="#4A90E2" />
-                <Text style={styles.loadingMoreText}>{t('loadingMore')}</Text>
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color="#fff3e5" />
+                <Text style={styles.loadingText}>{t('loading')}</Text>
               </View>
             ) : null
           }
@@ -1111,7 +1065,7 @@ const styles = StyleSheet.create({
   mapButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#42a5f5',
+    backgroundColor: '#1976d2',
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 12,
@@ -1162,7 +1116,7 @@ const styles = StyleSheet.create({
   },
   modalCoordinates: {
     fontSize: Math.min(width * 0.035, 14),
-    color: '#42a5f5',
+    color: '#1976d2',
     marginBottom: 8,
     fontWeight: '500',
   },
@@ -1179,7 +1133,7 @@ const styles = StyleSheet.create({
     marginBottom: 15,
   },
   openMapsButton: {
-    backgroundColor: '#42a5f5',
+    backgroundColor: '#1976d2',
     padding: 12,
     borderRadius: 10,
     alignItems: 'center',
@@ -1273,18 +1227,25 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,
     shadowRadius: 4,
+    alignItems: 'center',
   },
   simpleTimeContainer: {
     marginVertical: 20,
+    width: '100%',
+    alignItems: 'center',
   },
   simpleTimeInputGroup: {
     marginBottom: 16,
+    width: '90%',
+    alignItems: 'center',
   },
   simpleTimeLabel: {
     fontSize: Math.min(width * 0.04, 16),
     color: '#fff3e5',
     marginBottom: 10,
     fontWeight: 'bold',
+    textAlign: 'center',
+    width: '100%',
   },
   timeInputContainer: {
     flexDirection: 'row',
