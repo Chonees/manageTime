@@ -326,13 +326,13 @@ const AdminActivityList = () => {
       case 'location_check':
         return '#42a5f5'; // Azul claro
       case 'task_complete':
-        return '#2196f3'; // Azul
+        return '#4CAF50'; // Azul
       case 'task_create':
-        return '#9c27b0'; // Púrpura
+        return '#6d4c41'; // Moka
       case 'task_update':
-        return '#ff9800'; // Naranja
+        return '#0277bd'; // Azul
       case 'task_delete':
-        return '#795548'; // Marrón
+        return '#ff5252'; // Rojo
       case 'started_working':
       case 'clock_in':
         return '#4CAF50'; // Verde
@@ -627,7 +627,12 @@ const AdminActivityList = () => {
     return (
       <View style={styles.activityItem}>
         <View style={[styles.activityIconContainer, { backgroundColor: color }]}>
-          <Ionicons name={icon} size={24} color="white" />
+          <Ionicons 
+            name={icon} 
+            size={24} 
+            color="white" 
+            style={[styles.iconCentered, type === 'task_update' ? styles.updateIconFix : null]} 
+          />
         </View>
         
         <View style={styles.activityContent}>
@@ -689,7 +694,7 @@ const AdminActivityList = () => {
         <View style={styles.modalOverlay}>
           <View style={styles.timeModalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>{t('filterByTime')}</Text>
+              <Text style={styles.modalTitle}>{t('selectTimeRange')}</Text>
               <TouchableOpacity onPress={() => setTimeModalVisible(false)}>
                 <Ionicons name="close" size={24} color="#fff3e5" />
               </TouchableOpacity>
@@ -784,14 +789,14 @@ const AdminActivityList = () => {
                 style={styles.modalCancelButton} 
                 onPress={clearTimeFilter}
               >
-                <Text style={styles.modalCancelButtonText}>{t('clearFilter')}</Text>
+                <Text style={styles.modalCancelButtonText}>{t('clear')}</Text>
               </TouchableOpacity>
               
               <TouchableOpacity 
                 style={styles.modalApplyButton} 
                 onPress={applyTimeFilter}
               >
-                <Text style={styles.modalApplyButtonText}>{t('applyFilter')}</Text>
+                <Text style={styles.modalApplyButtonText}>{t('apply')}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -806,7 +811,7 @@ const AdminActivityList = () => {
       <View>
         <View style={styles.filterContainer}>
           <TouchableOpacity
-            style={[styles.filterButton, filterType === 'all' && styles.filterButtonActive]}
+            style={[styles.filterButton, filterType === 'all' && styles.filterButtonActive, { marginTop: 6 }]}
             onPress={() => {
               setFilterType('all');
               setTimeFilter(null); // Limpiar filtro de hora al cambiar de tipo
@@ -829,7 +834,7 @@ const AdminActivityList = () => {
           </TouchableOpacity>
           
           <TouchableOpacity
-            style={[styles.filterButton, filterType === 'login' && styles.filterButtonActive]}
+            style={[styles.filterButton, filterType === 'login' && styles.filterButtonActive, { marginTop: 4 }]}
             onPress={() => {
               setFilterType('login');
               setTimeFilter(null); // Limpiar filtro de hora al cambiar de tipo
@@ -912,7 +917,7 @@ const AdminActivityList = () => {
                 style={{ marginRight: 6 }} 
               />
               <Text style={styles.timeFilterMainButtonText}>
-                {formatTimeRange()}
+                {t('timeFilter')}
               </Text>
               <Ionicons 
                 name="chevron-down-outline" 
@@ -1313,7 +1318,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   periodSwitchButtonActive: {
-    backgroundColor: '#42a5f5',
+    backgroundColor: '#fff3e5',
   },
   periodSwitchText: {
     color: '#fff3e5',
@@ -1321,7 +1326,7 @@ const styles = StyleSheet.create({
   },
   periodSwitchTextActive: {
     fontWeight: 'bold',
-    color: '#fff3e5',
+    color: '#1c1c1c',
   },
   modalButtonsContainer: {
     flexDirection: 'row',
@@ -1344,14 +1349,16 @@ const styles = StyleSheet.create({
   },
   modalApplyButton: {
     flex: 1,
-    backgroundColor: '#42a5f5',
+    backgroundColor: '#fff3e5',
     padding: 12,
     borderRadius: 10,
     alignItems: 'center',
     marginLeft: 8,
+    borderWidth: 1,
+    borderColor: '#000000',
   },
   modalApplyButtonText: {
-    color: '#fff3e5',
+    color: '#1c1c1c',
     fontSize: Math.min(width * 0.04, 16),
     fontWeight: 'bold',
   },
@@ -1419,6 +1426,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
+    flexDirection: 'row',
+  },
+  iconCentered: {
+    alignSelf: 'center',
+    textAlign: 'center',
+  },
+  updateIconFix: {
+    position: 'relative',
+    left: 2,  // Ajuste horizontal específico para el icono create-outline
+    top: 0, // Ligero ajuste vertical
   },
   activityContent: {
     flex: 1,

@@ -411,7 +411,7 @@ const AdminDashboardScreen = ({ navigation }) => {
                   
                   <View style={styles.statCard}>
                     <Text style={styles.statValue}>{stats.tasks.completionRate}%</Text>
-                    <Text style={styles.statLabel}>{t('completionRate')}</Text>
+                    <Text style={styles.statLabel}>{t('Idle')}</Text>
                   </View>
                 </View>
               )}
