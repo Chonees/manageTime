@@ -34,6 +34,7 @@ const DashboardScreen = ({ navigation }) => {
   const [position, setPosition] = useState(null);
   const [tasks, setTasks] = useState([]);
   const [selectedTaskLocation, setSelectedTaskLocation] = useState(null);
+  const [isDisconnecting, setIsDisconnecting] = useState(false);
   const theme = useTheme();
   
   // Referencia para el componente de mapa
@@ -176,10 +177,12 @@ const DashboardScreen = ({ navigation }) => {
   // Function to log out
   const handleLogout = async () => {
     try {
+      setIsDisconnecting(true);
       await logout();
       // No need to navigate, AppNavigator will do it automatically
     } catch (error) {
       Alert.alert(t('error'), t('errorLoggingOut'));
+      setIsDisconnecting(false);
     }
   };
 
@@ -260,11 +263,12 @@ const DashboardScreen = ({ navigation }) => {
           {t('Welcome')}, {user?.username || t('user')}
         </Text>
         <TouchableOpacity 
-          style={styles.logoutButton}
+          style={[styles.logoutButton, isDisconnecting && styles.disabledButton]}
           onPress={handleLogout}
+          disabled={isDisconnecting}
         >
           <Text style={styles.logoutButtonText}>
-            {t('logOut')}
+            {"Desactivarme"}
           </Text>
         </TouchableOpacity>
       </View>
@@ -450,6 +454,10 @@ const styles = StyleSheet.create({
     borderRadius: 15,
     borderWidth: 1,
     borderColor: 'rgba(255, 243, 229, 0.2)',
+  },
+  disabledButton: {
+    opacity: 0.5,
+    backgroundColor: '#333333',
   },
   logoutButtonText: {
     color: '#fff3e5',

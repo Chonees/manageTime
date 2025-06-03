@@ -288,9 +288,13 @@ const UserManagementScreen = ({ navigation }) => {
                   }
                 }}
               >
-                <Text style={styles.buttonText}>
-                  {selectedUser.isAdmin ? t('normalUser') : t('adminUser')}
-                </Text>
+                {selectedUser.isAdmin ? (
+                  <Text style={styles.buttonText}>{t('normalUser')}</Text>
+                ) : (
+                  <Text style={[styles.buttonText, {textAlign: 'center'}]}>
+                    {"Adminis-\ntrador"}
+                  </Text>
+                )}
               </TouchableOpacity>
             </View>
           </View>
@@ -485,9 +489,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#1c1c1c',
   },
   buttonText: {
-    color: '#ffffff',
-    fontSize: Math.min(width * 0.03, 12),
+    color: '#fff3e5',
+    fontSize: Math.min(width * 0.035, 14),
     fontWeight: 'bold',
+    textAlign: 'center',
   },
   emptyContainer: {
     padding: 20,
@@ -550,6 +555,7 @@ const styles = StyleSheet.create({
     borderRadius: 15,
     marginHorizontal: 5,
     alignItems: 'center',
+    justifyContent: 'center',
     borderWidth: 1,
     borderColor: 'rgba(255, 243, 229, 0.2)',
   },
@@ -557,9 +563,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#1c1c1c',
   },
   closeButtonText: {
-    color: '#ffffff',
+    color: '#fff3e5',
     fontWeight: 'bold',
     fontSize: Math.min(width * 0.035, 14),
+    textAlign: 'center',
   },
 });
 

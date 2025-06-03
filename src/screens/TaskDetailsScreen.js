@@ -1241,7 +1241,7 @@ const toggleComplete = async () => {
               style={styles.editButton}
               onPress={() => setShowEditModal(true)}
             >
-              <Ionicons name="create-outline" size={20} color="#fff" style={styles.buttonIcon} />
+              <Ionicons name="create-outline" size={20} color="#0277bd" style={styles.buttonIcon} />
               <Text style={styles.editButtonText}>{t('editTask')}</Text>
             </TouchableOpacity>
           )}
@@ -1755,7 +1755,7 @@ const styles = StyleSheet.create({
     marginTop: 15,
   },
   directionsButton: {
-    backgroundColor: '#4A90E2',
+    backgroundColor: '#0277bd',
     padding: 12,
     borderRadius: 15,
     alignItems: 'center',
@@ -1915,17 +1915,20 @@ const styles = StyleSheet.create({
   },
   // Los estilos del temporizador se han movido al componente TaskTimer
   editButton: {
-    backgroundColor: '#007BFF',
+    backgroundColor: '#e1f5fe',
     padding: 12,
     borderRadius: 15,
     alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'center',
+    marginTop: 10,
     marginBottom: 15,
     marginHorizontal: 10,
+    borderWidth: 1,
+    borderColor: '#0277bd',
   },
   editButtonText: {
-    color: '#fff',
+    color: '#0277bd',
     fontSize: 16,
     fontWeight: 'bold',
   },

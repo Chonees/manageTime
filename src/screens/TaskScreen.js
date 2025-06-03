@@ -735,7 +735,7 @@ const TaskScreen = ({ navigation }) => {
   const renderAddTaskForm = () => {
     return (
       <ScrollView style={styles.formContainer}>
-        <Text style={styles.formTitle}>{t('addTask')}</Text>
+        <Text style={[styles.formTitle, {fontSize: 24, textAlign: 'center', marginBottom: 15}]}>{t('addTask')}</Text>
         
         <TaskForm 
           isEditing={false}
@@ -743,6 +743,7 @@ const TaskScreen = ({ navigation }) => {
           isSubmitting={isSubmitting}
           showUserSelector={() => setShowUserSelector(true)}
           isAdmin={user?.isAdmin}
+          formTitle=""
         />
         
         {/* Botón de cancelar */}
@@ -826,7 +827,7 @@ const TaskScreen = ({ navigation }) => {
                       <Ionicons 
                         name={isSelected ? "checkbox" : "square-outline"} 
                         size={24} 
-                        color={isSelected ? "#4CAF50" : "#a8a8a8"} 
+                        color={isSelected ? "#fff3e5" : "rgba(255, 243, 229, 0.6)"} 
                       />
                       <View style={styles.userInfoContainer}>
                         <Text style={styles.username}>{user.username}</Text>
@@ -855,7 +856,7 @@ const TaskScreen = ({ navigation }) => {
                   setShowUserSelector(false);
                 }}
               >
-                <Text style={styles.buttonText}>
+                <Text style={styles.confirmButtonText}>
                   {t('confirm')} ({selectedUserIds.length})
                 </Text>
               </TouchableOpacity>
@@ -895,28 +896,30 @@ const TaskScreen = ({ navigation }) => {
         )}
         
         <View style={styles.taskFooter}>
-          <View style={styles.taskUserInfo}>
-            <Ionicons name="person" size={16} color="#a8a8a8" />
-            <Text style={styles.taskUsername}>{username}</Text>
+          <View style={styles.taskIconsColumn}>
+            <View style={styles.taskIconRow}>
+              <Ionicons name="person" size={16} color="#a8a8a8" />
+              <Text style={styles.taskIconText}>{username}</Text>
+            </View>
+            
+            {item.timeLimit > 0 && (
+              <View style={styles.taskIconRow}>
+                <Ionicons name="time" size={16} color="#a8a8a8" />
+                <Text style={styles.taskIconText}>
+                  {Math.floor(item.timeLimit / 60)}h {item.timeLimit % 60}m
+                </Text>
+              </View>
+            )}
+            
+            {item.location && item.radius && (
+              <View style={styles.taskIconRow}>
+                <Ionicons name="location" size={16} color="#a8a8a8" />
+                <Text style={styles.taskIconText}>
+                  {item.locationName || t('location')} ({item.radius} km)
+                </Text>
+              </View>
+            )}
           </View>
-          
-          {item.timeLimit > 0 && (
-            <View style={styles.taskTimeInfo}>
-              <Ionicons name="time" size={16} color="#a8a8a8" />
-              <Text style={styles.taskTimeLimit}>
-                {Math.floor(item.timeLimit / 60)}h {item.timeLimit % 60}m
-              </Text>
-            </View>
-          )}
-          
-          {item.location && item.radius && (
-            <View style={styles.taskLocationInfo}>
-              <Ionicons name="location" size={16} color="#a8a8a8" />
-              <Text style={styles.taskLocation}>
-                {item.locationName || t('location')} ({item.radius} km)
-              </Text>
-            </View>
-          )}
         </View>
       </TouchableOpacity>
     );
@@ -1073,24 +1076,32 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   userSelectorContainer: {
-    backgroundColor: '#fff',
+    backgroundColor: '#1c1c1c',
     borderRadius: 15,
     width: '90%',
     maxWidth: 400,
     maxHeight: '80%',
     padding: 20,
     elevation: 5,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 243, 229, 0.1)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
   },
   selectorTitle: {
     fontSize: 18,
     fontWeight: 'bold',
     marginBottom: 15,
     textAlign: 'center',
+    color: '#fff3e5',
   },
   noUsersMessage: {
     textAlign: 'center',
     padding: 20,
-    color: '#777',
+    color: '#fff3e5',
+    opacity: 0.7,
   },
   usersList: {
     maxHeight: 350,
@@ -1099,11 +1110,16 @@ const styles = StyleSheet.create({
   userItem: {
     padding: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#ececec',
+    borderBottomColor: 'rgba(255, 243, 229, 0.1)',
     flexDirection: 'row',
+    borderRadius: 10,
+    marginBottom: 5,
+    backgroundColor: '#2e2e2e',
   },
   selectedUserItem: {
-    backgroundColor: '#e6f7ff',
+    backgroundColor: '#1c1c1c',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 243, 229, 0.2)',
   },
   userItemContent: {
     flexDirection: 'row',
@@ -1117,32 +1133,52 @@ const styles = StyleSheet.create({
   username: {
     fontSize: 16,
     fontWeight: '500',
+    color: '#fff3e5',
   },
   userEmail: {
     fontSize: 14,
-    color: '#777',
+    color: '#fff3e5',
+    opacity: 0.7,
   },
   userSelectorActions: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 15,
+    gap: 50,
   },
   actionButton: {
     paddingVertical: 12,
     paddingHorizontal: 20,
-    borderRadius: 8,
+    borderRadius: 15,
     minWidth: 100,
     alignItems: 'center',
+    justifyContent: 'center',
+    height: 48,
   },
   cancelButton: {
-    backgroundColor: '#f1f1f1',
+    backgroundColor: '#2e2e2e',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 243, 229, 0.2)',
   },
   confirmButton: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: '#fff3e5',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.1)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   buttonText: {
     fontSize: 16,
-    fontWeight: '500',
+    fontWeight: 'bold',
+    color: '#fff3e5',
+  },
+  confirmButtonText: {
+    fontSize: 16,
+    fontWeight: 'bold',
     color: '#000',
   },
   taskList: {
@@ -1208,9 +1244,21 @@ const styles = StyleSheet.create({
   },
   taskFooter: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    marginTop: 10,
+  },
+  taskIconsColumn: {
+    flexDirection: 'column',
+    flex: 1,
+  },
+  taskIconRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 5,
+    marginBottom: 8,
+  },
+  taskIconText: {
+    fontSize: Math.min(width * 0.035, 14),
+    color: '#fff3e5',
+    marginLeft: 8,
   },
   taskDate: {
     fontSize: 12,
