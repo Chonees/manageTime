@@ -314,10 +314,10 @@ const TaskForm = ({
     <ScrollView contentContainerStyle={styles.formContainer}>
       <Text style={styles.formTitle}>{formTitle}</Text>
       
-      {/* Campo de File Number (solo para administradores) */}
+      {/* Campo de File Number (solo para administradores) - Movido arriba */}
       {user?.isAdmin && (
         <View style={styles.inputContainer}>
-          <Text style={styles.inputLabel}>{t('fileNumber') || 'Número de archivo'}</Text>
+          <Text style={[styles.inputLabel, {marginTop: -35, fontWeight: 'bold', marginBottom: 5}]}>{t('fileNumber') || 'Número de archivo'}</Text>
           <TextInput
             style={styles.input}
             placeholder={t('enterFileNumber') || 'Ingrese el número de archivo'}
@@ -328,6 +328,7 @@ const TaskForm = ({
         </View>
       )}
       
+      <Text style={[styles.inputLabel, {marginTop: -15, fontWeight: 'bold'}]}>{t('taskTitle') || 'Título de la tarea'}</Text>
       <TextInput
         style={styles.input}
         placeholder={t('taskTitle')}
@@ -336,6 +337,7 @@ const TaskForm = ({
         placeholderTextColor="#a8a8a8"
       />
       
+      <Text style={[styles.inputLabel, {marginTop: 5, fontWeight: 'bold'}]}>{t('taskDescription') || 'Descripción'}</Text>
       <TextInput
         style={[styles.input, styles.textArea]}
         placeholder={t('taskDescription')}
@@ -349,7 +351,7 @@ const TaskForm = ({
       {/* Botón para seleccionar usuarios (solo para administradores) */}
       {user?.isAdmin && (
         <View style={styles.sectionContainer}>
-          <Text style={styles.sectionTitle}>{t('assignUsers') || 'Asignar usuarios'}</Text>
+          <Text style={[styles.inputLabel, {marginTop: 5, fontWeight: 'bold'}]}>{t('assignUsers') || 'Asignar usuarios'}</Text>
           <TouchableOpacity 
             style={styles.userSelectorButton}
             onPress={() => showUserSelector && showUserSelector()}
@@ -380,37 +382,45 @@ const TaskForm = ({
         </View>
       )}
       
-      {/* Botón para seleccionar ubicación */}
-      <View style={styles.locationContainer}>
-        <TouchableOpacity 
-          style={styles.locationButton}
-          onPress={() => setShowLocationSelector(true)}
-        >
-          <Ionicons name="location" size={20} color="#000000" />
-          <Text style={[styles.locationButtonText, { color: '#fff3e5' }]}>
-            {taskLocation 
-              ? `${taskLocationName || t('selectedLocation')} (${taskRadius} km)` 
-              : t('addLocationAndRadius')}
-          </Text>
-        </TouchableOpacity>
-        
-        {/* Botón para seleccionar ubicaciones guardadas */}
-        <TouchableOpacity 
-          style={[styles.savedLocationsButton, { backgroundColor: '#fff3e5', padding: 10, marginLeft: 8, width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }]}
-          onPress={() => setShowSavedLocationsSelector(true)}
-        >
-          <Ionicons name="bookmark" size={24} color="#000000" />
-        </TouchableOpacity>
-        
-        {/* Botón para plantillas de tareas (solo para administradores) */}
-        {user?.isAdmin && (
+      {/* Contenedor principal para botones de ubicación */}
+      <View style={{marginBottom: 15}}>
+        {/* Botón para seleccionar ubicación */}
+        <View style={styles.locationContainer}>
           <TouchableOpacity 
-            style={[styles.templateButton, { backgroundColor: '#fff3e5', padding: 10, marginLeft: 8, width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }]}
-            onPress={() => setShowTemplateSelector(true)}
+            style={[styles.locationButton, {paddingVertical: 10, paddingHorizontal: 8, flex: 1}]}
+            onPress={() => setShowLocationSelector(true)}
           >
-            <Ionicons name="copy-outline" size={24} color="#000000" />
+            <Ionicons name="location" size={22} color="#fff3e5" style={{marginRight: 6}} />
+            <Text style={[styles.locationButtonText, { color: '#fff3e5' }]}>
+              {taskLocation 
+                ? `${taskLocationName || t('selectedLocation')} (${taskRadius} km)` 
+                : t('addLocationAndRadius')}
+            </Text>
           </TouchableOpacity>
-        )}
+        </View>
+        
+        {/* Contenedor para botones adicionales */}
+        <View style={{flexDirection: 'column', marginTop: -8, gap: 8}}>
+          {/* Botón para seleccionar ubicaciones guardadas */}
+          <TouchableOpacity 
+            style={[styles.savedLocationsButton, { backgroundColor: '#fff3e5', paddingVertical: 10, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', borderRadius: 8 }]}
+            onPress={() => setShowSavedLocationsSelector(true)}
+          >
+            <Ionicons name="bookmark" size={22} color="#000000" style={{marginRight: 6}} />
+            <Text style={{color: '#000000', fontWeight: 'bold', fontSize: 14}}>{t('savedLocations') || 'Guardadas'}</Text>
+          </TouchableOpacity>
+          
+          {/* Botón para plantillas de tareas (solo para administradores) */}
+          {user?.isAdmin && (
+            <TouchableOpacity 
+              style={[styles.templateButton, { backgroundColor: '#fff3e5', paddingVertical: 10, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', borderRadius: 8 }]}
+              onPress={() => setShowTemplateSelector(true)}
+            >
+              <Ionicons name="copy-outline" size={22} color="#000000" style={{marginRight: 6}} />
+              <Text style={{color: '#000000', fontWeight: 'bold', fontSize: 14}}>{t('templates') || 'Plantillas'}</Text>
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
       
       {/* Opción de Modo Manos Libres */}
@@ -447,7 +457,7 @@ const TaskForm = ({
               placeholderTextColor="#a8a8a8"
             />
             <TouchableOpacity 
-              style={styles.addKeywordButton}
+              style={[styles.addKeywordButton, {marginTop: -16}]}
               onPress={addKeyword}
             >
               <Text style={styles.addKeywordButtonText}>+</Text>
@@ -519,6 +529,9 @@ const styles = StyleSheet.create({
   formContainer: {
     padding: 15,
     backgroundColor: '#2e2e2e',
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 243, 229, 0.1)',
   },
   formTitle: {
     fontSize: 22,
@@ -534,6 +547,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     marginBottom: 8,
     color: '#fff3e5',
+    fontWeight: 'bold',
   },
   userSelectorButton: {
     flexDirection: 'row',
@@ -647,11 +661,15 @@ const styles = StyleSheet.create({
     height: 40,
     justifyContent: 'center',
     alignItems: 'center',
+    marginTop: 0, // Asegura que no haya margen superior
   },
   addKeywordButtonText: {
     color: '#000000',
     fontSize: 24,
     fontWeight: 'bold',
+    lineHeight: 26,
+    textAlign: 'center',
+    paddingBottom: 2,
   },
   keywordsList: {
     marginTop: 5,

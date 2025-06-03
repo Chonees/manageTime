@@ -52,6 +52,7 @@ export const translations = {
     loggedInUsers: 'Logged In Users',
     user: 'User',
     users: 'Users',
+    realTimeLocationOfUsers: 'Real Time Location Of Users',
     
     // Activity translations
     userActivities: 'User Activities',
@@ -199,6 +200,8 @@ export const translations = {
     myActivity: 'My Activity',
     
     // User Management translations
+    assignUsers: 'Assign Users',
+    selectUsers: 'Select Users',
     searchUsers: 'Search users...',
     loadingUsers: 'Loading users...',
     noUsers: 'No registered users',
@@ -211,6 +214,16 @@ export const translations = {
     close: 'Close',
     activate: 'Activate',
     deactivate: 'Deactivate',
+    confirm: 'Confirm',
+    cancel: 'Cancel',
+    selectTimeLimit: 'Select time limit',
+    hour: 'hour',
+    hours: 'hours',
+    minute: 'minute',
+    minutes: 'minutes',
+    savedLocations: 'Saved',
+    templates: 'Templates',
+    currentKeywords: 'Current keywords',
     normalUser: 'Normal User',
     adminUser: 'Administrator',
     active: 'Active',
@@ -780,6 +793,7 @@ export const translations = {
     loggedInUsers: 'Usuarios logueados',
     user: 'Usuario',
     users: 'Usuarios',
+    realTimeLocationOfUsers: 'Ubicación en tiempo real de usuarios',
     
     // Activity translations
     userActivities: 'Actividades de Usuarios',
@@ -928,8 +942,8 @@ export const translations = {
     yourActivity: 'Tu Actividad',
     activityHistoryFor: 'Historial de actividad para',
     myActivity: 'Mi Actividad',
-    
-    // User Management translations
+    assignUsers: 'Asignar Usuarios',
+    selectUsers: 'Seleccionar Usuarios',
     searchUsers: 'Buscar usuarios...',
     loadingUsers: 'Cargando usuarios...',
     noUsers: 'No hay usuarios registrados',
@@ -942,6 +956,16 @@ export const translations = {
     close: 'Cerrar',
     activate: 'Activar',
     deactivate: 'Desactivar',
+    confirm: 'Confirmar',
+    cancel: 'Cancelar',
+    selectTimeLimit: 'Seleccionar tiempo límite',
+    hour: 'hora',
+    hours: 'horas',
+    minute: 'minuto',
+    minutes: 'minutos',
+    savedLocations: 'Guardadas',
+    templates: 'Plantillas',
+    currentKeywords: 'Palabras clave actuales',
     normalUser: 'Usuario normal',
     adminUser: 'Administrador',
     active: 'Activo',

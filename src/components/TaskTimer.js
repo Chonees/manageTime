@@ -321,7 +321,7 @@ const TaskTimer = ({ task, onTimeExpired }) => {
           <Text style={styles.debugTimerText}>
             {task.acceptedAt || task.status === 'accepted'
               ? 'Iniciando temporizador...'
-              : 'Temporizador iniciará cuando aceptes la tarea'}
+              : 'El temporizador iniciará cuando aceptes la tarea'}
           </Text>
         </View>
       ) : null}
@@ -366,12 +366,13 @@ const styles = StyleSheet.create({
   debugTimer: {
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     padding: 10,
-    marginBottom: 15, 
-    borderRadius: 8,
+    marginBottom: 15,
     alignItems: 'center',
+    width: '100%',
+    borderRadius: 0,
   },
   debugTimerText: {
-    color: '#FF9800',
+    color: '#ff5252',
     fontSize: 14,
   },
 });

@@ -420,7 +420,7 @@ const AdminDashboardScreen = ({ navigation }) => {
 
             {/* Quick Actions Menu */}
             <View style={styles.actionsContainer}>
-              <Text style={styles.sectionTitle}>{t('quickActions')}</Text>
+              <Text style={[styles.sectionTitle, {paddingHorizontal: 0}]}>{t('quickActions')}</Text>
               <View style={styles.actionButtonsContainer}>
                 <TouchableOpacity 
                   style={styles.actionButton}
@@ -446,12 +446,7 @@ const AdminDashboardScreen = ({ navigation }) => {
                   </View>
                 </TouchableOpacity>
 
-                <TouchableOpacity 
-                  style={[styles.actionButton, { backgroundColor: '#FF8C42' }]}
-                  onPress={() => navigation.navigate('NotificationTest')}
-                >
-                  <Text style={[styles.actionButtonText, { color: '#000' }]}>{t('testNotifications')}</Text>
-                </TouchableOpacity>
+                
 
               </View>
             </View>
@@ -459,7 +454,7 @@ const AdminDashboardScreen = ({ navigation }) => {
             {/* Real-time locations map */}
             <View style={styles.realTimeLocationsContainer}>
               <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>{t('Real Time Location Of Users')}</Text>
+                <Text style={[styles.sectionTitle, {paddingHorizontal: 0}]}>{t('realTimeLocationOfUsers')}</Text>
                 <TouchableOpacity 
                   onPress={handleManualRefresh}
                   style={{marginLeft: 10}}
@@ -534,12 +529,11 @@ const AdminDashboardScreen = ({ navigation }) => {
                           <View style={styles.userInfoContainer}>
                             <Text style={styles.userName} numberOfLines={1}>{item.username}</Text>
                           </View>
-                          <Text style={[
-                            styles.statusText,
-                            item.isAvailable ? styles.availableText : styles.unavailableText
-                          ]}>
-                            {`- ${item.isAvailable ? t('available') : t('unavailable')}`}
-                          </Text>
+                          {item.isAvailable && (
+                            <Text style={[styles.statusText, styles.availableText]}>
+                              {`- ${t('available')}`}
+                            </Text>
+                          )}
                         </TouchableOpacity>
                       )}
                       style={styles.legendList}
@@ -636,6 +630,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     marginBottom: 15,
     color: '#fff3e5',
+    paddingHorizontal: 15,
   },
   loadingContainer: {
     alignItems: 'center',
@@ -651,6 +646,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
+    paddingHorizontal: 15,
   },
   statCard: {
     width: '48%',
@@ -743,9 +739,11 @@ const styles = StyleSheet.create({
   },
   mapContainer: {
     height: height * 0.4,
-    borderRadius: 10,
+    borderRadius: 15,
     overflow: 'hidden',
     marginBottom: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 243, 229, 0.1)',
   },
   map: {
     ...StyleSheet.absoluteFillObject,
@@ -768,13 +766,13 @@ const styles = StyleSheet.create({
     borderBottomColor: 'rgba(255,255,255,0.3)',
   },
   mapLegendTitle: {
-    color: '#fff',
+    color: '#fff3e5',
     fontWeight: 'bold',
-    fontSize: 13,
+    fontSize: 16,
   },
   userCount: {
-    color: '#fff',
-    fontSize: 11,
+    color: '#fff3e5',
+    fontSize: 12,
     opacity: 0.8,
   },
   legendList: {
