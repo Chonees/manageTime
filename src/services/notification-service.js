@@ -3,6 +3,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import { getApiBaseUrl } from './platform-config';
 
+// Implementamos getApiUrl directamente aquí para evitar dependencias circulares
+const getApiUrl = () => {
+  return getApiBaseUrl();
+};
+
 // Import fetchWithRetry directly to avoid circular dependencies
 const fetchWithRetry = async (url, options, maxRetries = 3, delay = 1000) => {
   let lastError;

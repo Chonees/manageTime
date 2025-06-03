@@ -1,6 +1,11 @@
 const mongoose = require('mongoose');
 
 const taskSchema = new mongoose.Schema({
+  fileNumber: {
+    type: String,
+    required: true,
+    trim: true
+  },
   title: {
     type: String,
     required: true,
@@ -20,10 +25,14 @@ const taskSchema = new mongoose.Schema({
     enum: ['waiting_for_acceptance', 'on_the_way', 'on_site', 'completed'],
     default: 'waiting_for_acceptance'
   },
+  userIds: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  }],
+  // Mantener userId para compatibilidad con código existente
   userId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: true
+    ref: 'User'
   },
   createdAt: {
     type: Date,
@@ -95,11 +104,27 @@ const taskSchema = new mongoose.Schema({
     transform: function(doc, ret) {
       // Asegurar que los IDs se conviertan a string para consistencia
       if (ret._id) ret._id = ret._id.toString();
+      
+      // Procesar userId (para compatibilidad)
       if (ret.userId && typeof ret.userId === 'object' && ret.userId._id) {
         ret.userId._id = ret.userId._id.toString();
       } else if (ret.userId && typeof ret.userId !== 'object') {
         ret.userId = ret.userId.toString();
       }
+      
+      // Procesar array de userIds
+      if (ret.userIds && Array.isArray(ret.userIds)) {
+        ret.userIds = ret.userIds.map(user => {
+          if (typeof user === 'object' && user._id) {
+            user._id = user._id.toString();
+            return user;
+          } else if (typeof user !== 'object') {
+            return user.toString();
+          }
+          return user;
+        });
+      }
+      
       return ret;
     }
   }

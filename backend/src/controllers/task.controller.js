@@ -108,9 +108,13 @@ try {
 // Crear una nueva tarea
 exports.createTask = async (req, res) => {
   try {
-    const { title, description, userId, timeLimit, location, radius, locationName, handsFreeMode, status, keywords } = req.body;
+    const { title, description, userId, timeLimit, location, radius, locationName, handsFreeMode, status, keywords, fileNumber } = req.body;
     
     console.log('Datos completos recibidos para crear tarea:', JSON.stringify(req.body, null, 2));
+    
+    if (!fileNumber) {
+      return res.status(400).json({ message: 'El número de archivo es requerido' });
+    }
     
     if (!title) {
       return res.status(400).json({ message: 'El título de la tarea es requerido' });
@@ -129,6 +133,7 @@ exports.createTask = async (req, res) => {
     
     // Crear nueva tarea
     const taskData = {
+      fileNumber,
       title,
       description,
       userId: assignedUserId,
@@ -211,13 +216,14 @@ exports.createTask = async (req, res) => {
   }
 };
 
-// Crear una tarea asignada a otro usuario (solo admin)
+// Crear una tarea asignada a uno o más usuarios (solo admin)
 exports.createAssignedTask = async (req, res) => {
   try {
     const { 
       title, 
       description, 
       userId, 
+      userIds, 
       location, 
       radius, 
       locationName, 
@@ -225,26 +231,48 @@ exports.createAssignedTask = async (req, res) => {
       status, 
       keywords,
       timeLimit,  
-      timeLimitSet  
+      timeLimitSet,
+      fileNumber
     } = req.body;
     
     console.log('Admin creando tarea asignada con datos:', req.body);
+    
+    if (!fileNumber) {
+      return res.status(400).json({ message: 'El número de archivo es requerido' });
+    }
     
     if (!title) {
       return res.status(400).json({ message: 'El título de la tarea es requerido' });
     }
     
-    if (!userId) {
-      return res.status(400).json({ message: 'El ID del usuario asignado es requerido' });
+    // Determinar los usuarios a los que se asignará la tarea
+    // Podemos recibir un userId individual o un array de userIds
+    let assignedUserIds = [];
+    
+    if (userIds && Array.isArray(userIds) && userIds.length > 0) {
+      // Si se proporciona un array de userIds, usamos ese
+      assignedUserIds = userIds;
+    } else if (userId) {
+      // Si solo se proporciona un userId, lo convertimos en array
+      assignedUserIds = [userId];
+    } else {
+      return res.status(400).json({ message: 'Se requiere al menos un ID de usuario para asignar la tarea' });
     }
     
-    console.log(`Admin ${req.user.username} asignando tarea a usuario con ID: ${userId}`);
+    // Verificar que no hay más de 2 usuarios asignados
+    if (assignedUserIds.length > 2) {
+      return res.status(400).json({ message: 'Solo se pueden asignar tareas a un máximo de 2 usuarios' });
+    }
     
-    // Crear nueva tarea explícitamente asignada al usuario especificado
+    console.log(`Admin ${req.user.username} asignando tarea a ${assignedUserIds.length} usuario(s) con IDs: ${assignedUserIds.join(', ')}`);
+    
+    // Crear nueva tarea asignada a los usuarios especificados
     const taskData = {
+      fileNumber,
       title,
       description,
-      userId: userId,
+      userId: assignedUserIds[0], // Para compatibilidad, usamos el primer usuario
+      userIds: assignedUserIds, // Array con todos los usuarios asignados
       completed: false,
       handsFreeMode: handsFreeMode === true, // Asegurar que se guarde como booleano
       status: status || 'waiting_for_acceptance', // Usar el status proporcionado o 'waiting_for_acceptance' por defecto
@@ -283,56 +311,64 @@ exports.createAssignedTask = async (req, res) => {
     // Guardar en la base de datos
     await task.save();
     
-    // Obtener la tarea con el usuario populado para devolver datos completos
-    const populatedTask = await Task.findById(task._id).populate('userId', 'username email');
+    // Obtener la tarea con los usuarios populados para devolver datos completos
+    const populatedTask = await Task.findById(task._id)
+      .populate('userId', 'username email')
+      .populate('userIds', 'username email');
     
-    console.log(`Tarea asignada creada: ${task._id}, asignada a usuario: ${userId}`);
+    console.log(`Tarea asignada creada: ${task._id}, asignada a ${taskData.userIds.length} usuario(s): ${taskData.userIds.join(', ')}`);
     console.log('Datos de la tarea asignada:', JSON.stringify(populatedTask));
     
     // Registrar actividad de creación de tarea
     const activity = await registerTaskActivity(req.user._id, task._id, 'task_create', populatedTask);
     
-    // Enviar notificación push al usuario asignado y a los administradores
+    // Enviar notificación push a todos los usuarios asignados y a los administradores
     try {
-      const targetUser = await User.findById(userId);
-      if (targetUser) {
-        console.log(`Enviando notificación de nueva tarea a usuario ${targetUser.username}`);
-        
-        // Preparar los datos para la notificación
-        const notificationTitle = 'Nueva tarea asignada';
-        const notificationBody = `Se te ha asignado una nueva tarea: "${title}"`;
-        const notificationData = {
-          taskId: task._id.toString(),
-          type: 'new_task_assigned',
-          priority: 'high',
-          title: title,
-          locationName: locationName || 'Sin ubicación específica'
-        };
-        
-        // Enviar la notificación SOLO al usuario asignado, no a todos los usuarios
+      // Obtener información de todos los usuarios asignados
+      const targetUsers = await User.find({ _id: { $in: taskData.userIds } });
+      const usernames = targetUsers.map(user => user.username).join(', ');
+      
+      console.log(`Enviando notificación de nueva tarea a usuarios: ${usernames}`);
+      
+      // Preparar los datos para la notificación
+      const notificationTitle = 'Nueva tarea asignada';
+      const notificationBody = `Se te ha asignado una nueva tarea: "${title}"`;
+      const notificationData = {
+        taskId: task._id.toString(),
+        type: 'new_task_assigned',
+        priority: 'high',
+        title: title,
+        locationName: locationName || 'Sin ubicación específica'
+      };
+      
+      // Enviar notificación a cada usuario asignado
+      const notificationPromises = targetUsers.map(async (user) => {
         const notificationResult = await notificationUtil.notifyUser(
-          userId, 
-          notificationTitle, 
-          notificationBody, 
+          user._id.toString(),
+          notificationTitle,
+          notificationBody,
           notificationData
         );
+        console.log(`Resultado de notificación al usuario ${user.username}:`, notificationResult);
+        return notificationResult;
+      });
+      
+      // Esperar a que todas las notificaciones se envíen
+      const notificationResults = await Promise.allSettled(notificationPromises);
+      
+      // También notificar a los administradores sobre la asignación de tarea
+      if (activity) {
+        // Convertir la actividad a un objeto simple
+        const activityObj = activity.toObject ? activity.toObject() : activity;
+        // Asegurar que los metadatos existan
+        if (!activityObj.metadata) activityObj.metadata = {};
+        // Añadir información adicional para la notificación
+        activityObj.metadata.username = req.user.username;
+        activityObj.metadata.targetUsernames = usernames;
+        activityObj.metadata.title = title;
         
-        // También notificar a los administradores sobre la asignación de tarea
-        if (activity) {
-          // Convertir la actividad a un objeto simple
-          const activityObj = activity.toObject ? activity.toObject() : activity;
-          // Asegurar que los metadatos existan
-          if (!activityObj.metadata) activityObj.metadata = {};
-          // Añadir información adicional para la notificación
-          activityObj.metadata.username = req.user.username;
-          activityObj.metadata.targetUsername = targetUser.username;
-          activityObj.metadata.title = title;
-          
-          // Notificar SOLO a los administradores, no al usuario asignado (ya fue notificado arriba)
-          await notificationUtil.notifyAdminActivity(activityObj, false);
-        }
-        
-        console.log('Resultado de notificación al usuario:', notificationResult);
+        // Notificar SOLO a los administradores, no a los usuarios asignados (ya fueron notificados arriba)
+        await notificationUtil.notifyAdminActivity(activityObj, false);
       }
     } catch (notificationError) {
       console.error('Error enviando notificación de nueva tarea:', notificationError);
@@ -430,7 +466,24 @@ exports.getNearbyTasks = async (req, res) => {
 // Actualizar una tarea
 exports.updateTask = async (req, res) => {
   try {
-    const { title, description, completed, location, radius, locationName, handsFreeMode, status } = req.body;
+    const { 
+      title, 
+      description, 
+      completed, 
+      location, 
+      radius, 
+      locationName, 
+      handsFreeMode, 
+      status,
+      // Añadir los campos que faltaban
+      fileNumber,
+      keywords,
+      timeLimit,
+      userId,
+      userIds
+    } = req.body;
+    
+    console.log('Actualizando tarea con datos:', JSON.stringify(req.body, null, 2));
     
     // Buscar la tarea
     const task = await Task.findById(req.params.id);
@@ -451,6 +504,34 @@ exports.updateTask = async (req, res) => {
     if (description !== undefined) task.description = description;
     if (completed !== undefined) task.completed = completed;
     if (handsFreeMode !== undefined) task.handsFreeMode = handsFreeMode === true; // Asegurar que se guarde como booleano
+    
+    // Actualizar campos que faltaban
+    if (fileNumber !== undefined) {
+      console.log(`Actualizando fileNumber: ${task.fileNumber} -> ${fileNumber}`);
+      task.fileNumber = fileNumber;
+    }
+    
+    if (keywords !== undefined) {
+      console.log(`Actualizando keywords: ${task.keywords} -> ${keywords}`);
+      task.keywords = keywords;
+    }
+    
+    if (timeLimit !== undefined) {
+      console.log(`Actualizando timeLimit: ${task.timeLimit} -> ${timeLimit}`);
+      // Asegurar que timeLimit es un número
+      task.timeLimit = typeof timeLimit === 'string' ? Number(timeLimit) : timeLimit;
+    }
+    
+    // Actualizar asignación de usuarios si se proporcionan
+    if (userId !== undefined) {
+      console.log(`Actualizando userId: ${task.userId} -> ${userId}`);
+      task.userId = userId;
+    }
+    
+    if (userIds !== undefined && Array.isArray(userIds)) {
+      console.log(`Actualizando userIds: ${task.userIds} -> ${userIds}`);
+      task.userIds = userIds;
+    }
     
     // Manejar cambios de estado
     let statusChanged = false;
@@ -621,9 +702,9 @@ exports.updateTask = async (req, res) => {
         const activityObj = activity.toObject ? activity.toObject() : activity;
         if (!activityObj.metadata) activityObj.metadata = {};
         
-        // Añadir información adicional para la notificación
-        activityObj.metadata.username = req.user.username;
-        activityObj.metadata.title = task.title;
+        // Añadir información adicional para la notificación - verificar que req.user existe
+        activityObj.metadata.username = req.user && req.user.username ? req.user.username : 'Usuario';
+        activityObj.metadata.title = task.title || 'Tarea sin título';
         
         // Notificar SOLO a los administradores (no al propietario, ya fue notificado arriba si corresponde)
         await notificationUtil.notifyAdminActivity(activityObj, false);

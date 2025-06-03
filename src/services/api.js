@@ -1115,17 +1115,37 @@ export const saveActivity = async (activityData) => {
     }
     
     // If userId is not provided, try to get it from AsyncStorage
-    if (!dataToSend.userId) {
+    if (!dataToSend.userId || !dataToSend.username) {
       try {
         const userInfoString = await AsyncStorage.getItem('userInfo');
         if (userInfoString) {
           const parsedUserInfo = JSON.parse(userInfoString);
-          dataToSend.userId = parsedUserInfo._id;
-          dataToSend.username = parsedUserInfo.name || parsedUserInfo.username || 'User';
+          // Asegurar que siempre tengamos un userId válido
+          if (!dataToSend.userId && parsedUserInfo._id) {
+            dataToSend.userId = parsedUserInfo._id;
+          }
+          // Asegurar que siempre tengamos un username válido
+          if (!dataToSend.username) {
+            dataToSend.username = parsedUserInfo.name || parsedUserInfo.username || 'User';
+          }
+        } else {
+          // Si no hay userInfo, asegurar un valor por defecto para username
+          if (!dataToSend.username) {
+            dataToSend.username = 'User';
+          }
         }
       } catch (storageError) {
         // Manejo silencioso de errores
+        // Asegurar un valor por defecto en caso de error
+        if (!dataToSend.username) {
+          dataToSend.username = 'User';
+        }
       }
+    }
+    
+    // Validación final para asegurar que username siempre tenga un valor
+    if (!dataToSend.username) {
+      dataToSend.username = 'User';
     }
     
     // Ensure metadata exists
@@ -1182,7 +1202,7 @@ export const saveActivity = async (activityData) => {
           body: JSON.stringify({
             activityId: responseData._id || responseData.id,
             title: getActivityTitle(activityData.type),
-            body: `${activityData.username || 'User'}: ${getActivityMessage(activityData)}`,
+            body: `${dataToSend.username || 'User'}: ${getActivityMessage(activityData)}`,
             type: activityData.type,
             pushToken
           })

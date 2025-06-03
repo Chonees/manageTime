@@ -25,6 +25,7 @@ import * as api from '../services/api';
 import LocationRadiusSelector from '../components/LocationRadiusSelector';
 import SavedLocationsSelector from '../components/SavedLocationsSelector';
 import TaskTemplateSelector from '../components/TaskTemplateSelector';
+import TaskForm from '../components/TaskForm'; // Importar el componente de formulario de tareas
 
 const { width, height } = Dimensions.get('window');
 
@@ -36,9 +37,11 @@ const TaskScreen = ({ navigation }) => {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [fileNumber, setFileNumber] = useState('');
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskDescription, setNewTaskDescription] = useState('');
-  const [selectedUserId, setSelectedUserId] = useState(null);
+  const [selectedUserIds, setSelectedUserIds] = useState([]);
+  const [selectedUserId, setSelectedUserId] = useState(null); // Mantener para compatibilidad
   const [error, setError] = useState(null);
   const [showAddForm, setShowAddForm] = useState(false);
   const [showUserSelector, setShowUserSelector] = useState(false);
@@ -55,6 +58,7 @@ const TaskScreen = ({ navigation }) => {
   const [selectedHours, setSelectedHours] = useState(0); // Horas seleccionadas
   const [selectedMinutes, setSelectedMinutes] = useState(30); // Minutos seleccionados (default 30 min)
   const [showTemplateSelector, setShowTemplateSelector] = useState(false); // Estado para mostrar el selector de plantillas
+  const [isSubmitting, setIsSubmitting] = useState(false); // Estado para controlar si se está enviando el formulario
 
   // Function to handle pull-to-refresh
   const onRefresh = async () => {
@@ -65,6 +69,91 @@ const TaskScreen = ({ navigation }) => {
       console.error('Error refreshing data:', error);
     } finally {
       setRefreshing(false);
+    }
+  };
+  
+  // Función para manejar la ubicación seleccionada desde LocationRadiusSelector
+  const handleLocationSelected = (data) => {
+    console.log('Datos de ubicación recibidos:', data);
+    
+    // Comprobar si recibimos un objeto con la estructura esperada (como lo envía LocationRadiusSelector)
+    if (data && data.location) {
+      // Guardar directamente el objeto location en formato GeoJSON
+      setTaskLocation(data.location);
+      setTaskRadius(data.radius || 1.0);
+      setTaskLocationName(data.locationName || '');
+      
+      console.log('Ubicación guardada:', data.location);
+      console.log('Radio guardado:', data.radius);
+      console.log('Nombre guardado:', data.locationName);
+    } 
+    // Mantener compatibilidad con el formato anterior por si acaso
+    else if (data && data.latitude && data.longitude) {
+      setTaskLocation({
+        type: 'Point',
+        coordinates: [data.longitude, data.latitude]
+      });
+      setTaskRadius(data.radius || 1.0);
+      setTaskLocationName(data.locationName || '');
+    } else {
+      console.warn('Formato de ubicación no reconocido:', data);
+      setTaskLocation(null);
+    }
+    
+    // Cerramos el selector
+    setShowLocationSelector(false);
+  };
+
+  // Función para manejar la selección de ubicaciones guardadas
+  const handleSelectSavedLocation = (savedLocation) => {
+    console.log('Ubicación guardada seleccionada:', savedLocation);
+    
+    if (savedLocation && savedLocation.location && savedLocation.location.coordinates) {
+      // Las ubicaciones guardadas tienen formato GeoJSON, extraemos lat/lng
+      const [lng, lat] = savedLocation.location.coordinates;
+      
+      // Actualizar estado con los datos de la ubicación guardada
+      setTaskLocation(savedLocation.location);
+      setTaskRadius(savedLocation.radius || 1.0);
+      setTaskLocationName(savedLocation.name || '');
+      
+      // Cerramos el selector
+      setShowLocationSelector(false);
+    } else {
+      console.warn('La ubicación guardada no tiene coordenadas válidas');
+    }
+  };
+  
+  // Función para manejar la selección de plantillas de tareas
+  const handleSelectTemplate = (template) => {
+    console.log('Plantilla de tarea seleccionada:', template);
+    
+    if (template) {
+      // Aplicamos los datos de la plantilla a la tarea actual
+      if (template.title) setNewTaskTitle(template.title);
+      if (template.description) setNewTaskDescription(template.description);
+      if (template.timeLimit) {
+        // Convertir el timeLimit a horas y minutos para el selector personalizado
+        const hours = Math.floor(template.timeLimit / 60);
+        const minutes = template.timeLimit % 60;
+        setSelectedHours(hours);
+        setSelectedMinutes(minutes);
+      }
+      if (template.keywords && Array.isArray(template.keywords)) {
+        setTaskKeywords(template.keywords);
+      } else if (template.keywords && typeof template.keywords === 'string') {
+        setTaskKeywords(template.keywords.split(',').map(k => k.trim()).filter(k => k));
+      }
+      
+      // Si la plantilla tiene ubicación
+      if (template.location) {
+        setTaskLocation(template.location);
+        setTaskRadius(template.radius || 1.0);
+        setTaskLocationName(template.locationName || '');
+      }
+      
+      // Cerramos el selector de plantillas
+      setShowTemplateSelector(false);
     }
   };
 
@@ -223,11 +312,129 @@ const TaskScreen = ({ navigation }) => {
     return result;
   };
 
-  // Añadir nueva tarea
+  // Función para manejar el envío del formulario de tareas
+  const handleTaskSubmit = async (taskData) => {
+    // Verificar que el usuario sea administrador
+    if (!user?.isAdmin) {
+      Alert.alert(t('error'), t('adminPermissionRequired'));
+      return;
+    }
+    
+    try {
+      setIsSubmitting(true);
+      
+      console.log('Datos de tarea recibidos del formulario:', JSON.stringify(taskData, null, 2));
+      
+      // Verificar que los datos de ubicación sean correctos
+      if (taskData.location) {
+        console.log('Datos de ubicación:', JSON.stringify(taskData.location, null, 2));
+        
+        // Asegurar que la ubicación tiene el formato correcto para el backend
+        if (taskData.location.coordinates) {
+          console.log('Coordenadas detectadas en el formato correcto');
+        } else if (taskData.location.latitude && taskData.location.longitude) {
+          console.log('Convirtiendo formato de coordenadas planas a GeoJSON Point');
+          taskData.location = {
+            type: 'Point',
+            coordinates: [taskData.location.longitude, taskData.location.latitude]
+          };
+        } else {
+          console.warn('Formato de ubicación no reconocido');
+        }
+      } else {
+        console.log('No se proporcionó ubicación para esta tarea');
+      }
+      
+      // Si hay usuarios seleccionados, añadirlos a los datos de la tarea
+      if (selectedUserIds.length > 0) {
+        taskData.userId = selectedUserIds[0];
+        taskData.userIds = selectedUserIds;
+        console.log('Usuarios asignados a la tarea:', selectedUserIds);
+      } else {
+        console.log('No se asignaron usuarios a la tarea');
+      }
+      
+      // Establecer el estado de la tarea
+      taskData.status = 'waiting_for_acceptance';
+      
+      // Comprobar campos obligatorios
+      if (!taskData.fileNumber || !taskData.title) {
+        console.error('Faltan campos obligatorios:', { 
+          fileNumber: !!taskData.fileNumber, 
+          title: !!taskData.title 
+        });
+        Alert.alert(t('error'), t('requiredFieldsMissing') || 'Faltan campos obligatorios');
+        setIsSubmitting(false);
+        return;
+      }
+      
+      let result;
+      console.log('Payload final a enviar:', JSON.stringify(taskData, null, 2));
+      
+      // Llamar a la API para guardar o asignar la tarea
+      if (taskData.userIds && taskData.userIds.length > 0) {
+        console.log('Usando assignTask para asignar tarea a usuarios');
+        result = await api.assignTask(taskData);
+        console.log('Resultado de assignTask:', JSON.stringify(result, null, 2));
+      } else {
+        console.log('Usando saveTask para crear tarea sin asignar');
+        result = await api.saveTask(taskData);
+        console.log('Resultado de saveTask:', JSON.stringify(result, null, 2));
+      }
+      
+      // Mostrar mensaje de éxito
+      Alert.alert(
+        t('success'),
+        taskData.userIds && taskData.userIds.length > 0
+          ? t('taskAssignedSuccessfully')
+          : t('taskCreatedSuccessfully')
+      );
+      
+      // Ocultar el formulario y recargar tareas
+      setShowAddForm(false);
+      loadTasks();
+      
+      // Limpiar selecciones de usuarios
+      setSelectedUserIds([]);
+      setSelectedUserId(null);
+    } catch (error) {
+      console.error('Error al añadir tarea:', error);
+      
+      // Extraer mensaje de error más detallado si está disponible
+      let errorMessage = t('errorCreatingTask');
+      if (error.message) {
+        console.error('Mensaje de error detallado:', error.message);
+        // Intentar extraer mensaje de error del backend si existe
+        try {
+          if (error.message.includes('{')) {
+            const errorJson = JSON.parse(error.message.substring(error.message.indexOf('{')));
+            if (errorJson.message) {
+              errorMessage = errorJson.message;
+            }
+          }
+        } catch (parseError) {
+          // Si no podemos extraer un error JSON, usar el mensaje completo
+          errorMessage = error.message;
+        }
+      }
+      
+      Alert.alert(t('error'), errorMessage);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+  
+  // Añadir nueva tarea (Mantener por compatibilidad)
   const addTask = async () => {
     // Verificar que el usuario sea administrador
     if (!user?.isAdmin) {
       Alert.alert(t('error'), t('adminPermissionRequired'));
+      return;
+    }
+    
+    // Validación de file number para administradores
+    if (user?.isAdmin && !fileNumber.trim()) {
+      Alert.alert(t('validationError'), t('fileNumberRequired') || 'Se requiere ingresar un número de archivo');
       return;
     }
     
@@ -237,9 +444,9 @@ const TaskScreen = ({ navigation }) => {
       return;
     }
     
-    // Si no hay usuario seleccionado, puede quedarse como null
+    // Si no hay usuarios seleccionados, puede quedarse como null
     // pero mostramos advertencia
-    if (!selectedUserId) {
+    if (selectedUserIds.length === 0) {
       console.log(t('noUserSelected'));
       // Dejar que avance sin usuario asignado
     }
@@ -257,16 +464,20 @@ const TaskScreen = ({ navigation }) => {
       };
     }
     
-    // Preparar el objeto de tarea con todos los datos necesarios
+    // Crear objeto de tarea con datos de usuario o no, según corresponda
     const taskData = {
-      title: newTaskTitle.trim(),
-      description: newTaskDescription.trim(),
-      userId: selectedUserId, // Puede ser null
-      location: locationData, // Asignar la ubicación correctamente formateada
+      fileNumber: fileNumber.trim(), // Añadir el número de archivo
+      title: newTaskTitle,
+      description: newTaskDescription,
+      // Para compatibilidad mantenemos userId, pero ahora usamos userIds para múltiples usuarios
+      userId: selectedUserIds.length > 0 ? selectedUserIds[0] : null,
+      userIds: selectedUserIds, // Array de IDs de usuarios seleccionados
       handsFreeMode: handsFreeMode,
-      keywords: taskKeywords.length > 0 ? taskKeywords.join(',') : undefined,
+      keywords: taskKeywords.join(','),
+      status: 'waiting_for_acceptance', // Estado inicial para tareas asignadas
       radius: parseFloat(taskRadius) || 1.0,
-      locationName: taskLocationName || ''
+      locationName: taskLocationName || '',
+      location: locationData // Añadir el objeto de ubicación creado anteriormente
     };
     
     // Añadir tiempo límite si está seleccionado (convertir horas y minutos a minutos totales)
@@ -292,9 +503,9 @@ const TaskScreen = ({ navigation }) => {
       let result;
       
       // Si es admin y hay un usuario seleccionado, usar el endpoint específico para asignar tareas
-      if (user?.isAdmin && selectedUserId) {
+      if (user?.isAdmin && selectedUserIds.length > 0) {
         // Make sure userId is a string
-        const userIdString = String(selectedUserId);
+        const userIdString = String(selectedUserIds[0]);
         console.log(t('adminAssigningTask'));
         
         // Include userId as string in taskData
@@ -316,34 +527,50 @@ const TaskScreen = ({ navigation }) => {
         console.log(t('taskDataReceived'), JSON.stringify(result.task));
         
         // Process the returned task object to handle populated userId
-        let taskUsername = null;
         let taskUserId = null;
+        let taskUsername = null;
+        let assignedUsernames = [];
         
         if (result.task.userId) {
           // If userId is an object (populated), extract _id and username
-          if (typeof result.task.userId === 'object') {
+          if (typeof result.task.userId === 'object' && result.task.userId._id) {
             taskUserId = result.task.userId._id;
-            taskUsername = result.task.userId.username;
-            console.log(t('newTaskHasUsername', { username: taskUsername }));
+            taskUsername = result.task.userId.username || 'Unknown';
+            console.log(t('processedPopulatedUserId', { userId: taskUserId, username: taskUsername }));
           } else {
-            // If userId is just an ID, keep it as is
+            // Otherwise it's just an ID string
             taskUserId = result.task.userId;
-            
-            // Try to find the username in our local users list
-            if (users.length > 0) {
-              const taskUser = users.find(u => String(u._id) === String(taskUserId));
-              if (taskUser) {
-                taskUsername = taskUser.username;
-                console.log(t('foundUsernameForTask', { username: taskUsername }));
-              }
+            console.log(t('processedStringUserId', { userId: taskUserId }));
+          }
+          
+          // Try to find username if we don't have it yet
+          if (!taskUsername && users.length > 0) {
+            const foundUser = users.find(u => u._id === taskUserId);
+            if (foundUser) {
+              taskUsername = foundUser.username;
+              console.log(t('foundUsernameInUsers', { username: taskUsername }));
             }
           }
+        }
+        
+        // Buscar nombre de usuario para mostrarlo
+        if (result.task.userIds && Array.isArray(result.task.userIds)) {
+          assignedUsernames = result.task.userIds.map(userId => {
+            if (typeof userId === 'object' && userId.username) {
+              return userId.username;
+            } else {
+              const foundUser = users.find(u => u._id === userId);
+              return foundUser ? foundUser.username : 'Usuario desconocido';
+            }
+          });
+          console.log('Nombres de usuarios asignados:', assignedUsernames);
         }
         
         // Create a properly formatted task object with username info
         const newTaskObject = {
           ...result.task,
           _username: taskUsername, // Store username directly in task for easy access
+          _assignedUsernames: assignedUsernames, // Store all assigned usernames
           userId: taskUserId || result.task.userId
         };
         
@@ -367,9 +594,11 @@ const TaskScreen = ({ navigation }) => {
         }
         
         // Resetear formulario
+        setFileNumber('');
         setNewTaskTitle('');
         setNewTaskDescription('');
-        setSelectedUserId(null);
+        setSelectedUserIds([]); // Restablecer usuarios seleccionados
+        setSelectedUserId(null); // Restablecer usuario seleccionado para compatibilidad
         setTaskLocation(null);
         setTaskRadius(1.0);
         setTaskLocationName('');
@@ -401,570 +630,33 @@ const TaskScreen = ({ navigation }) => {
     }
   };
 
-  // Eliminar tarea - solo para administradores
-  const deleteTask = async (taskId) => {
-    try {
-      // Verificar si el usuario es administrador
-      if (!user?.isAdmin) {
-        console.error('Permiso denegado: Solo los administradores pueden eliminar tareas');
-        Alert.alert(t('permissionDenied'), t('adminOnlyDeleteTasks'));
-        return;
-      }
-      
-      const taskToDelete = tasks.find(task => task._id === taskId);
-      if (!taskToDelete) {
-        console.error(t('taskNotFound'), taskId);
-        return;
-      }
-
-      // Eliminar la tarea - el backend registrará la actividad automáticamente
-      await api.deleteTask(taskId);
-      
-      // Actualizar la UI después de eliminar
-      setTasks(tasks.filter(task => task._id !== taskId));
-      
-      // No es necesario registrar la actividad manualmente, el backend ya lo hace
-    } catch (error) {
-      console.error('Error deleting task:', error);
-      Alert.alert('Error', error.message || t('errorDeletingTask'));
-    }
-  };
-
-
-  // Toggle task completion
-  const toggleComplete = async (taskId) => {
-    try {
-      // Find the task to toggle
-      const taskToToggle = tasks.find(task => task._id === taskId);
-      if (!taskToToggle) {
-        console.error('Task not found:', taskId);
-        return;
-      }
-      
-      // Determine the new completion status
-      const currentCompleted = taskToToggle.completed !== undefined ? taskToToggle.completed : false;
-      const newCompletedStatus = !currentCompleted;
-      
-      console.log(`Toggling task ${taskId} from ${currentCompleted} to ${newCompletedStatus}`);
-      
-      // Update locally first for immediate UI feedback
-      setTasks(tasks.map(task => {
-        if (task._id === taskId) {
-          return { ...task, completed: newCompletedStatus };
-        }
-        return task;
-      }));
-      
-      // Send update to server
-      const result = await api.updateTaskCompletion(taskId, newCompletedStatus);
-      console.log('Server response for task update:', result);
-      
-      // Save activity for task completion
-      try {
-        await api.saveActivity({
-          type: newCompletedStatus ? 'task_complete' : 'task_update',
-          taskId,
-          message: newCompletedStatus 
-            ? `Tarea "${taskToToggle.title}" completada`
-            : `Tarea "${taskToToggle.title}" actualizada`,
-          metadata: {
-            title: taskToToggle.title,
-            completed: newCompletedStatus,
-            updatedAt: new Date().toISOString()
-          }
-        });
-      } catch (error) {
-        console.error('Error saving activity:', error);
-      }
-      
-      // If we got here, the server update was successful
-    } catch (error) {
-      console.error('Error updating task completion status:', error);
-      
-      // Revert the local change if the server update failed
-      setTasks(tasks.map(task => {
-        if (task._id === taskId) {
-          // Asegurarnos de que completed tenga un valor por defecto
-          const currentCompleted = task.completed !== undefined ? task.completed : false;
-          return { ...task, completed: currentCompleted }; // Revert to original state
-        }
-        return task;
-      }));
-      
-      Alert.alert('Error', error.message || t('errorOccurred'));
-
-    }
-  };
-
   // Seleccionar usuario para asignar tarea
   const selectUser = (userId) => {
     console.log(`Usuario seleccionado: ${userId}`);
-    console.log('Tipo de userId:', typeof userId);
     
-    // Asegurarnos de que el userId sea un string
-    const userIdString = userId.toString();
-    console.log(`userId convertido a string: ${userIdString}`);
+    // Verificar si el usuario ya está seleccionado
+    const isAlreadySelected = selectedUserIds.includes(userId);
     
-    setSelectedUserId(userIdString);
-    setShowUserSelector(false);
-  };
-
-  // Renderizar una tarea
-  const renderTask = ({ item }) => {
-    // Get assigned user's name
-    let assignedUserName = t('noUserAssigned');
-    if (user?.isAdmin && item.userId) {
-      // Try to get username from cached username first
-      if (item._username) {
-        assignedUserName = item._username;
-        console.log(t('usingCachedUsername', { taskId: item._id, username: assignedUserName }));
-      } else {
-        // If no cached username, look up in users array
-        const assignedUser = users.find(u => u._id === item.userId);
-        if (assignedUser) {
-          assignedUserName = assignedUser.username;
-          console.log(t('foundUsernameInUsers', { taskId: item._id, username: assignedUserName }));
-        } else {
-          console.log(t('noUserFoundForTask', { taskId: item._id, userId: item.userId }));
-        }
-      }
+    if (isAlreadySelected) {
+      // Si ya está seleccionado, lo quitamos
+      const updatedSelection = selectedUserIds.filter(id => id !== userId);
+      setSelectedUserIds(updatedSelection);
+      
+      // Actualizar también selectedUserId para compatibilidad
+      setSelectedUserId(updatedSelection.length > 0 ? updatedSelection[0] : null);
+    } else {
+      // Añadimos el nuevo usuario a los seleccionados
+      // Sin límite en la cantidad de usuarios que pueden ser seleccionados
+      const updatedSelection = [...selectedUserIds, userId];
+      setSelectedUserIds(updatedSelection);
+      setSelectedUserId(updatedSelection[0]); // Para compatibilidad con el sistema anterior
     }
     
-    return (
-      <TouchableOpacity 
-        style={styles.taskItem}
-        onPress={() => navigation.navigate('TaskDetails', { taskId: item._id })}
-      >
-        <View style={styles.taskHeader}>
-          <Text style={styles.taskTitle}>{item.title || t('noTitle')}</Text>
-          {user?.isAdmin && (
-            <TouchableOpacity 
-              onPress={(e) => {
-                e.stopPropagation();
-                deleteTask(item._id);
-              }}
-              style={styles.deleteButton}
-            >
-              <Text style={styles.deleteButtonText}>×</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-        
-        <View style={styles.taskDetails}>
-          <Text style={styles.taskDescription}>{item.description || ''}</Text>
-          
-          {user?.isAdmin && (
-            <View style={styles.assignedToContainer}>
-              <Text style={styles.assignedToLabel}>{t('assignedTo')}:</Text>
-              <Text style={styles.assignedToValue}>{assignedUserName}</Text>
-            </View>
-          )}
-          
-          <View style={styles.taskFooter}>
-            <Text style={styles.taskDate}>
-              {new Date(item.createdAt).toLocaleDateString()}
-            </Text>
-            <TouchableOpacity
-              style={[
-                styles.completeButton,
-                item.completed && styles.completedButton
-              ]}
-              onPress={(e) => {
-                e.stopPropagation();
-                toggleComplete(item._id);
-              }}
-            >
-              <Text style={styles.completeButtonText}>
-                {item.completed ? '✓' : '○'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </TouchableOpacity>
-    );
+    // No cerramos el selector automáticamente para permitir seleccionar múltiples usuarios
+    // El usuario debe cerrar el selector manualmente cuando haya terminado
   };
 
-  // Renderizar el selector de usuarios
-  const renderUserSelector = () => (
-    <Modal
-      visible={showUserSelector}
-      transparent={true}
-      animationType="slide"
-      onRequestClose={() => setShowUserSelector(false)}
-    >
-      <View style={styles.modalContainer}>
-        <View style={styles.modalContent}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>{t('selectUser')}</Text>
-            <TouchableOpacity 
-              onPress={() => setShowUserSelector(false)}
-              style={{ padding: 5 }}
-            >
-              <Text style={{ color: '#fff3e5', fontSize: 24, fontWeight: 'bold' }}>×</Text>
-            </TouchableOpacity>
-          </View>
-          <ScrollView style={styles.userList}>
-            {users.map(user => (
-              <TouchableOpacity
-                key={user._id}
-                style={[
-                  styles.userItem,
-                  selectedUserId === user._id && styles.selectedUserItem
-                ]}
-                onPress={() => selectUser(user._id)}
-              >
-                <Text style={[
-                  styles.userItemText,
-                  selectedUserId === user._id && { color: '#000000' }
-                ]}>{user.username}</Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
-      </View>
-    </Modal>
-  );
 
-  // Function to handle selecting a saved location
-  const handleSelectSavedLocation = (location) => {
-    console.log('Selected saved location:', JSON.stringify(location, null, 2));
-    
-    try {
-      // Validate the location data
-      if (!location || !location.location || !location.location.coordinates) {
-        throw new Error('Invalid location data');
-      }
-      
-      // Extract coordinates
-      const [longitude, latitude] = location.location.coordinates;
-      
-      // Update the task location
-      setTaskLocation({
-        coordinates: [longitude, latitude]
-      });
-      
-      // Update the task radius
-      setTaskRadius(location.radius || 0.5);
-      
-      // Update the location name
-      setTaskLocationName(location.name || 'Saved Location');
-      
-      // Close the saved locations selector
-      setShowSavedLocationsSelector(false);
-      
-      console.log('Successfully set location from saved location');
-    } catch (error) {
-      console.error('Error selecting saved location:', error);
-      Alert.alert(
-        t('error') || 'Error',
-        (t('errorSelectingLocation') || 'Error selecting location') + ': ' + error.message,
-        [{ text: t('ok') || 'OK' }]
-      );
-    }
-  };
-
-  // Función para manejar la selección de ubicación y radio
-  const handleLocationSelected = (locationData) => {
-    setTaskLocation(locationData.location);
-    setTaskRadius(locationData.radius);
-    setTaskLocationName(locationData.locationName);
-    console.log(t('locationSelected', { 
-      coordinates: JSON.stringify(locationData.location.coordinates), 
-      radius: locationData.radius,
-      place: locationData.locationName 
-    }));
-  };
-
-  // Función para manejar la selección de una plantilla de tarea
-  const handleSelectTemplate = (template) => {
-    // Aplicar los datos de la plantilla al formulario
-    setNewTaskTitle(template.title || '');
-    setNewTaskDescription(template.description || '');
-    
-    // Aplicar datos de ubicación si existen (verificando diferentes estructuras posibles)
-    if (template.location) {
-      // Verificar si la ubicación tiene la estructura esperada o si es directamente un array de coordenadas
-      if (typeof template.location === 'object') {
-        if (template.location.coordinates) {
-          setTaskLocation(template.location);
-        } else if (Array.isArray(template.location)) {
-          // Si es un array directamente, asumir que son coordenadas
-          setTaskLocation({ coordinates: template.location });
-        } else {
-          // Si no tiene ninguna estructura reconocible, no establecer ubicación
-          setTaskLocation(null);
-        }
-      } else {
-        setTaskLocation(null);
-      }
-      // Asegurarnos de que el radio se maneje correctamente, incluso si es un valor decimal pequeño
-    const radius = template.radius !== undefined && template.radius !== null
-      ? parseFloat(template.radius)
-      : 1.0;
-    
-    console.log(`Radio de plantilla: ${template.radius} (tipo: ${typeof template.radius}), convertido a: ${radius}`);
-    setTaskRadius(radius);
-      setTaskLocationName(template.locationName || '');
-    }
-    
-    // Aplicar límite de tiempo si existe
-    if (template.timeLimit) {
-      const hours = Math.floor(template.timeLimit / 60);
-      const minutes = template.timeLimit % 60;
-      setSelectedHours(hours);
-      setSelectedMinutes(minutes);
-      setTaskTimeLimit(`${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`);
-    }
-    
-    // Aplicar palabras clave si existen
-    if (template.keywords && Array.isArray(template.keywords)) {
-      setTaskKeywords(template.keywords);
-    }
-    
-    // Aplicar modo manos libres
-    setHandsFreeMode(template.handsFreeMode || false);
-    
-    // Cerrar el selector de plantillas
-    setShowTemplateSelector(false);
-    
-    // Mostrar mensaje de confirmación
-    Alert.alert(
-      t('success'),
-      `${t('templateApplied')}: ${template.name}`,
-      [{ text: 'OK' }]
-    );
-  };
-
-  // Renderizar el formulario para añadir tareas
-  const renderAddTaskForm = () => {
-    return (
-      <View style={styles.formContainer}>
-        <View style={styles.formHeaderRow}>
-          <Text style={styles.formTitle}>{t('addNewTask')}</Text>
-        </View>
-        
-        <TextInput
-          style={[styles.input, { color: '#fff3e5', borderColor: '#fff3e5' }]}
-          placeholder={t('taskTitle')}
-          value={newTaskTitle}
-          onChangeText={setNewTaskTitle}
-          placeholderTextColor="#a8a8a8"
-        />
-        
-        <TextInput
-          style={[styles.input, styles.textArea, { color: '#fff3e5', borderColor: '#fff3e5' }]}
-          placeholder={t('taskDescription')}
-          value={newTaskDescription}
-          onChangeText={setNewTaskDescription}
-          multiline={true}
-          numberOfLines={3}
-          placeholderTextColor="#a8a8a8"
-        />
-        
-        {/* Campo para tiempo límite (solo para administradores) */}
-        {user?.isAdmin && (
-          <View style={styles.timeLimitContainer}>
-            <Ionicons name="timer-outline" size={20} color="#fff3e5" style={styles.timeLimitIcon} />
-            <TouchableOpacity 
-              style={styles.timePicker} 
-              onPress={showTimePicker}
-            >
-              <Text style={styles.timePickerText}>
-                {formatSelectedTime()}
-              </Text>
-              <Ionicons name="chevron-down" size={20} color="#fff3e5" />
-            </TouchableOpacity>
-          </View>
-        )}
-        
-        {/* Botón para seleccionar ubicación */}
-        <View style={styles.locationContainer}>
-          <TouchableOpacity 
-            style={styles.locationButton}
-            onPress={() => setShowLocationSelector(true)}
-          >
-            <Ionicons name="location" size={20} color="#000000" />
-            <Text style={[styles.locationButtonText, { color: '#fff3e5' }]}>
-              {taskLocation 
-                ? `${taskLocationName || t('selectedLocation')} (${taskRadius} km)` 
-                : t('addLocationAndRadius')}
-            </Text>
-          </TouchableOpacity>
-          
-          {/* Botón para seleccionar ubicaciones guardadas */}
-          <TouchableOpacity 
-            style={[styles.savedLocationsButton, { backgroundColor: '#fff3e5', padding: 10, marginLeft: 8, width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }]}
-            onPress={() => setShowSavedLocationsSelector(true)}
-          >
-            <Ionicons name="bookmark" size={24} color="#000000" />
-          </TouchableOpacity>
-          
-          {/* Botón para plantillas de tareas (solo para administradores) */}
-          {/* Botón para seleccionar plantillas de tareas (solo para administradores) */}
-          {user?.isAdmin && (
-            <TouchableOpacity 
-              style={[styles.templateButton, { backgroundColor: '#fff3e5', padding: 10, marginLeft: 8, width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }]}
-              onPress={() => setShowTemplateSelector(true)}
-            >
-              <Ionicons name="copy-outline" size={24} color="#000000" />
-            </TouchableOpacity>
-          )}
-        </View>
-        
-        {/* Opción de Modo Manos Libres */}
-        <View style={styles.handsFreeContainer}>
-          <View style={styles.handsFreeTextContainer}>
-            <Ionicons name="mic-outline" size={20} color="#fff3e5" />
-            <Text style={[styles.handsFreeText, { color: '#fff3e5' }]}>{t('handsFreeMode')}</Text>
-          </View>
-          <TouchableOpacity 
-            style={[
-              styles.handsFreeSwitch, 
-              handsFreeMode ? { backgroundColor: '#fff3e5' } : styles.handsFreeInactive
-            ]}
-            onPress={() => setHandsFreeMode(!handsFreeMode)}
-          >
-            <View style={[
-              styles.handsFreeHandle,
-              handsFreeMode ? { backgroundColor: '#000000' } : styles.handsFreeHandleInactive
-            ]} />
-          </TouchableOpacity>
-        </View>
-        
-        {/* Campo para palabras clave solo si handsFreeMode está activado */}
-        {handsFreeMode && (
-          <View style={styles.keywordsContainer}>
-            <Text style={[styles.keywordsLabel, { color: '#fff3e5' }]}>{t('voiceKeywords') || 'Palabras clave para activación por voz'}</Text>
-            
-            <View style={styles.keywordInputRow}>
-              <TextInput
-                style={[styles.input, styles.keywordInput, { color: '#fff3e5', borderColor: '#fff3e5' }]}
-                placeholder={t('keywordPlaceholder') || "Escriba una palabra clave"}
-                value={currentKeyword}
-                onChangeText={setCurrentKeyword}
-                placeholderTextColor="#a8a8a8"
-              />
-              <TouchableOpacity 
-                style={[styles.addKeywordButton, { backgroundColor: '#fff3e5' }]}
-                onPress={() => {
-                  if (currentKeyword.trim()) {
-                    setTaskKeywords([...taskKeywords, currentKeyword.trim()]);
-                    setCurrentKeyword('');
-                  }
-                }}
-              >
-                <Text style={[styles.addKeywordButtonText, { color: '#000000' }]}>+</Text>
-              </TouchableOpacity>
-            </View>
-            
-            {taskKeywords.length > 0 && (
-              <View style={styles.keywordsList}>
-                <Text style={styles.keywordsListTitle}>Keywords:</Text>
-                <View style={styles.keywordTags}>
-                  {taskKeywords.map((keyword, index) => (
-                    <View key={`keyword-${index}`} style={styles.keywordTag}>
-                      <Text style={styles.keywordTagText}>{keyword}</Text>
-                      <TouchableOpacity
-                        style={styles.removeKeywordButton}
-                        onPress={() => {
-                          const updatedKeywords = [...taskKeywords];
-                          updatedKeywords.splice(index, 1);
-                          setTaskKeywords(updatedKeywords);
-                        }}
-                      >
-                        <Text style={styles.removeKeywordButtonText}>×</Text>
-                      </TouchableOpacity>
-                    </View>
-                  ))}
-                </View>
-              </View>
-            )}
-          </View>
-        )}
-        
-        {user?.isAdmin && (
-          <TouchableOpacity 
-            style={styles.userSelectButton}
-            onPress={() => setShowUserSelector(true)}
-          >
-            <Text style={[styles.userSelectButtonText, { color: '#fff3e5' }]}>
-              {selectedUserId 
-                ? users.find(u => u._id === selectedUserId)?.username || t('userSelected')
-                : t('assignToUser')}
-            </Text>
-            <Ionicons name="chevron-forward" size={16} color="#fff3e5" />
-          </TouchableOpacity>
-        )}
-        
-        <View style={styles.formButtons}>
-          <TouchableOpacity 
-            style={[styles.formButton, styles.cancelButton]}
-            onPress={() => {
-              setShowAddForm(false);
-              setNewTaskTitle('');
-              setNewTaskDescription('');
-              setSelectedUserId(null);
-              setTaskLocation(null);
-              setTaskRadius(1.0);
-              setTaskLocationName('');
-              setHandsFreeMode(false); // Restablecer el modo manos libres
-              setTaskKeywords([]); // Restablecer palabras clave
-              setCurrentKeyword(''); // Limpiar el campo de entrada actual
-              setTaskTimeLimit(''); // Limpiar el campo de tiempo límite
-            }}
-          >
-            <Text style={styles.cancelButtonText}>{t('cancel')}</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={[styles.formButton, styles.saveButton]}
-            onPress={addTask}
-          >
-            <Text style={styles.saveButtonText}>{t('save')}</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Location and Radius Selector */}
-        <LocationRadiusSelector
-          visible={showLocationSelector}
-          onClose={() => setShowLocationSelector(false)}
-          onSave={handleLocationSelected}
-          initialLocation={taskLocation ? {
-            latitude: taskLocation.coordinates[1],
-            longitude: taskLocation.coordinates[0]
-          } : null}
-          initialRadius={taskRadius}
-          initialLocationName={taskLocationName}
-        />
-        
-        {/* Saved Locations Selector */}
-        <SavedLocationsSelector
-          visible={showSavedLocationsSelector}
-          onClose={() => setShowSavedLocationsSelector(false)}
-          onSelect={handleSelectSavedLocation}
-        />
-        
-        {/* Task Templates Selector - Solo para administradores */}
-        {user?.isAdmin && (
-          <TaskTemplateSelector
-            visible={showTemplateSelector}
-            onClose={() => setShowTemplateSelector(false)}
-            onSelectTemplate={handleSelectTemplate}
-            currentTask={{
-              title: newTaskTitle,
-              description: newTaskDescription,
-              location: taskLocation ? { coordinates: taskLocation.coordinates } : null,
-              radius: taskRadius,
-              locationName: taskLocationName,
-              timeLimit: selectedHours * 60 + selectedMinutes,
-              keywords: taskKeywords,
-              handsFreeMode: handsFreeMode
-            }}
-          />
-        )}
-      </View>
-    );
-  };
 
   // Renderizar el selector de tiempo personalizado
   const renderCustomTimePicker = () => {
@@ -1039,6 +731,198 @@ const TaskScreen = ({ navigation }) => {
     );
   };
 
+  // Renderizar el formulario para añadir tareas usando el componente TaskForm
+  const renderAddTaskForm = () => {
+    return (
+      <ScrollView style={styles.formContainer}>
+        <Text style={styles.formTitle}>{t('addTask')}</Text>
+        
+        <TaskForm 
+          isEditing={false}
+          onSubmit={handleTaskSubmit}
+          isSubmitting={isSubmitting}
+          showUserSelector={() => setShowUserSelector(true)}
+          isAdmin={user?.isAdmin}
+        />
+        
+        {/* Botón de cancelar */}
+        <TouchableOpacity 
+          style={[styles.button, styles.cancelButton]} 
+          onPress={() => setShowAddForm(false)}
+        >
+          <Text style={styles.cancelButtonText}>{t('cancel')}</Text>
+        </TouchableOpacity>
+
+        {/* Modal de selector de ubicación */}
+        {showLocationSelector && (
+          <LocationRadiusSelector 
+            visible={showLocationSelector}
+            onClose={() => setShowLocationSelector(false)}
+            onSave={handleLocationSelected}
+            initialRegion={null}
+          />
+        )}
+        
+        {/* Modal de ubicaciones guardadas */}
+        {showSavedLocationsSelector && (
+          <SavedLocationsSelector
+            visible={showSavedLocationsSelector}
+            onClose={() => setShowSavedLocationsSelector(false)}
+            onSelect={handleSelectSavedLocation}
+          />
+        )}
+        
+        {/* Modal de selector de plantillas */}
+        {showTemplateSelector && (
+          <TaskTemplateSelector 
+            visible={showTemplateSelector}
+            onClose={() => setShowTemplateSelector(false)}
+            onSelectTemplate={handleSelectTemplate}
+          />
+        )}
+      </ScrollView>
+    );
+  };
+
+  // Renderizar el selector de usuarios
+  const renderUserSelector = () => {
+    if (!showUserSelector) return null;
+    
+    // Filtrar usuarios que estén activos y no sean administradores
+    const eligibleUsers = users.filter(user => 
+      user.isActive === true && user.isAdmin === false
+    );
+    
+    return (
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={true}
+        onRequestClose={() => setShowUserSelector(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.userSelectorContainer}>
+            <Text style={styles.selectorTitle}>{t('selectUser')}</Text>
+            
+            {/* Mostrar mensaje si no hay usuarios disponibles */}
+            {eligibleUsers.length === 0 && (
+              <Text style={styles.noUsersMessage}>
+                {t('noEligibleUsers') || 'No hay usuarios activos disponibles'}
+              </Text>
+            )}
+            
+            {/* Lista de usuarios filtrados */}
+            <ScrollView style={styles.usersList}>
+              {eligibleUsers.map(user => {
+                const isSelected = selectedUserIds.includes(user._id);
+                
+                return (
+                  <TouchableOpacity
+                    key={user._id}
+                    style={[styles.userItem, isSelected && styles.selectedUserItem]}
+                    onPress={() => selectUser(user._id)}
+                  >
+                    <View style={styles.userItemContent}>
+                      <Ionicons 
+                        name={isSelected ? "checkbox" : "square-outline"} 
+                        size={24} 
+                        color={isSelected ? "#4CAF50" : "#a8a8a8"} 
+                      />
+                      <View style={styles.userInfoContainer}>
+                        <Text style={styles.username}>{user.username}</Text>
+                        {user.email && <Text style={styles.userEmail}>{user.email}</Text>}
+                      </View>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+            
+            {/* Botones de acción */}
+            <View style={styles.userSelectorActions}>
+              <TouchableOpacity 
+                style={[styles.actionButton, styles.cancelButton]} 
+                onPress={() => setShowUserSelector(false)}
+              >
+                <Text style={styles.buttonText}>{t('cancel')}</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={[styles.actionButton, styles.confirmButton]} 
+                onPress={() => {
+                  // Confirmar la selección y cerrar
+                  console.log(`${selectedUserIds.length} usuarios seleccionados`);
+                  setShowUserSelector(false);
+                }}
+              >
+                <Text style={styles.buttonText}>
+                  {t('confirm')} ({selectedUserIds.length})
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    );
+  };
+
+  // Renderizar una tarea individual
+  const renderTask = ({ item }) => {
+    // Extraer información de la tarea
+    const taskUser = users.find(u => u._id === item.userId);
+    const username = item._username || (taskUser ? taskUser.username : t('unassigned'));
+    
+    return (
+      <TouchableOpacity 
+        style={[styles.taskItem, item.completed && styles.completedTask]}
+        onPress={() => navigation.navigate('TaskDetails', { taskId: item._id })}
+      >
+        <View style={styles.taskHeader}>
+          <Text style={styles.taskTitle}>{item.title}</Text>
+          <View style={styles.taskStatus}>
+            {item.completed ? (
+              <Ionicons name="checkbox" size={20} color="#4CAF50" />
+            ) : (
+              <Ionicons name="square-outline" size={20} color="#FFC107" />
+            )}
+          </View>
+        </View>
+        
+        {item.description && (
+          <Text style={styles.taskDescription} numberOfLines={2}>
+            {item.description}
+          </Text>
+        )}
+        
+        <View style={styles.taskFooter}>
+          <View style={styles.taskUserInfo}>
+            <Ionicons name="person" size={16} color="#a8a8a8" />
+            <Text style={styles.taskUsername}>{username}</Text>
+          </View>
+          
+          {item.timeLimit > 0 && (
+            <View style={styles.taskTimeInfo}>
+              <Ionicons name="time" size={16} color="#a8a8a8" />
+              <Text style={styles.taskTimeLimit}>
+                {Math.floor(item.timeLimit / 60)}h {item.timeLimit % 60}m
+              </Text>
+            </View>
+          )}
+          
+          {item.location && item.radius && (
+            <View style={styles.taskLocationInfo}>
+              <Ionicons name="location" size={16} color="#a8a8a8" />
+              <Text style={styles.taskLocation}>
+                {item.locationName || t('location')} ({item.radius} km)
+              </Text>
+            </View>
+          )}
+        </View>
+      </TouchableOpacity>
+    );
+  };
+  
+  // Return principal del componente TaskScreen
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar backgroundColor={theme.colors.darkGrey} barStyle="light-content" />
@@ -1106,7 +990,6 @@ const TaskScreen = ({ navigation }) => {
           )}
         </>
       )}
-      
       {renderUserSelector()}
       {renderCustomTimePicker()}
     </SafeAreaView>
@@ -1188,6 +1071,79 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     fontSize: Math.min(width * 0.04, 16),
     marginLeft: 8,
+  },
+  userSelectorContainer: {
+    backgroundColor: '#fff',
+    borderRadius: 15,
+    width: '90%',
+    maxWidth: 400,
+    maxHeight: '80%',
+    padding: 20,
+    elevation: 5,
+  },
+  selectorTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 15,
+    textAlign: 'center',
+  },
+  noUsersMessage: {
+    textAlign: 'center',
+    padding: 20,
+    color: '#777',
+  },
+  usersList: {
+    maxHeight: 350,
+    marginBottom: 15,
+  },
+  userItem: {
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#ececec',
+    flexDirection: 'row',
+  },
+  selectedUserItem: {
+    backgroundColor: '#e6f7ff',
+  },
+  userItemContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  userInfoContainer: {
+    marginLeft: 12,
+    flex: 1,
+  },
+  username: {
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  userEmail: {
+    fontSize: 14,
+    color: '#777',
+  },
+  userSelectorActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 10,
+  },
+  actionButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    minWidth: 100,
+    alignItems: 'center',
+  },
+  cancelButton: {
+    backgroundColor: '#f1f1f1',
+  },
+  confirmButton: {
+    backgroundColor: '#4CAF50',
+  },
+  buttonText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#000',
   },
   taskList: {
     flex: 1,
@@ -1700,6 +1656,23 @@ const styles = StyleSheet.create({
   },
   timePickerConfirmText: {
     color: '#fff3e5',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  // Estilos para botones en el formulario modular
+  button: {
+    padding: 15,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 15,
+  },
+  cancelButton: {
+    backgroundColor: '#555',
+    marginVertical: 10,
+  },
+  cancelButtonText: {
+    color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
   },
