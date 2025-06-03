@@ -319,7 +319,7 @@ const TaskForm = ({
         <View style={styles.inputContainer}>
           <Text style={[styles.inputLabel, {marginTop: -35, fontWeight: 'bold', marginBottom: 5}]}>{t('fileNumber') || 'Número de archivo'}</Text>
           <TextInput
-            style={styles.input}
+            style={[styles.input, {color: '#fff3e5'}]}
             placeholder={t('enterFileNumber') || 'Ingrese el número de archivo'}
             placeholderTextColor="#a8a8a8"
             value={fileNumber}

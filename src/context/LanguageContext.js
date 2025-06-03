@@ -4,6 +4,7 @@ import React, { createContext, useState, useContext } from 'react';
 export const translations = {
   en: {
     login: 'Login',
+    deactivate: 'Deactivate me',
     username: 'Username',
     password: 'Password',
     loginButton: 'Login',
@@ -761,6 +762,7 @@ export const translations = {
   },
   es: {
     login: 'Iniciar Sesión',
+    deactivate: 'Desactivarme',
     username: 'Usuario',
     password: 'Contraseña',
     loginButton: 'Iniciar Sesión',

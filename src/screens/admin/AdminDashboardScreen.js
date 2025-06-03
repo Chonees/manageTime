@@ -369,6 +369,7 @@ const AdminDashboardScreen = ({ navigation }) => {
       {error && <Text style={styles.errorText}>{error}</Text>}
       
       <FlatList
+        contentContainerStyle={{paddingTop: 5}}
         data={[1]} // Just need one item to render our content
         keyExtractor={() => 'dashboard-content'}
         renderItem={() => (
@@ -579,15 +580,17 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-
     paddingHorizontal: 15,
     paddingTop: Platform.OS === 'ios' ? 10 : 15,
     paddingBottom: 15,
     backgroundColor: '#2e2e2e',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 243, 229, 0.1)',
   },
   headerTitleContainer: {
     flex: 1,
   },
+
   headerTitle: {
     fontSize: 22,
 
