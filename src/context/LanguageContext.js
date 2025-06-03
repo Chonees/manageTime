@@ -46,11 +46,11 @@ export const translations = {
     someTimeAgo: 'some time ago',
     
     // Real-time locations
-    loggedUsers: 'Logged Users',
+    loggedUsers: 'Active Users',
     loadingLocations: 'Loading locations...',
     noActiveUsers: 'No active users',
     locationLegend: 'Location Legend',
-    loggedInUsers: 'Logged In Users',
+    loggedInUsers: 'Active Users',
     user: 'User',
     users: 'Users',
     realTimeLocationOfUsers: 'Real Time Location Of Users',
@@ -79,9 +79,14 @@ export const translations = {
     
     // Task status translations - nuevos estados más precisos
     waiting_for_acceptance: 'Waiting for acceptance',
+    waitingAcceptance: 'Waiting for acceptance',
     on_the_way: 'On the way',
+    onTheWay: 'On the way',
     on_site: 'On site',
+    onSite: 'On site',
     completed: 'Completed',
+    inProgress: 'In Progress',
+    pending: 'Pending',
     
     // Activity type translations
     locationEnter: 'Location Entry',
@@ -804,11 +809,11 @@ export const translations = {
     someTimeAgo: 'hace algún tiempo',
     
     // Real-time locations
-    loggedUsers: 'Usuarios Logueados',
+    loggedUsers: 'Usuarios Activos',
     loadingLocations: 'Cargando ubicaciones...',
     noActiveUsers: 'No hay usuarios activos',
     locationLegend: 'Leyenda de Ubicaciones',
-    loggedInUsers: 'Usuarios logueados',
+    loggedInUsers: 'Usuarios activos',
     user: 'Usuario',
     users: 'Usuarios',
     realTimeLocationOfUsers: 'Ubicación en tiempo real de usuarios',
@@ -833,20 +838,14 @@ export const translations = {
     timeLimit: 'Límite de tiempo',
     minutes: 'minutos',
     taskRejected: 'Tarea Rechazada',
-    taskRejectedMessage: 'Has rechazado esta tarea y ha sido desactivada.',
-    errorRejectingTask: 'Error al rechazar la tarea',
-    taskHasTimeLimit: 'Esta tarea tiene un límite de tiempo de {{minutes}} minutos',
-    
-    // Task status translations - nuevos estados más precisos
-    waiting_for_acceptance: 'Esperando aceptación',
-    on_the_way: 'En camino',
-    on_site: 'En el sitio',
-    completed: 'Completada',
-    
-    // Activity type translations
-    locationEnter: 'Entrada a Ubicación',
-    locationExit: 'Salida de Ubicación',
     taskComplete: 'Tarea Completada',
+    
+    // Estados de tareas
+    waitingAcceptance: 'Esperando aceptación',
+    onTheWay: 'En camino',
+    onSite: 'En el sitio',
+    completed: 'Completada',
+    pending: 'Pendiente',
     taskCreate: 'Tarea Creada',
     taskUpdate: 'Tarea Actualizada',
     taskDelete: 'Tarea Eliminada',

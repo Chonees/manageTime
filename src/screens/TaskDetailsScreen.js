@@ -873,6 +873,7 @@ const toggleComplete = async () => {
   
   // Función para editar la tarea actual (solo administradores)
   const handleEditTask = async (updatedTaskData) => {
+    // Verificación estricta de permisos de administrador para asignar/reasignar usuarios
     if (!user?.isAdmin) {
       Alert.alert(t('error'), t('adminPermissionRequired'));
       return;
@@ -883,8 +884,8 @@ const toggleComplete = async () => {
       
       console.log('Datos recibidos del formulario para actualizar:', JSON.stringify(updatedTaskData, null, 2));
       
-      // Ahora el backend ha sido actualizado para manejar todos los campos
-      // Podemos enviar los datos directamente sin modificaciones
+      // Aseguramos que los userIds provengan exclusivamente del formulario de edición
+      // Los usuarios solo pueden ser asignados/reasignados a través del TaskForm
       const updatedTask = await api.updateTask(task._id, updatedTaskData);
       
       console.log('Respuesta del servidor:', JSON.stringify(updatedTask, null, 2));
@@ -1437,28 +1438,7 @@ const toggleComplete = async () => {
               </TouchableOpacity>
             </View>
             
-            {/* Botón para seleccionar usuarios */}
-            {user?.isAdmin && (
-              <TouchableOpacity 
-                style={styles.userSelectorButton}
-                onPress={() => {
-                  // Inicializar usuarios seleccionados basado en la tarea actual
-                  if (task?.userIds && Array.isArray(task.userIds) && task.userIds.length > 0) {
-                    setSelectedUserIds(task.userIds);
-                  } else if (task?.userId) {
-                    setSelectedUserIds([task.userId]);
-                  } else {
-                    setSelectedUserIds([]);
-                  }
-                  setShowUserSelector(true);
-                }}
-              >
-                <Ionicons name="people" size={20} color="#fff" style={styles.buttonIcon} />
-                <Text style={styles.userSelectorButtonText}>
-                  {t('assignUsers') || 'Asignar usuarios'}
-                </Text>
-              </TouchableOpacity>
-            )}
+            {/* Usamos solo el selector integrado en el formulario */}
             
             {task && (
               <TaskForm 
@@ -1473,6 +1453,17 @@ const toggleComplete = async () => {
                   handleEditTask(finalData);
                 }}
                 isSubmitting={isUpdatingTask}
+                showUserSelector={() => {
+                  // Inicializar usuarios seleccionados basado en la tarea actual
+                  if (task?.userIds && Array.isArray(task.userIds) && task.userIds.length > 0) {
+                    setSelectedUserIds(task.userIds);
+                  } else if (task?.userId) {
+                    setSelectedUserIds([task.userId]);
+                  } else {
+                    setSelectedUserIds([]);
+                  }
+                  setShowUserSelector(true);
+                }}
               />
             )}
           </View>

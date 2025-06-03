@@ -873,6 +873,48 @@ const TaskScreen = ({ navigation }) => {
     const taskUser = users.find(u => u._id === item.userId);
     const username = item._username || (taskUser ? taskUser.username : t('unassigned'));
     
+    // Función para manejar la eliminación de una tarea
+    const handleDeleteTask = async () => {
+      try {
+        // Mostrar confirmación antes de eliminar
+        Alert.alert(
+          t('deleteTask'),
+          t('deleteTaskConfirmation'),
+          [
+            { text: t('cancel'), style: 'cancel' },
+            { 
+              text: t('delete'), 
+              style: 'destructive',
+              onPress: async () => {
+                try {
+                  await api.deleteTask(item._id);
+                  // Recargar la lista de tareas después de eliminar
+                  loadTasks();
+                } catch (error) {
+                  Alert.alert(t('error'), t('errorDeletingTask'));
+                  console.error('Error al eliminar tarea:', error);
+                }
+              }
+            }
+          ]
+        );
+      } catch (error) {
+        console.error('Error en handleDeleteTask:', error);
+      }
+    };
+    
+    // Función para marcar una tarea como completada o pendiente
+    const handleToggleTaskCompletion = async () => {
+      try {
+        await api.updateTask(item._id, { completed: !item.completed });
+        // Recargar la lista de tareas después de actualizar
+        loadTasks();
+      } catch (error) {
+        Alert.alert(t('error'), t('errorUpdatingTask'));
+        console.error('Error al actualizar estado de tarea:', error);
+      }
+    };
+    
     return (
       <TouchableOpacity 
         style={[styles.taskItem, item.completed && styles.completedTask]}
@@ -880,11 +922,34 @@ const TaskScreen = ({ navigation }) => {
       >
         <View style={styles.taskHeader}>
           <Text style={styles.taskTitle}>{item.title}</Text>
-          <View style={styles.taskStatus}>
-            {item.completed ? (
-              <Ionicons name="checkbox" size={20} color="#4CAF50" />
-            ) : (
-              <Ionicons name="square-outline" size={20} color="#FFC107" />
+          <View style={styles.taskControls}>
+            {/* Mostrar estado para todos los usuarios */}
+            <View style={styles.statusContainer}>
+              <Text style={styles.statusLabel}>{t('status')}:</Text>
+              <Text 
+                style={[
+                  styles.statusValue, 
+                  item.status === 'completed' || item.completed ? styles.completedStatusValue : 
+                  item.status === 'on_site' ? styles.onSiteStatusValue : 
+                  item.status === 'on_the_way' ? styles.onTheWayStatusValue : 
+                  styles.waitingStatusValue
+                ]}
+              >
+                {item.status === 'completed' || item.completed ? t('completed') : 
+                 item.status === 'on_site' ? t('on_site') : 
+                 item.status === 'on_the_way' ? t('on_the_way') : 
+                 t('waiting_for_acceptance')}
+              </Text>
+            </View>
+            
+            {/* Solo los administradores ven el botón de eliminar */}
+            {user && user.isAdmin && (
+              <TouchableOpacity 
+                style={styles.deleteButton}
+                onPress={handleDeleteTask}
+              >
+                <Ionicons name="trash-outline" size={20} color="#ff5252" />
+              </TouchableOpacity>
             )}
           </View>
         </View>
@@ -1249,6 +1314,40 @@ const styles = StyleSheet.create({
   taskIconsColumn: {
     flexDirection: 'column',
     flex: 1,
+  },
+  taskControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  statusContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 5,
+  },
+  statusLabel: {
+    fontSize: 14,
+    color: '#a8a8a8',
+    marginRight: 4,
+  },
+  statusValue: {
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  completedStatusValue: {
+    color: '#4CAF50', // Verde para completado
+  },
+  onSiteStatusValue: {
+    color: '#2196F3', // Azul para en el sitio
+  },
+  onTheWayStatusValue: {
+    color: '#FF9800', // Naranja para en camino
+  },
+  waitingStatusValue: {
+    color: '#9C27B0', // Púrpura para esperando aceptación
+  },
+  pendingStatusValue: {
+    color: '#FFC107', // Amarillo para pendiente
   },
   taskIconRow: {
     flexDirection: 'row',
