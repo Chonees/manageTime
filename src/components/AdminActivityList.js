@@ -305,40 +305,28 @@ const AdminActivityList = () => {
         return 'create-outline';
       case 'task_delete':
         return 'trash-outline';
-      case 'started_working':
-      case 'clock_in':
-        return 'play-circle-outline';
-      case 'stopped_working':
-      case 'clock_out':
-        return 'stop-circle-outline';
       default:
         return 'information-circle-outline';
     }
   };
 
-  // Obtener color según el tipo de actividad
+  // Obtener el color según el tipo de actividad
   const getActivityColor = (type) => {
     switch (type) {
       case 'location_enter':
-        return '#4caf50'; // Verde
+        return '#2196F3'; // Azul
       case 'location_exit':
-        return '#f44336'; // Rojo
+        return '#673AB7'; // Morado
       case 'location_check':
-        return '#1976d2'; // Azul oscuro pastel
+        return '#03A9F4'; // Azul claro
       case 'task_complete':
-        return '#4CAF50'; // Azul
+        return '#4CAF50'; // Verde
       case 'task_create':
-        return '#6d4c41'; // Moka
+        return '#009688'; // Verde azulado
       case 'task_update':
-        return '#0277bd'; // Azul
+        return '#FF9800'; // Naranja
       case 'task_delete':
         return '#ff5252'; // Rojo
-      case 'started_working':
-      case 'clock_in':
-        return '#4CAF50'; // Verde
-      case 'stopped_working':
-      case 'clock_out':
-        return '#FF5722'; // Naranja rojizo
       default:
         return '#607d8b'; // Gris azulado
     }
@@ -347,14 +335,6 @@ const AdminActivityList = () => {
   // Obtener texto descriptivo según el tipo de actividad
   const getActivityTypeText = (type) => {
     switch (type) {
-      case 'clock_in':
-        return 'Entrada';
-      case 'clock_out':
-        return 'Salida';
-      case 'started_working':
-        return 'Inicio de trabajo';
-      case 'stopped_working':
-        return 'Fin de trabajo';
       case 'task_create':
         return 'Creación de tarea';
       case 'task_update':
@@ -375,45 +355,31 @@ const AdminActivityList = () => {
   };
 
   // Generar una descripción detallada de la actividad
-  const getDetailedDescription = (item) => {
-    const { type, metadata, taskId, userId } = item;
+  const getDetailedDescription = (activity) => {
+    const { type, metadata, message } = activity;
     
-    // Nombre de usuario para mostrar
-    let userName = '';
-    if (typeof userId === 'object' && userId?.username) {
-      userName = userId.username;
+    if (message && message.trim()) {
+      return message;
     }
     
     switch (type) {
       case 'task_create':
-        if (metadata && metadata.title) {
-          return `Creó la tarea "${metadata.title}"`;
-        }
         return 'Creó una tarea';
         
       case 'task_update':
-        if (metadata && metadata.title) {
-          return `Actualizó la tarea "${metadata.title}"`;
-        }
         return 'Actualizó una tarea';
         
       case 'task_complete':
-        if (metadata && metadata.title) {
-          return `Completó la tarea "${metadata.title}"`;
-        }
         return 'Completó una tarea';
         
       case 'task_delete':
-        if (metadata && metadata.title) {
-          return `Eliminó la tarea "${metadata.title}"`;
-        }
         return 'Eliminó una tarea';
         
       case 'location_enter':
         if (metadata && metadata.locationName) {
-          return `Entró en ${metadata.locationName}`;
+          return `Entró a ${metadata.locationName}`;
         }
-        return 'Entró en una ubicación';
+        return 'Entró a una ubicación';
         
       case 'location_exit':
         if (metadata && metadata.locationName) {
@@ -422,75 +388,41 @@ const AdminActivityList = () => {
         return 'Salió de una ubicación';
         
       case 'location_check':
-        if (metadata && metadata.latitude && metadata.longitude) {
-          return `Punto de seguimiento en coordenadas: ${metadata.latitude.toFixed(6)}, ${metadata.longitude.toFixed(6)}`;
+        if (metadata && metadata.locationName) {
+          return `Registró posición en ${metadata.locationName}`;
         }
         return 'Punto de seguimiento';
-        
-      case 'clock_in':
-        return 'Marcó entrada';
-        
-      case 'clock_out':
-        return 'Marcó salida';
-        
-      case 'started_working':
-        return 'Comenzó a trabajar';
-        
-      case 'stopped_working':
-        if (metadata && metadata.duration) {
-          return `Marcó como no disponible (duración: ${Math.floor(metadata.duration / 60)} min)`;
-        } else if (metadata && metadata.latitude && metadata.longitude) {
-          return `Marcó como no disponible en coordenadas: ${metadata.latitude.toFixed(6)}, ${metadata.longitude.toFixed(6)}`;
-        }
-        return 'Marcó como no disponible';
-        
+                
       default:
-        return 'Actividad registrada';
+        return message || 'Actividad sin detalle';
     }
   };
 
-  // Filtrar actividades por tipo y tiempo
+  // Filtrar actividades por tipo
   const getFilteredActivities = () => {
-    // Primero, filtramos los location_check de la vista general
     let filteredActivities = activities;
-    if (filterType !== 'location') {
-      // Si no estamos en el filtro de ubicación, excluimos los location_check
-      filteredActivities = activities.filter(activity => activity.type !== 'location_check');
-    }
     
-    // Si estamos en la vista general (sin filtro específico), retornamos todo excepto location_check
     if (filterType === 'all') {
-      return filteredActivities;
-    }
-    
-    // Aplicar filtros específicos por tipo
-    filteredActivities = filteredActivities.filter(activity => {
-      const { type } = activity;
-      
-      if (filterType === 'availability') {
-        return ['clock_in', 'clock_out', 'started_working', 'stopped_working'].includes(type);
-      }
-      
-      if (filterType === 'task') {
-        return ['task_create', 'task_update', 'task_complete', 'task_delete'].includes(type);
-      }
-      
-      if (filterType === 'location') {
-        return ['location_check'].includes(type);
-      }
-      
-      return true;
-    });
-    
-    // Aplicar filtro de tiempo si está activo y estamos en filtro de ubicación
-    if (filterType === 'location' && timeFilter) {
-      filteredActivities = filteredActivities.filter(activity => {
-        // Obtener la hora del evento
-        const activityDate = new Date(activity.createdAt || activity.timestamp);
-        const activityHour = activityDate.getHours();
+      // Excluir actividades de verificación de ubicación y puntos de seguimiento
+      filteredActivities = activities.filter(activity => activity.type !== 'location_check');
+    } else if (filterType && filterType !== 'all') {
+      filteredActivities = activities.filter(activity => {
+        const { type } = activity;
         
-        // Verificar si la hora está dentro del rango seleccionado
-        return activityHour >= timeFilter.start && activityHour < timeFilter.end;
+        if (filterType === 'availability') {
+          // Ya no hay actividades de disponibilidad
+          return false;
+        }
+        
+        if (filterType === 'task') {
+          return type.includes('task_');
+        }
+        
+        if (filterType === 'location') {
+          return type.includes('location_');
+        }
+        
+        return type === filterType;
       });
     }
     
