@@ -24,13 +24,6 @@ const registerTaskActivity = async (userId, taskId, type, taskData) => {
           location: taskData.location || null
         };
         break;
-      case 'task_update':
-        message = `Tarea "${taskData.title}" actualizada`;
-        metadata = { 
-          changes: taskData.changes || {},
-          title: taskData.title
-        };
-        break;
       case 'task_complete':
         message = `Tarea "${taskData.title}" completada`;
         metadata = { 
@@ -613,19 +606,8 @@ exports.updateTask = async (req, res) => {
     
     console.log(`Tarea actualizada: ${task._id}`);
     
-    // Solo registrar actividad si:
-    // 1. Se especifica explícitamente que hay que registrarla (edición de administrador desde botón especial)
-    // 2. El usuario es un administrador 
-    if (registerActivity === true && req.user.isAdmin) {
-      console.log(`Registrando actividad de actualización por administrador para tarea ${task._id}`);
-      
-      // Registrar la actividad con metadatos adicionales
-      await registerTaskActivity(req.user._id, task._id, 'task_update', {
-        title: task.title,
-        changes: req.body,
-        adminUpdate: true  // Marcar explícitamente como actualización de administrador
-      });
-    }
+    // Se ha eliminado la lógica de registro de actividades ''
+    // Los administradores pueden seguir editando tareas, pero no se registrarán como actividades
     
     res.status(200).json(updatedTask);
   } catch (error) {

@@ -351,7 +351,7 @@ const notifyAdminActivity = async (activity, notifyOwner = false) => {
     // Si se solicita notificar también al propietario de la actividad y no es un admin
     // Y SOLO si es una notificación de tarea asignada al usuario
     if (notifyOwner && activity.userId && 
-        (activity.type === 'task_assign' || activity.type === 'task_update' || 
+        (activity.type === 'task_assign' || 
          activity.type === 'task_complete' || activity.type === 'task_activity')) {
       try {
         // Verificar que el usuario no sea un administrador para evitar notificaciones duplicadas

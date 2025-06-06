@@ -114,7 +114,7 @@ exports.generateTaskReport = async (req, res) => {
     filter.type = { 
       $in: [
         'task_create', 
-        'task_update', 
+        
         'task_complete', 
         'task_delete', 
         'task_assign',
@@ -317,7 +317,7 @@ exports.generateTaskReport = async (req, res) => {
                 actionType = 'Created';
                 statusText = 'waiting_for_acceptance';
                 break;
-              case 'task_update':
+
                 actionType = 'Updated';
                 if (activity.metadata && activity.metadata.changes) {
                   details = `Changes: ${JSON.stringify(activity.metadata.changes)}`;
@@ -396,8 +396,8 @@ exports.generateTaskReport = async (req, res) => {
           userSheet.addRow({});
         }
         
-        // Activities without a task or actividades de tipo 'updated' (task_update)
-        const untaskedActivities = activities.filter(a => !a.taskId || a.type === 'task_update');
+        // Activities without a task
+        const untaskedActivities = activities.filter(a => !a.taskId);
         
         if (untaskedActivities.length > 0) {
           // Add section header
