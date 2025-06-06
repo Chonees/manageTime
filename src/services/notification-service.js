@@ -123,10 +123,6 @@ export const getActivityTypeText = (type) => {
     'task_assign': 'Task Assigned',
     'location_enter': 'Location Entered',
     'location_exit': 'Location Exited',
-    'clock_in': 'Available',
-    'clock_out': 'Unavailable',
-    'started_working': 'Available',
-    'stopped_working': 'Unavailable',
     'task_activity': 'Task Activity'
   };
   

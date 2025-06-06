@@ -579,7 +579,7 @@ export const saveTask = async (task) => {
       task: {
         ...responseData,
         completed: responseData.completed !== undefined ? responseData.completed : false,
-        // Asegurar que se devuelvan los datos de ubicación si existen
+        // Aseguramos que se devuelvan los datos de ubicación si existen
         location: responseData.location || null,
         radius: responseData.radius || null,
         locationName: responseData.locationName || ''
@@ -1076,30 +1076,10 @@ export const saveActivity = async (activityData) => {
     // Create a copy of the data to send
     const dataToSend = { ...activityData };
     
-    // Mapear los tipos a los que el backend realmente reconoce
-    // La validación demuestra que started_working/stopped_working no son válidos
-    if (dataToSend.type === 'clock_in' || dataToSend.type === 'started_working') {
-      dataToSend.type = 'task_activity';
-      if (!dataToSend.metadata) dataToSend.metadata = {};
-      dataToSend.metadata.availability = 'available';
-    } else if (dataToSend.type === 'clock_out' || dataToSend.type === 'stopped_working') {
-      dataToSend.type = 'task_activity';
-      if (!dataToSend.metadata) dataToSend.metadata = {};
-      dataToSend.metadata.availability = 'unavailable';
-    }
+    // Eliminamos toda la lógica relacionada con started_working y stopped_working
     
-    // Check if this is an availability activity
-    const isAvailabilityActivity = 
-      dataToSend.type === 'task_activity' && 
-      dataToSend.metadata && 
-      dataToSend.metadata.availability && 
-      (dataToSend.metadata.availability === 'available' || 
-       dataToSend.metadata.availability === 'unavailable');
-    
-    // Para actividades que no son de disponibilidad ni de eliminación de tareas, taskId es requerido
-    if (dataToSend.type !== 'task_delete' && 
-        !isAvailabilityActivity && 
-        !dataToSend.taskId) {
+    // Para actividades que no son de eliminación de tareas, taskId es requerido
+    if (dataToSend.type !== 'task_delete' && !dataToSend.taskId) {
       throw new Error('Activity data missing required field: taskId');
     }
     
@@ -1151,19 +1131,6 @@ export const saveActivity = async (activityData) => {
     // Ensure metadata exists
     if (!dataToSend.metadata) {
       dataToSend.metadata = {};
-    }
-    
-    // Si es una actividad de disponibilidad, asegurarse de que el taskId sea null
-    if (isAvailabilityActivity) {
-      delete dataToSend.taskId;
-    }
-    
-    // Special handling for task_delete
-    if (dataToSend.type === 'task_delete' && activityData.taskId) {
-      if (!dataToSend.metadata) {
-        dataToSend.metadata = {};
-      }
-      dataToSend.metadata.deletedTaskId = activityData.taskId;
     }
     
     // Get API URL and token
@@ -1236,8 +1203,6 @@ const getActivityTitle = (type) => {
     'task_assign': 'Task Assigned',
     'location_enter': 'Location Entered',
     'location_exit': 'Location Exited',
-    'started_working': 'Started Working',
-    'stopped_working': 'Stopped Working',
     'task_activity': 'Task Activity'
   };
   
@@ -1258,8 +1223,6 @@ const getActivityMessage = (activityData) => {
     'task_assign': 'assigned a task',
     'location_enter': 'entered task location',
     'location_exit': 'exited task location',
-    'started_working': 'started working on a task',
-    'stopped_working': 'stopped working on a task',
     'task_activity': 'performed an activity on a task'
   };
   
@@ -1677,10 +1640,6 @@ const getActionFromType = (type) => {
       return 'entered_location';
     case 'location_exit':
       return 'exited_location';
-    case 'started_working':
-      return 'started_working';
-    case 'stopped_working':
-      return 'stopped_working';
     default:
       return 'unknown';
   }

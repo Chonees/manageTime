@@ -35,6 +35,12 @@ exports.createActivity = async (req, res) => {
       'NOTES' // Añadido soporte para notas
     ];
     
+    // Rechazar explícitamente actividades de disponibilidad
+    if (type === 'clock_in' || type === 'clock_out' || 
+        type === 'started_working' || type === 'stopped_working') {
+      return res.status(400).json({ message: 'Los tipos de actividad relacionados con la disponibilidad han sido eliminados del sistema' });
+    }
+    
     if (!validTypes.includes(type)) {
       return res.status(400).json({ message: 'Tipo de actividad no válido' });
     }
