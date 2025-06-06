@@ -1,10 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const taskTemplateController = require('../controllers/taskTemplate.controller');
-const authMiddleware = require('../middleware/auth');
+const { verifyToken } = require('../middleware/auth.middleware');
 
 // Aplicar middleware de autenticación a todas las rutas
-router.use(authMiddleware);
+router.use(verifyToken);
 
 // Rutas para plantillas de tareas
 router.post('/', taskTemplateController.createTaskTemplate);
