@@ -886,7 +886,10 @@ const toggleComplete = async () => {
       
       // Aseguramos que los userIds provengan exclusivamente del formulario de edición
       // Los usuarios solo pueden ser asignados/reasignados a través del TaskForm
-      const updatedTask = await api.updateTask(task._id, updatedTaskData);
+      const updatedTask = await api.updateTask(task._id, {
+        ...updatedTaskData, 
+        registerActivity: true // Indicar que debe registrarse como actividad de administrador
+      });
       
       console.log('Respuesta del servidor:', JSON.stringify(updatedTask, null, 2));
       
