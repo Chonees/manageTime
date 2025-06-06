@@ -480,7 +480,9 @@ exports.updateTask = async (req, res) => {
       keywords,
       timeLimit,
       userId,
-      userIds
+      userIds,
+      // Nuevo parámetro para controlar el registro de actividad
+      registerActivity
     } = req.body;
     
     console.log('Actualizando tarea con datos:', JSON.stringify(req.body, null, 2));
@@ -600,176 +602,35 @@ exports.updateTask = async (req, res) => {
         task.locationName = locationName;
       }
       
-      console.log(`Tarea actualizada con ubicación: ${location.coordinates}, radio: ${radius}km, lugar: ${locationName || 'Sin nombre'}`);
+      console.log(`Tarea actualizada con ubicación: [${location.coordinates}]`);
     }
     
-    // Guardar cambios
+    // Guardar los cambios en la tarea
     await task.save();
     
-    // Obtener la tarea con el usuario populado para devolver datos completos
-    const populatedTask = await Task.findById(task._id).populate('userId', 'username email');
+    // Obtener la tarea actualizada para devolver al cliente
+    const updatedTask = await Task.findById(task._id).populate('userId', 'username email');
     
     console.log(`Tarea actualizada: ${task._id}`);
-    console.log('Datos de la tarea actualizada:', JSON.stringify(populatedTask));
     
-    // Registrar la actividad correspondiente y enviar notificaciones apropiadas
-    let activity;
-    let notificationType = null;
-    let notificationTitle = '';
-    let notificationBody = '';
-    
-    if (completed !== undefined) {
-      if (completed === true) {
-        // Si la tarea fue marcada como completada, registrar actividad específica de completado
-        console.log(`Registrando tarea completada: ${task._id}`);
-        activity = await registerTaskActivity(req.user._id, task._id, 'task_complete', populatedTask);
-        notificationType = 'task_complete';
-        notificationTitle = 'Tarea completada';
-        notificationBody = `La tarea "${task.title}" ha sido completada`;
-      } else if (completed === false && task.isModified('completed')) {
-        // Si la tarea fue marcada como no completada después de estar completada
-        console.log(`Registrando tarea reactivada: ${task._id}`);
-        activity = await registerTaskActivity(req.user._id, task._id, 'task_update', {
-          ...populatedTask.toObject(),
-          changes: { completed: false }
-        });
-        notificationType = 'task_update';
-        notificationTitle = 'Tarea reactivada';
-        notificationBody = `La tarea "${task.title}" ha sido reactivada`;
-      }
-    } else if (status !== undefined && statusChanged) {
-      // Solo registrar actividades si el estado realmente cambió
-      if (status === 'on_the_way') {
-        console.log(`Registrando actividad de tarea en camino: ${task._id}`);
-        activity = await registerTaskActivity(req.user._id, task._id, 'task_accept', populatedTask);
-        notificationType = 'task_accept';
-        notificationTitle = 'Tarea aceptada';
-        notificationBody = `La tarea "${task.title}" ha sido aceptada y está en camino`;
-      } else if (status === 'on_site') {
-        console.log(`Registrando actividad de tarea en sitio: ${task._id}`);
-        activity = await registerTaskActivity(req.user._id, task._id, 'task_on_site', populatedTask);
-        notificationType = 'task_on_site';
-        notificationTitle = 'Llegada al sitio';
-        notificationBody = `El usuario ha llegado al sitio de la tarea "${task.title}"`;
-      } else if (status === 'waiting_for_acceptance') {
-        console.log(`Registrando tarea rechazada: ${task._id}`);
-        activity = await registerTaskActivity(req.user._id, task._id, 'task_reject', populatedTask);
-        notificationType = 'task_reject';
-        notificationTitle = 'Tarea rechazada';
-        notificationBody = `La tarea "${task.title}" ha sido rechazada`;
-      } else {
-        // Para cualquier otro cambio de estado, registrar como actualización normal
-        console.log(`Registrando cambio de estado de tarea: ${task._id} a ${status}`);
-        activity = await registerTaskActivity(req.user._id, task._id, 'task_update', {
-          ...populatedTask.toObject(),
-          changes: { status }
-        });
-        notificationType = 'task_update';
-        notificationTitle = 'Tarea actualizada';
-        notificationBody = `La tarea "${task.title}" ha sido actualizada`;
-      }
-    }
-    
-    // Enviar notificaciones si hay actividad registrada
-    if (activity && notificationType) {
-      try {
-        // Determinar si debemos notificar al propietario de la tarea
-        const shouldNotifyOwner = task.userId && task.userId.toString() !== req.user._id.toString();
-        
-        // Si el usuario actual no es el propietario de la tarea, notificar al propietario
-        if (shouldNotifyOwner) {
-          console.log(`Enviando notificación al propietario de la tarea: ${task.userId}`);
-          
-          // Preparar datos para la notificación
-          const notificationData = {
-            taskId: task._id.toString(),
-            type: notificationType,
-            priority: 'high',
-            title: task.title,
-            updatedBy: req.user.username || 'Usuario'
-          };
-          
-          // Enviar notificación SOLO al propietario de la tarea
-          await notificationUtil.notifyUser(
-            task.userId.toString(),
-            notificationTitle,
-            notificationBody,
-            notificationData
-          );
-        }
-        
-        // Notificar a los administradores sobre la actualización
-        const activityObj = activity.toObject ? activity.toObject() : activity;
-        if (!activityObj.metadata) activityObj.metadata = {};
-        
-        // Añadir información adicional para la notificación - verificar que req.user existe
-        activityObj.metadata.username = req.user && req.user.username ? req.user.username : 'Usuario';
-        activityObj.metadata.title = task.title || 'Tarea sin título';
-        
-        // Notificar SOLO a los administradores (no al propietario, ya fue notificado arriba si corresponde)
-        await notificationUtil.notifyAdminActivity(activityObj, false);
-        
-      } catch (notificationError) {
-        console.error('Error enviando notificaciones de actualización de tarea:', notificationError);
-        // No interrumpir el flujo por un error de notificación
-      }
-    } else {
-      // Para cualquier otra actualización, registrar como actualización normal
-      console.log(`Registrando actualización general de tarea: ${task._id}`);
-      const activity = await registerTaskActivity(req.user._id, task._id, 'task_update', {
-        ...populatedTask.toObject(),
-        changes: req.body
-      });
+    // Solo registrar actividad si:
+    // 1. Se especifica explícitamente que hay que registrarla (edición de administrador desde botón especial)
+    // 2. El usuario es un administrador 
+    if (registerActivity === true && req.user.isAdmin) {
+      console.log(`Registrando actividad de actualización por administrador para tarea ${task._id}`);
       
-      // Enviar notificaciones para actualizaciones generales
-      try {
-        // Determinar si debemos notificar al propietario de la tarea
-        const shouldNotifyOwner = task.userId && task.userId.toString() !== req.user._id.toString();
-        
-        // Si el usuario actual no es el propietario de la tarea, notificar al propietario
-        if (shouldNotifyOwner) {
-          console.log(`Enviando notificación al propietario de la tarea: ${task.userId}`);
-          
-          // Preparar datos para la notificación
-          const notificationData = {
-            taskId: task._id.toString(),
-            type: 'task_update',
-            priority: 'high',
-            title: task.title,
-            updatedBy: req.user.username || 'Usuario'
-          };
-          
-          // Enviar notificación SOLO al propietario de la tarea
-          await notificationUtil.notifyUser(
-            task.userId.toString(),
-            'Tarea actualizada',
-            `La tarea "${task.title}" ha sido actualizada`,
-            notificationData
-          );
-        }
-        
-        // Notificar a los administradores sobre la actualización
-        if (activity) {
-          const activityObj = activity.toObject ? activity.toObject() : activity;
-          if (!activityObj.metadata) activityObj.metadata = {};
-          
-          // Añadir información adicional para la notificación
-          activityObj.metadata.username = req.user.username;
-          activityObj.metadata.title = task.title;
-          
-          // Notificar SOLO a los administradores (no al propietario, ya fue notificado arriba si corresponde)
-          await notificationUtil.notifyAdminActivity(activityObj, false);
-        }
-      } catch (notificationError) {
-        console.error('Error enviando notificaciones de actualización general de tarea:', notificationError);
-        // No interrumpir el flujo por un error de notificación
-      }
+      // Registrar la actividad con metadatos adicionales
+      await registerTaskActivity(req.user._id, task._id, 'task_update', {
+        title: task.title,
+        changes: req.body,
+        adminUpdate: true  // Marcar explícitamente como actualización de administrador
+      });
     }
     
-    res.status(200).json(populatedTask);
+    res.status(200).json(updatedTask);
   } catch (error) {
     console.error('Error al actualizar tarea:', error);
-    res.status(500).json({ message: 'Error al actualizar tarea' });
+    res.status(500).json({ message: 'Error al actualizar tarea', error: error.message });
   }
 };
 
