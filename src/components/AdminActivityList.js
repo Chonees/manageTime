@@ -301,7 +301,7 @@ const AdminActivityList = () => {
         return 'checkmark-circle-outline';
       case 'task_create':
         return 'add-circle-outline';
-      case 'task_update':
+
         return 'create-outline';
       case 'task_delete':
         return 'trash-outline';
@@ -323,7 +323,7 @@ const AdminActivityList = () => {
         return '#4CAF50'; // Verde
       case 'task_create':
         return '#009688'; // Verde azulado
-      case 'task_update':
+
         return '#FF9800'; // Naranja
       case 'task_delete':
         return '#ff5252'; // Rojo
@@ -337,7 +337,7 @@ const AdminActivityList = () => {
     switch (type) {
       case 'task_create':
         return 'Creación de tarea';
-      case 'task_update':
+
         return 'Actualización de tarea';
       case 'task_complete':
         return 'Tarea completada';
@@ -366,7 +366,7 @@ const AdminActivityList = () => {
       case 'task_create':
         return 'Creó una tarea';
         
-      case 'task_update':
+
         return 'Actualizó una tarea';
         
       case 'task_complete':
@@ -563,7 +563,7 @@ const AdminActivityList = () => {
             name={icon} 
             size={24} 
             color="white" 
-            style={[styles.iconCentered, type === 'task_update' ? styles.updateIconFix : null]} 
+            style={styles.iconCentered} 
           />
         </View>
         

@@ -1033,6 +1033,14 @@ export const updateTask = async (taskId, taskData) => {
     
     const url = `${getApiUrl()}/api/tasks/${taskId}`;
     
+    // La funcionalidad de task_update ha sido eliminada completamente
+    // a menos que se especifique explícitamente registerActivity: true
+    const dataToSend = { 
+      ...taskData,
+      // Si no se especifica registerActivity, establecerlo como false por defecto
+      registerActivity: taskData.registerActivity === true ? true : false
+    };
+    
     // Crear opciones de la petición con mayor detalle de logs
     const options = {
       method: 'PUT',
@@ -1040,7 +1048,7 @@ export const updateTask = async (taskId, taskData) => {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`
       },
-      body: JSON.stringify(taskData)
+      body: JSON.stringify(dataToSend)
     };
     
     // Realizar la petición con reintentos automáticos
@@ -1085,7 +1093,7 @@ export const saveActivity = async (activityData) => {
     
     // Valid activity types according to the backend
     const validTypes = [
-      'task_create', 'task_update', 'task_complete', 'task_delete',
+      'task_create', 'task_complete', 'task_delete',
       'task_assign', 'location_enter', 'location_exit',
       'task_activity', 'task_accept', 'task_reject'
     ];
@@ -1197,7 +1205,7 @@ export const saveActivity = async (activityData) => {
 const getActivityTitle = (type) => {
   const titles = {
     'task_create': 'Task Created',
-    'task_update': 'Task Updated',
+    
     'task_complete': 'Task Completed',
     'task_delete': 'Task Deleted',
     'task_assign': 'Task Assigned',
@@ -1217,7 +1225,7 @@ const getActivityMessage = (activityData) => {
   
   const messages = {
     'task_create': 'created a new task',
-    'task_update': 'updated a task',
+    
     'task_complete': 'completed a task',
     'task_delete': 'deleted a task',
     'task_assign': 'assigned a task',
@@ -1632,8 +1640,6 @@ const getActionFromType = (type) => {
       return 'created';
     case 'task_complete':
       return 'completed';
-    case 'task_update':
-      return 'updated';
     case 'task_delete':
       return 'deleted';
     case 'location_enter':

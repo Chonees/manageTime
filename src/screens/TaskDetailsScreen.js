@@ -56,7 +56,9 @@ const TaskDetailsScreen = ({ route, navigation }) => {
   const [showUserSelector, setShowUserSelector] = useState(false);
   const [activeUsers, setActiveUsers] = useState([]);
   const [selectedUserIds, setSelectedUserIds] = useState([]); 
-  
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [pendingActivity, setPendingActivity] = useState('');
+
   // Referencia al componente de ubicación
   const locationComponentRef = useRef(null);
 
@@ -818,8 +820,8 @@ const toggleComplete = async () => {
         throw new Error('No hay token de autenticación para guardar la nota');
       }
       
-      // Usar el mismo endpoint que usa VoiceListener
-      const url = `${getApiUrl()}/tasks/${task._id}/note`;
+      // Usar el mismo endpoint que usa VoiceListener (asegurando que incluya el prefijo /api)
+      const url = `${getApiUrl()}/api/tasks/${task._id}/note`;
       
       // Enviar la nota al backend usando el mismo formato que VoiceListener
       const response = await fetch(url, {
@@ -1185,11 +1187,22 @@ const toggleComplete = async () => {
       <StatusBar barStyle="light-content" backgroundColor="#1c1c1c" />
       
       <View style={styles.headerMain}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#fff3e5" />
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerBackButton}>
+          <Ionicons name="arrow-back" size={22} color="#fff3e5" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>{task ? task.title : t('taskDetails')}</Text>
-        <View style={styles.headerRightPlaceholder}></View>
+        <View style={styles.headerRightSection}>
+          {user?.isAdmin && task && (
+            <TouchableOpacity onPress={() => setShowEditModal(true)} style={styles.headerEditButton}>
+              <Ionicons name="create-outline" size={22} color="#fff3e5" />
+            </TouchableOpacity>
+          )}
+          {user?.isAdmin && task && (
+            <TouchableOpacity onPress={handleDeleteTask} style={styles.headerDeleteButton}>
+              <Ionicons name="trash-outline" size={22} color="#e74c3c" />
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
       
       {/* Timer display section prominently positioned */}
@@ -1228,67 +1241,64 @@ const toggleComplete = async () => {
               </Text>
             </TouchableOpacity>
             <Text style={styles.taskStatus}>
-              {task.completed ? t('completed') : t(task.status)}
+              {task.completed 
+                ? t('completed') 
+                : (() => {
+                    // Primero intentamos la traducción con la clave exacta
+                    const directTranslation = t(task.status);
+                    
+                    // Si la traducción es igual a la clave, significa que no encontró traducción
+                    // intentamos con la clave sin guiones bajos
+                    if (directTranslation === task.status) {
+                      // Convertimos waiting_for_acceptance a waitingForAcceptance (formato camelCase)
+                      const camelCaseKey = task.status?.replace(/_([a-z])/g, (g) => g[1].toUpperCase());
+                      return t(camelCaseKey) !== camelCaseKey 
+                        ? t(camelCaseKey) 
+                        : task.status?.replace(/_/g, ' ');
+                    }
+                    
+                    return directTranslation;
+                  })()
+              }
             </Text>
           </View>
-          
-          {user?.isAdmin && (
-            <TouchableOpacity 
-              style={styles.deleteButton}
-              onPress={handleDeleteTask}
-            >
-              <Ionicons name="trash-outline" size={24} color="#e74c3c" />
-            </TouchableOpacity>
-          )}
-          {user?.isAdmin && task && (
-            <TouchableOpacity 
-              style={styles.editButton}
-              onPress={() => setShowEditModal(true)}
-            >
-              <Ionicons name="create-outline" size={20} color="#0277bd" style={styles.buttonIcon} />
-              <Text style={styles.editButtonText}>{t('editTask')}</Text>
-            </TouchableOpacity>
-          )}
         </View>
         
         <View style={styles.titleContainer}>
-          <Text style={styles.title}>{task.title || t('noTitle')}</Text>
+          <View style={styles.titleRow}>
+            <View style={styles.titleDateInfo}>
+              <View style={styles.headerDateItem}>
+                <Ionicons name="create-outline" size={14} color="#777" />
+                <Text style={styles.headerDateLabel}>{t('created')}:</Text>
+                <Text style={styles.headerDateText}>
+                  {task.createdAt ? new Date(task.createdAt).toLocaleString() : t('unknown')}
+                </Text>
+              </View>
+              <View style={styles.headerDateItem}>
+                <Ionicons name="refresh-outline" size={14} color="#777" />
+                <Text style={styles.headerDateLabel}>{t('updated')}:</Text>
+                <Text style={styles.headerDateText}>
+                  {task.updatedAt ? new Date(task.updatedAt).toLocaleString() : t('unknown')}
+                </Text>
+              </View>
+            </View>
+          </View>
         </View>
         
         <View style={styles.infoContainer}>
           {/* Descripción */}
-          <View style={styles.infoSection}>
-            <Text style={styles.infoLabel}>{t('description')}:</Text>
-            <Text style={styles.description}>{task.description || t('noDescription')}</Text>
-          </View>
-          
-          {/* Fechas en una sola fila */}
-          <View style={styles.datesContainer}>
-            <View style={styles.dateSection}>
-              <Text style={styles.infoLabel}>{t('created')}:</Text>
-              <Text style={styles.dateValue}>
-                {task.createdAt ? new Date(task.createdAt).toLocaleString() : t('unknown')}
-              </Text>
+          <View style={styles.infoSectionCard}>
+            <View style={styles.infoHeader}>
+              <View style={styles.infoHeaderLeft}>
+                <Ionicons name="document-text-outline" size={20} color="#444" />
+                <Text style={styles.infoHeaderText}>{t('description')}</Text>
+              </View>
             </View>
-            
-            <View style={styles.dateSection}>
-              <Text style={styles.infoLabel}>{t('updated')}:</Text>
-              <Text style={styles.dateValue}>
-                {task.updatedAt ? new Date(task.updatedAt).toLocaleString() : t('unknown')}
-              </Text>
+            <View style={styles.infoContent}>
+              <Text style={styles.description}>{task.description || t('noDescription')}</Text>
             </View>
           </View>
           
-          {(user?.isAdmin || (task.userId && task.userId === user?._id)) && (
-            <View style={styles.infoSection}>
-              <Text style={styles.infoLabel}>{t('assignedTo')}:</Text>
-              <Text style={styles.value}>
-                {assignedUser ? assignedUser.username : 
-                 (task.userId && typeof task.userId === 'object' && task.userId.username) ? task.userId.username : 
-                 t('noUserAssigned')}
-              </Text>
-            </View>
-          )}
         </View>
         
         {hasLocation && (
@@ -1297,7 +1307,7 @@ const toggleComplete = async () => {
             <LocationComponent
               ref={locationComponentRef}
               mapOnly={true}
-              customHeight={200}
+              customHeight={350}
               taskLocation={{
                 latitude: task.location.coordinates[1],
                 longitude: task.location.coordinates[0],
@@ -1369,7 +1379,14 @@ const toggleComplete = async () => {
           />
           <TouchableOpacity 
             style={styles.submitActivityButton}
-            onPress={submitActivity}
+            onPress={() => {
+              if (activityInput.trim() !== '') {
+                setPendingActivity(activityInput.trim());
+                setShowConfirmModal(true);
+              } else {
+                Alert.alert(t('error'), t('pleaseEnterActivity'));
+              }
+            }}
             disabled={isSubmittingActivity}
           >
             <Text style={styles.submitActivityButtonText}>{t('submitActivity')}</Text>
@@ -1390,22 +1407,24 @@ const toggleComplete = async () => {
               
               return (
                 <View key={index} style={styles.keywordWrapper}>
-                  <Text 
-                    style={[
-                      styles.keyword, 
-                      isSpoken && styles.spokenKeyword
-                    ]}
-                  >
-                    {keyword}
-                  </Text>
-                  {isSpoken && (
-                    <Ionicons 
-                      name="checkmark-circle" 
-                      size={16} 
-                      color="#4CAF50" 
-                      style={styles.keywordCheckmark} 
-                    />
-                  )}
+                  <View style={styles.keywordContentWrapper}>
+                    <Text 
+                      style={[
+                        styles.keyword, 
+                        isSpoken && styles.spokenKeyword
+                      ]}
+                    >
+                      {keyword}
+                    </Text>
+                    {isSpoken && (
+                      <Ionicons 
+                        name="checkmark-circle" 
+                        size={16} 
+                        color="#4CAF50" 
+                        style={styles.keywordCheckmark} 
+                      />
+                    )}
+                  </View>
                 </View>
               );
             })}
@@ -1469,6 +1488,53 @@ const toggleComplete = async () => {
                 }}
               />
             )}
+          </View>
+        </View>
+      </Modal>
+      
+      {/* Modal de confirmación para enviar actividad */}
+      <Modal
+        visible={showConfirmModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowConfirmModal(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>{t('confirmToLog') || 'Confirm to log'}</Text>
+              <TouchableOpacity onPress={() => setShowConfirmModal(false)}>
+                <Ionicons name="close" size={24} color="#fff3e5" />
+              </TouchableOpacity>
+            </View>
+            
+            <View style={styles.confirmModalContent}>
+              <View style={styles.activityPreviewContainer}>
+                <Text style={styles.activityPreview}>{pendingActivity}</Text>
+              </View>
+              
+              <View style={styles.confirmModalButtonsRow}>
+                <TouchableOpacity 
+                  style={styles.cancelButton}
+                  onPress={() => setShowConfirmModal(false)}
+                >
+                  <Ionicons name="close-circle-outline" size={18} color="#ff6b6b" style={styles.buttonIcon} />
+                  <Text style={styles.cancelButtonText}>{t('cancel') || 'Cancelar'}</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  style={styles.confirmButton}
+                  onPress={() => {
+                    setShowConfirmModal(false);
+                    submitActivity();
+                  }}
+                  disabled={isSubmittingActivity}
+                >
+                  <Text style={styles.confirmButtonText}>{t('confirm') || 'Confirmar'}</Text>
+                  <Ionicons name="checkmark-circle-outline" size={18} color="#2e2e2e" style={styles.buttonIcon} />
+                </TouchableOpacity>
+              </View>
+            </View>
           </View>
         </View>
       </Modal>
@@ -1564,15 +1630,56 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 15,
-    paddingVertical: 15,
+    paddingVertical: 6, // Aún más reducido para que sea muy fino
     backgroundColor: '#2e2e2e',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 243, 229, 0.1)', // Borde sutil para separar
+  },
+  headerRightSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  headerBackButton: {
+    backgroundColor: '#1c1c1c',
+    padding: 10,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 243, 229, 0.2)',
+    width: 42,
+    height: 42,
+  },
+  headerEditButton: {
+    backgroundColor: '#1c1c1c',
+    padding: 10,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 243, 229, 0.2)',
+    width: 42,
+    height: 42,
+  },
+  headerDeleteButton: {
+    backgroundColor: '#1c1c1c',
+    padding: 10,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 243, 229, 0.2)',
+    width: 42,
+    height: 42,
   },
   headerTitle: {
-    fontSize: 20,
+    fontSize: 25, // Tamaño aumentado a 25
     fontWeight: 'bold',
     color: '#fff3e5',
     flex: 1,
     textAlign: 'center',
+    marginLeft:10, // Ajuste para compensar el botón de regreso y centrar correctamente
   },
   timerContainer: {
     marginBottom: 15,
@@ -1606,10 +1713,9 @@ const styles = StyleSheet.create({
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 15,
-
     paddingVertical: 10,
     backgroundColor: '#1c1c1c',
     borderBottomWidth: 1,
@@ -1619,6 +1725,11 @@ const styles = StyleSheet.create({
   taskStatusContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    backgroundColor: 'rgba(0, 0, 0, 0.2)',
+    borderRadius: 15,
   },
   completeButton: {
     width: 30,
@@ -1642,53 +1753,150 @@ const styles = StyleSheet.create({
     color: '#fff3e5',
   },
   taskStatus: {
-    fontSize: 16,
-
+    fontSize: 18,
+    fontWeight: 'bold',
     color: '#fff3e5',
-
+    marginLeft: 8,
   },
   deleteButton: {
     padding: 8,
   },
   titleContainer: {
-    padding: 15,
-
-    backgroundColor: '#1c1c1c',
-
-    marginBottom: 10,
-    borderRadius: 15,
+    marginVertical: 10,
     marginHorizontal: 10,
-    marginTop: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 243, 229, 0.1)',
+    backgroundColor: '#1c1c1c',
+    borderRadius: 8,
+    padding: 15,
+  },
+  titleRow: {
+    flexDirection: 'column',
   },
   title: {
     fontSize: 22,
     fontWeight: 'bold',
-    color: '#fff',
+    color: '#fff3e5',
+    marginBottom: 8,
+  },
+  titleDateInfo: {
+    marginTop: 4,
+    paddingTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 243, 229, 0.2)',
   },
   infoContainer: {
-    padding: 15,
-    backgroundColor: '#fff3e5', // Fondo color crema
+    padding: 10,
     marginBottom: 10,
-    borderRadius: 15,
     marginHorizontal: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(28, 28, 28, 0.1)', // Borde sutil oscuro
   },
-  infoSection: {
-    marginBottom: 6,
+  infoSectionCard: {
+    backgroundColor: '#fff3e5', // Color crema de la app
+    borderRadius: 12,
+    marginBottom: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+    overflow: 'hidden',
   },
-  infoLabel: {
-    fontSize: 14,
+  infoHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,0,0,0.05)',
+    backgroundColor: 'rgba(0,0,0,0.02)',
+  },
+  infoHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  infoHeaderText: {
+    fontSize: 16,
     fontWeight: 'bold',
-    color: '#777777', // Subtítulos en gris
-    marginBottom: 5,
+    color: '#333',
+    marginLeft: 8,
+  },
+  infoHeaderDates: {
+    flexDirection: 'column',
+    alignItems: 'flex-end',
+  },
+  headerDateItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  headerDateLabel: {
+    fontSize: 11,
+    fontWeight: 'bold',
+    color: '#d1d1d1',
+    marginLeft: 4,
+    marginRight: 3,
+  },
+  headerDateText: {
+    fontSize: 11,
+    color: '#a0a0a0',
+    marginLeft: 2,
+  },
+  infoContent: {
+    padding: 16,
   },
   description: {
     fontSize: 16,
-    color: '#000000', // Texto en negro
+    color: '#222',
     lineHeight: 24,
+  },
+  dateRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+  },
+  dateIconContainer: {
+    width: 24,
+    alignItems: 'center',
+    marginRight: 8,
+    paddingTop: 2,
+  },
+  dateInfo: {
+    flex: 1,
+  },
+  dateLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#555',
+  },
+  dateValue: {
+    fontSize: 14,
+    color: '#222',
+    marginTop: 2,
+  },
+  userRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  userAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#1c1c1c',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  userInitial: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#fff3e5',
+  },
+  userInfo: {
+    flex: 1,
+  },
+  userName: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#222',
   },
   value: {
     fontSize: 16,
@@ -1764,12 +1972,14 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   startButton: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: '#4a4a4a', // Cambiado a fondo gris
     padding: 15,
     borderRadius: 15,
     alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#fff3e5', // Mantiene borde color crema
   },
   endButton: {
     backgroundColor: '#ff5252',
@@ -1907,24 +2117,40 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: 'rgba(255, 243, 229, 0.7)',
   },
+  keywordWrapper: {
+    marginBottom: 8,
+  },
+  keywordContentWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  keywordCheckmark: {
+    marginLeft: 6,
+  },
+  spokenKeyword: {
+    color: '#fff',
+    fontWeight: 'bold',
+  },
+  keywordsList: {
+    flexDirection: 'column',
+  },
   // Los estilos del temporizador se han movido al componente TaskTimer
   editButton: {
-    backgroundColor: '#e1f5fe',
-    padding: 12,
-    borderRadius: 15,
+    backgroundColor: 'rgba(255, 243, 229, 0.1)',
+    padding: 6,
+    borderRadius: 8,
     alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'center',
-    marginTop: 10,
-    marginBottom: 15,
-    marginHorizontal: 10,
+    marginLeft: 8,
     borderWidth: 1,
-    borderColor: '#0277bd',
+    borderColor: 'rgba(255, 243, 229, 0.2)',
   },
   editButtonText: {
-    color: '#0277bd',
-    fontSize: 16,
-    fontWeight: 'bold',
+    color: 'rgba(255, 243, 229, 0.9)',
+    fontSize: 12,
+    fontWeight: '500',
+    marginLeft: 4,
   },
   modalContainer: {
     flex: 1,
@@ -2033,6 +2259,67 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 14,
     fontWeight: 'bold',
+  },
+  // Estilos para el modal de confirmación de actividades
+  confirmModalContent: {
+    width: '100%',
+    alignItems: 'center',
+    paddingVertical: 15,
+  },
+  activityPreviewContainer: {
+    backgroundColor: '#1c1c1c',
+    padding: 15,
+    borderRadius: 10,
+    width: '90%',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 243, 229, 0.2)',
+    marginBottom: 20,
+  },
+  activityPreview: {
+    color: '#fff3e5',
+    fontSize: 18,
+    fontWeight: '400',
+    textAlign: 'center',
+  },
+  confirmModalButtonsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
+    paddingHorizontal: 15,
+  },
+  cancelButton: {
+    backgroundColor: '#1c1c1c',
+    padding: 12,
+    borderRadius: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '45%',
+    borderWidth: 1,
+    borderColor: '#ff6b6b',
+  },
+  cancelButtonText: {
+    color: '#ff6b6b',
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginLeft: 5,
+  },
+  confirmButton: {
+    backgroundColor: '#fff3e5',
+    padding: 12,
+    borderRadius: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '45%',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.1)',
+  },
+  confirmButtonText: {
+    color: '#2e2e2e',
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginRight: 5,
   },
 });
 

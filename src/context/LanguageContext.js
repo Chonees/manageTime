@@ -77,6 +77,13 @@ export const translations = {
     errorRejectingTask: 'Error rejecting task',
     taskHasTimeLimit: 'This task has a time limit of {{minutes}} minutes',
     
+    // Activity confirmation modal
+    confirmToLog: 'Confirm to log',
+    
+    // Task details improved UI
+    dates: 'Dates',
+    assignment: 'Assignment',
+    
     // Task status translations - nuevos estados más precisos
     waiting_for_acceptance: 'Waiting for acceptance',
     waitingAcceptance: 'Waiting for acceptance',
@@ -1175,6 +1182,13 @@ export const translations = {
     initialLocationReading: 'Lectura de ubicación inicial recibida',
     
     // TaskDetails screen
+    completed: 'Completada',
+    waiting_for_acceptance: 'Esperando aceptación',
+    waitingForAcceptance: 'Esperando aceptación',
+    on_site: 'En el sitio',
+    onSite: 'En el sitio',
+    on_the_way: 'En camino',
+    onTheWay: 'En camino',
     taskNotFound: 'Tarea no encontrada',
     errorLoadingTaskDetails: 'Error al cargar los detalles de la tarea',
     errorUpdatingTask: 'Error al actualizar la tarea',
@@ -1378,6 +1392,13 @@ export const translations = {
     errorDeletingTemplate: 'Error al eliminar la plantilla',
     enterTemplateName: 'Ingrese nombre de la plantilla',
     selectTemplate: 'Seleccionar Plantilla',
+    
+    // Activity confirmation modal
+    confirmToLog: 'Confirmar para el log',
+    
+    // Task details improved UI
+    dates: 'Fechas',
+    assignment: 'Asignación'
   }
 };
 
