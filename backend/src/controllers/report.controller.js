@@ -126,7 +126,7 @@ exports.generateActivityExcelReport = async (req, res) => {
       if (activityType === 'availability') {
         filter.type = { $in: ['location_enter', 'location_exit'] }; // Cambiado a ubicaciones en lugar de disponibilidad
       } else if (activityType === 'tasks') {
-        filter.type = { $in: ['task_create', 'task_update', 'task_complete', 'task_delete'] };
+        filter.type = { $in: ['task_create', 'task_complete', 'task_delete'] };
       } else if (activityType === 'locations') {
         filter.type = { $in: ['location_enter', 'location_exit'] };
       } else if (activityType !== 'all') {
@@ -508,7 +508,7 @@ const getActivityInfo = async (activity) => {
         activityType = 'Tarea creada';
         description = `Creó tarea: ${activity.taskId?.title || 'Tarea sin título'}`;
         break;
-      case 'task_update':
+
         activityType = 'Tarea actualizada';
         description = `Actualizó tarea: ${activity.taskId?.title || 'Tarea sin título'}`;
         break;
@@ -622,14 +622,14 @@ const createActivitySections = async (sheet, activities) => {
     );
     
     const taskActivities = activities.filter(a => 
-      a.type === 'task_create' || a.type === 'task_update' || 
+      a.type === 'task_create' || 
       a.type === 'task_complete' || a.type === 'task_delete' ||
       a.type === 'voice_note' // Incluir voice_note en actividades de tareas
     );
     
     const otherActivities = activities.filter(a => 
       !['location_enter', 'location_exit',
-        'task_create', 'task_update', 'task_complete', 'task_delete', 'voice_note'
+        'task_create', 'task_complete', 'task_delete', 'voice_note'
       ].includes(a.type)
     );
     
