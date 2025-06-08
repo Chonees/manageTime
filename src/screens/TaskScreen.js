@@ -734,8 +734,8 @@ const TaskScreen = ({ navigation }) => {
   // Renderizar el formulario para añadir tareas usando el componente TaskForm
   const renderAddTaskForm = () => {
     return (
-      <ScrollView style={styles.formContainer}>
-        <Text style={[styles.formTitle, {fontSize: 24, textAlign: 'center', marginBottom: 15}]}>{t('addTask')}</Text>
+      <View style={styles.formContainer}>
+        <Text style={[styles.formTitle, {fontSize: 24, textAlign: 'center', marginBottom: 10}]}>{t('addTask')}</Text>
         
         <TaskForm 
           isEditing={false}
@@ -781,7 +781,7 @@ const TaskScreen = ({ navigation }) => {
             onSelectTemplate={handleSelectTemplate}
           />
         )}
-      </ScrollView>
+      </View>
     );
   };
 
@@ -1037,24 +1037,26 @@ const TaskScreen = ({ navigation }) => {
             </TouchableOpacity>
           )}
           
-          {showAddForm && user?.isAdmin && renderAddTaskForm()}
-          
-          {error ? (
-            <Text style={styles.errorText}>{error}</Text>
-          ) : tasks.length === 0 ? (
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>{t('noTasks')}</Text>
-              <Text style={styles.emptySubText}>{t('tasksWillAppearHere')}</Text>
-            </View>
+          {showAddForm && user?.isAdmin ? (
+            renderAddTaskForm()
           ) : (
-            <FlatList
-              style={styles.taskList}
-              data={tasks}
-              renderItem={renderTask}
-              keyExtractor={item => item._id}
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-            />
+            error ? (
+              <Text style={styles.errorText}>{error}</Text>
+            ) : tasks.length === 0 ? (
+              <View style={styles.emptyContainer}>
+                <Text style={styles.emptyText}>{t('noTasks')}</Text>
+                <Text style={styles.emptySubText}>{t('tasksWillAppearHere')}</Text>
+              </View>
+            ) : (
+              <FlatList
+                style={styles.taskList}
+                data={tasks}
+                renderItem={renderTask}
+                keyExtractor={item => item._id}
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+              />
+            )
           )}
         </>
       )}
@@ -1068,6 +1070,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#2e2e2e',
+    paddingBottom: 0,
   },
   header: {
     flexDirection: 'row',
@@ -1122,17 +1125,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#fff3e5',
-    padding: 15,
-    borderRadius: 15,
-    marginHorizontal: 15,
-    marginBottom: 15,
-    borderWidth: 1,
-    borderColor: '#cccccc',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    paddingVertical: 10,
+    paddingHorizontal: 15,
+    borderRadius: 8,
+    marginTop: 10,
+    marginBottom: 10,
+    marginHorizontal: 10,
   },
   addTaskButtonText: {
     color: '#000',
@@ -1248,7 +1246,7 @@ const styles = StyleSheet.create({
   },
   taskList: {
     flex: 1,
-    marginHorizontal: 15,
+    marginHorizontal: 10,
   },
   taskItem: {
     backgroundColor: '#1c1c1c',
@@ -1412,16 +1410,10 @@ const styles = StyleSheet.create({
   formContainer: {
     backgroundColor: '#1c1c1c',
     borderRadius: 15,
-    padding: 15,
-    marginHorizontal: 15,
-    marginBottom: 15,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 243, 229, 0.1)',
+    padding: 10,
+    marginHorizontal: 10,
+    marginBottom: 0,
+    flex: 1,
   },
   formHeaderRow: {
     flexDirection: 'row',

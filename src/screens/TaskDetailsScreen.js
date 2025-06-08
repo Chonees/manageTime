@@ -1003,12 +1003,43 @@ const toggleComplete = async () => {
       // Obtener la fecha actual para el inicio del temporizador
       const now = new Date().toISOString();
       
-      // Actualizar el estado de la tarea a "on_the_way" y establecer timeLimitSet
+      // PASO 1: Actualizar el estado de la tarea a "on_the_way" 
       const updatedTask = await api.updateTask(taskId, { 
         status: 'on_the_way',
         acceptedAt: now,
-        timeLimitSet: now  // Establecer el inicio del temporizador
+        timeLimitSet: now,  // Establecer el inicio del temporizador
+        registerActivity: true // Esto asegura que se registre adecuadamente en el servidor
       });
+      
+      console.log('Estado actualizado a on_the_way correctamente');
+      
+      // PASO 2: Registrar explícitamente una actividad de tipo task_accept
+      // Esto es fundamental porque el backend eliminó la lógica de registro de actividades
+      try {
+        await api.saveActivity({
+          taskId,
+          type: 'task_accept',
+          message: 'Tarea aceptada',
+          metadata: {
+            status: 'on_the_way',
+            acceptedAt: now,
+            title: task.title || ''
+          }
+        });
+        console.log('Actividad task_accept registrada explícitamente');
+      } catch (activityError) {
+        console.error('Error al registrar actividad de aceptación:', activityError);
+        // Continuamos aunque falle el registro de actividad
+      }
+      
+      // PASO 3: Guardar explícitamente el estado en AsyncStorage como respaldo
+      try {
+        await AsyncStorage.setItem(`task_${taskId}_status`, 'on_the_way');
+        await AsyncStorage.setItem(`task_${taskId}_acceptedAt`, now);
+        console.log('Estado de tarea guardado localmente para persistencia');
+      } catch (storageError) {
+        console.error('Error al guardar estado en AsyncStorage:', storageError);
+      }
       
       console.log('Tarea actualizada con éxito:', {
         id: updatedTask._id,
@@ -1052,8 +1083,9 @@ const toggleComplete = async () => {
         t('taskAcceptedMessage') || 'Has aceptado esta tarea. Puedes iniciarla cuando estés listo.'
       );
       
-      // Recargar los detalles de la tarea desde el servidor para asegurar consistencia
-      loadTaskDetails();
+      // NO recargamos los detalles de la tarea desde el servidor para evitar
+      // que se sobrescriba el estado que acabamos de establecer
+      // El estado ya se actualizó localmente en setTask()
     } catch (error) {
       console.error('Error aceptando tarea:', error);
       setConfirmationLoading(false);
@@ -1713,23 +1745,19 @@ const styles = StyleSheet.create({
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'center',
+    justifyContent: 'center', // Centrar todo el contenido
     alignItems: 'center',
     paddingHorizontal: 15,
     paddingVertical: 10,
     backgroundColor: '#1c1c1c',
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(255, 243, 229, 0.1)',
-
   },
   taskStatusContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-    backgroundColor: 'rgba(0, 0, 0, 0.2)',
-    borderRadius: 15,
+    justifyContent: 'center', // Centrar los elementos dentro del contenedor
+    flex: 1, // Ocupar todo el espacio disponible
   },
   completeButton: {
     width: 30,
@@ -1753,10 +1781,12 @@ const styles = StyleSheet.create({
     color: '#fff3e5',
   },
   taskStatus: {
-    fontSize: 18,
+    fontSize: 22, // Tamaño aumentado para destacar el estado
     fontWeight: 'bold',
     color: '#fff3e5',
-    marginLeft: 8,
+    textAlign: 'center', // Texto centrado
+    textTransform: 'capitalize', // Primera letra en mayúscula
+    marginLeft: 5, // Un poco de espacio adicional después del icono de completo
   },
   deleteButton: {
     padding: 8,
