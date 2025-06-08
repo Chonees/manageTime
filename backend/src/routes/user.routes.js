@@ -9,6 +9,7 @@ router.use(verifyToken);
 // Rutas para administradores
 router.get('/active-locations', isAdmin, userController.getActiveLocations);
 router.get('/', isAdmin, userController.getAllUsers);
+router.post('/', isAdmin, userController.createUser); // Nueva ruta para crear usuarios
 router.delete('/:id', isAdmin, userController.deleteUser);
 router.post('/reset-all-to-inactive', isAdmin, userController.resetAllUsersToInactive);
 

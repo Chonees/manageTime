@@ -1,5 +1,57 @@
 const User = require('../models/user.model');
 
+// Crear un nuevo usuario (solo admin)
+exports.createUser = async (req, res) => {
+  try {
+    // Verificar si el usuario tiene permisos de administrador
+    if (!req.user.isAdmin) {
+      return res.status(403).json({ 
+        message: 'No tienes permiso para crear usuarios' 
+      });
+    }
+    
+    const { username, email, password, isAdmin } = req.body;
+    
+    // Verificar si el usuario ya existe
+    const existingUser = await User.findOne({ 
+      $or: [{ email }, { username }] 
+    });
+    
+    if (existingUser) {
+      return res.status(400).json({ 
+        message: 'El usuario o correo electrónico ya está registrado' 
+      });
+    }
+    
+    // Crear nuevo usuario
+    const user = new User({
+      username,
+      email,
+      password,
+      isAdmin: isAdmin || false,
+      isActive: true
+    });
+    
+    // Guardar usuario en la base de datos
+    await user.save();
+    
+    // Responder con los datos del usuario (sin la contraseña)
+    const userResponse = {
+      _id: user._id,
+      username: user.username,
+      email: user.email,
+      isAdmin: user.isAdmin,
+      isActive: user.isActive,
+      createdAt: user.createdAt
+    };
+    
+    res.status(201).json(userResponse);
+  } catch (error) {
+    console.error('Error al crear usuario:', error);
+    res.status(500).json({ message: 'Error al crear usuario' });
+  }
+};
+
 // Obtener todos los usuarios (solo admin)
 exports.getAllUsers = async (req, res) => {
   try {
