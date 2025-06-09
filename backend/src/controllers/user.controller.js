@@ -82,7 +82,7 @@ exports.getUserById = async (req, res) => {
 // Actualizar un usuario
 exports.updateUser = async (req, res) => {
   try {
-    const { username, email, isActive } = req.body;
+    const { username, email, isActive, isAdmin } = req.body;
     
     // Verificar si el usuario tiene permiso para actualizar
     if (!req.user.isAdmin && req.user._id.toString() !== req.params.id) {
@@ -91,10 +91,19 @@ exports.updateUser = async (req, res) => {
       });
     }
     
+    // Solo los administradores pueden cambiar el rol isAdmin de un usuario
+    const updateData = { username, email, isActive };
+    
+    // Si el usuario que hace la petición es admin y envió el campo isAdmin, lo incluimos
+    if (req.user.isAdmin && isAdmin !== undefined) {
+      updateData.isAdmin = isAdmin;
+      console.log(`Actualizando rol de administrador para usuario ${req.params.id} a: ${isAdmin}`);
+    }
+    
     // Buscar y actualizar usuario
     const updatedUser = await User.findByIdAndUpdate(
       req.params.id,
-      { username, email, isActive },
+      updateData,
       { new: true }
     ).select('-password');
     
