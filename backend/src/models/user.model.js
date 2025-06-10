@@ -27,6 +27,15 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  isSuperAdmin: {
+    type: Boolean,
+    default: false
+  },
+  assignedAdmin: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    default: null
+  },
   pushToken: {
     type: String,
     default: null
