@@ -10,7 +10,7 @@ exports.createUser = async (req, res) => {
       });
     }
     
-    const { username, email, password, isAdmin } = req.body;
+    const { username, email, password, isAdmin, isSuperAdmin, assignedAdmin } = req.body;
     
     // Verificar si el usuario ya existe
     const existingUser = await User.findOne({ 
@@ -29,8 +29,13 @@ exports.createUser = async (req, res) => {
       email,
       password,
       isAdmin: isAdmin || false,
-      isActive: true
+      isSuperAdmin: isSuperAdmin || false,
+      isActive: true,
+      assignedAdmin: assignedAdmin || null
     });
+    
+    // Solo el superadmin puede asignar usuarios a administradores
+    // Los administradores normales no pueden auto-asignarse usuarios
     
     // Guardar usuario en la base de datos
     await user.save();
@@ -41,7 +46,9 @@ exports.createUser = async (req, res) => {
       username: user.username,
       email: user.email,
       isAdmin: user.isAdmin,
+      isSuperAdmin: user.isSuperAdmin,
       isActive: user.isActive,
+      assignedAdmin: user.assignedAdmin,
       createdAt: user.createdAt
     };
     
@@ -55,8 +62,51 @@ exports.createUser = async (req, res) => {
 // Obtener todos los usuarios (solo admin)
 exports.getAllUsers = async (req, res) => {
   try {
-    const users = await User.find().select('-password');
-    res.status(200).json(users);
+    if (!req.user.isAdmin) {
+      return res.status(403).json({ 
+        message: 'No tienes permiso para ver usuarios' 
+      });
+    }
+    
+    let query = {};
+    
+    console.log(`Usuario solicitando getAllUsers: ${req.user.username}, isAdmin: ${req.user.isAdmin}, isSuperAdmin: ${req.user.isSuperAdmin}, ID: ${req.user._id}`);
+    
+    // Si es superadmin, puede ver todos los usuarios
+    // Si es admin regular, solo ve los usuarios que tiene asignados + a sí mismo
+    if (req.user.isAdmin && !req.user.isSuperAdmin) {
+      // IMPORTANTE: Filtrado estricto para administradores normales
+      // Solo pueden ver usuarios que están explícitamente asignados a ellos y a sí mismos
+      query = { $or: [{ assignedAdmin: req.user._id }, { _id: req.user._id }] };
+      console.log(`Administrador regular: Filtrando por usuarios asignados a: ${req.user._id}`);
+    } else if (req.user.isSuperAdmin) {
+      console.log('Superadmin: Mostrando todos los usuarios');
+    }
+    
+    // Incluir opción de población para mostrar información del admin asignado
+    const users = await User.find(query)
+      .select('-password')
+      .populate('assignedAdmin', 'username email'); // Poblar solo el nombre y email del admin
+    
+    console.log(`Usuarios encontrados: ${users.length}`);
+    users.forEach(user => {
+      if (user.assignedAdmin) {
+        console.log(`Usuario ${user.username} tiene asignado admin: ${typeof user.assignedAdmin === 'object' ? user.assignedAdmin.username : user.assignedAdmin}`);
+      }
+    });
+      
+    res.status(200).json(users.map(user => {
+      const userObj = user.toObject ? user.toObject() : user;
+      
+      // Asegurar que el campo assignedAdmin tenga el formato correcto
+      if (userObj.assignedAdmin && typeof userObj.assignedAdmin === 'object') {
+        console.log(`Mapeando usuario ${userObj.username}, admin asignado: ${userObj.assignedAdmin.username}`);
+      } else if (userObj.assignedAdmin) {
+        console.log(`Advertencia: Usuario ${userObj.username} tiene assignedAdmin que no es un objeto: ${userObj.assignedAdmin}`);
+      }
+      
+      return userObj;
+    }));
   } catch (error) {
     console.error('Error al obtener usuarios:', error);
     res.status(500).json({ message: 'Error al obtener usuarios' });
@@ -66,10 +116,29 @@ exports.getAllUsers = async (req, res) => {
 // Obtener un usuario por ID
 exports.getUserById = async (req, res) => {
   try {
-    const user = await User.findById(req.params.id).select('-password');
+    // Obtener usuario solicitado
+    const user = await User.findById(req.params.id)
+      .select('-password')
+      .populate('assignedAdmin', 'username email');
     
     if (!user) {
       return res.status(404).json({ message: 'Usuario no encontrado' });
+    }
+    
+    // Verificar permisos: Solo puede ver los detalles si:
+    // 1. Es el propio usuario
+    // 2. Es un superadmin
+    // 3. Es el admin asignado a este usuario
+    const isSelfQuery = req.user._id.toString() === req.params.id;
+    const isSuperAdmin = req.user.isSuperAdmin;
+    const isAssignedAdmin = user.assignedAdmin && 
+                          user.assignedAdmin._id && 
+                          user.assignedAdmin._id.toString() === req.user._id.toString();
+                          
+    if (!isSelfQuery && !isSuperAdmin && !isAssignedAdmin && !req.user.isAdmin) {
+      return res.status(403).json({ 
+        message: 'No tienes permiso para ver los detalles de este usuario' 
+      });
     }
     
     res.status(200).json(user);
@@ -82,22 +151,65 @@ exports.getUserById = async (req, res) => {
 // Actualizar un usuario
 exports.updateUser = async (req, res) => {
   try {
-    const { username, email, isActive, isAdmin } = req.body;
+    const { username, email, isActive, isAdmin, isSuperAdmin, assignedAdmin } = req.body;
     
-    // Verificar si el usuario tiene permiso para actualizar
-    if (!req.user.isAdmin && req.user._id.toString() !== req.params.id) {
+    // Obtener el usuario a actualizar
+    const userToUpdate = await User.findById(req.params.id);
+    
+    if (!userToUpdate) {
+      return res.status(404).json({ message: 'Usuario no encontrado' });
+    }
+    
+    // Verificar permisos:
+    // 1. El usuario puede actualizar su propio perfil
+    // 2. Un superAdmin puede actualizar cualquier usuario
+    // 3. Un admin normal solo puede actualizar sus usuarios asignados
+    const isSelfUpdate = req.user._id.toString() === req.params.id;
+    const isUserSuperAdmin = req.user.isSuperAdmin;
+    const isAssignedToAdmin = userToUpdate.assignedAdmin && 
+                           userToUpdate.assignedAdmin.toString() === req.user._id.toString();
+    
+    if (!isSelfUpdate && !isUserSuperAdmin && !isAssignedToAdmin) {
       return res.status(403).json({ 
-        message: 'No tienes permiso para actualizar este usuario' 
+        message: 'No tienes permiso para actualizar este usuario. Solo puedes actualizar usuarios asignados a ti.' 
       });
     }
     
-    // Solo los administradores pueden cambiar el rol isAdmin de un usuario
-    const updateData = { username, email, isActive };
+    // Datos básicos que cualquiera puede actualizar de sí mismo
+    const updateData = {};
     
-    // Si el usuario que hace la petición es admin y envió el campo isAdmin, lo incluimos
-    if (req.user.isAdmin && isAdmin !== undefined) {
-      updateData.isAdmin = isAdmin;
-      console.log(`Actualizando rol de administrador para usuario ${req.params.id} a: ${isAdmin}`);
+    if (username) updateData.username = username;
+    if (email) updateData.email = email;
+    
+    // Solo admins pueden cambiar el estado de activación
+    if (req.user.isAdmin && isActive !== undefined) {
+      updateData.isActive = isActive;
+    }
+    
+    // Solo superadmins pueden cambiar roles de admin y superadmin
+    if (isUserSuperAdmin) {
+      if (isAdmin !== undefined) {
+        updateData.isAdmin = isAdmin;
+        console.log(`Superadmin actualizando rol de administrador para usuario ${req.params.id} a: ${isAdmin}`);
+      }
+      
+      if (isSuperAdmin !== undefined) {
+        updateData.isSuperAdmin = isSuperAdmin;
+        console.log(`Superadmin actualizando rol de superadministrador para usuario ${req.params.id} a: ${isSuperAdmin}`);
+      }
+    }
+    
+    // Gestión de asignación de usuarios a administradores:
+    // Solo los superadministradores pueden asignar usuarios a administradores
+    if (assignedAdmin !== undefined) {
+      if (isUserSuperAdmin) {
+        // Superadmin puede asignar cualquier usuario a cualquier admin
+        updateData.assignedAdmin = assignedAdmin || null;
+        console.log(`Superadmin asignando usuario ${req.params.id} al administrador: ${assignedAdmin}`);
+      } else {
+        // Los administradores normales no pueden asignar usuarios
+        console.log(`Intento rechazado: Admin normal intentó asignar usuario ${req.params.id} a un administrador`);
+      }
     }
     
     // Buscar y actualizar usuario
@@ -105,10 +217,10 @@ exports.updateUser = async (req, res) => {
       req.params.id,
       updateData,
       { new: true }
-    ).select('-password');
+    ).select('-password').populate('assignedAdmin', 'username email');
     
     if (!updatedUser) {
-      return res.status(404).json({ message: 'Usuario no encontrado' });
+      return res.status(404).json({ message: 'Error al actualizar el usuario' });
     }
     
     res.status(200).json(updatedUser);
@@ -165,11 +277,34 @@ exports.deleteUser = async (req, res) => {
       });
     }
     
-    const deletedUser = await User.findByIdAndDelete(req.params.id);
+    // Buscar el usuario que se va a eliminar
+    const userToDelete = await User.findById(req.params.id);
     
-    if (!deletedUser) {
+    if (!userToDelete) {
       return res.status(404).json({ message: 'Usuario no encontrado' });
     }
+    
+    // Verificar permisos de eliminación:
+    // 1. Superadmin puede eliminar a cualquier usuario
+    // 2. Admin regular solo puede eliminar a usuarios asignados a él
+    const isSuperAdmin = req.user.isSuperAdmin;
+    const isAssignedToAdmin = userToDelete.assignedAdmin && 
+                           userToDelete.assignedAdmin.toString() === req.user._id.toString();
+    
+    if (!isSuperAdmin && !isAssignedToAdmin) {
+      return res.status(403).json({ 
+        message: 'No tienes permiso para eliminar este usuario. Solo puedes eliminar usuarios asignados a ti.' 
+      });
+    }
+    
+    // Verificar que no se está intentando eliminar a un admin o superadmin (solo superadmin puede)
+    if ((userToDelete.isAdmin || userToDelete.isSuperAdmin) && !isSuperAdmin) {
+      return res.status(403).json({
+        message: 'No tienes permiso para eliminar administradores. Solo un superadmin puede hacerlo.'
+      });
+    }
+    
+    const deletedUser = await User.findByIdAndDelete(req.params.id);
     
     res.status(200).json({ message: 'Usuario eliminado correctamente' });
   } catch (error) {
@@ -191,8 +326,17 @@ exports.getActiveLocations = async (req, res) => {
     // Importar el modelo de Location
     const Location = require('../models/location.model');
     
-    // Obtener usuarios activos
-    const activeUsers = await User.find({ isActive: true }).select('_id username');
+    // Query para filtrar usuarios según el nivel de permisos:
+    // - Superadmin puede ver todos los usuarios activos
+    // - Admin regular solo ve los usuarios asignados a él
+    let userQuery = { isActive: true };
+    
+    if (req.user.isAdmin && !req.user.isSuperAdmin) {
+      userQuery.assignedAdmin = req.user._id;
+    }
+    
+    // Obtener usuarios activos según permisos
+    const activeUsers = await User.find(userQuery).select('_id username');
     
     // Para cada usuario activo, buscar su ubicación más reciente
     const activeLocations = [];
