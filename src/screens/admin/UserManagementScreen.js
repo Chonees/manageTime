@@ -125,14 +125,7 @@ const UserManagementScreen = ({ navigation }) => {
                   </Text>
                 </TouchableOpacity>
                 
-                <TouchableOpacity 
-                  style={[styles.actionButton, styles.roleButton]}
-                  onPress={() => toggleUserRole(item._id, item.isAdmin)}
-                >
-                  <Text style={styles.buttonText}>
-                    {item.isAdmin ? t('normalUser') : t('adminUser')}
-                  </Text>
-                </TouchableOpacity>
+                {/* Se eliminó el botón para cambiar roles de usuario por seguridad */}
                 
                 <TouchableOpacity 
                   style={[styles.actionButton, styles.deleteButton]}
