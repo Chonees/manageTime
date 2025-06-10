@@ -34,6 +34,8 @@ const TaskScreen = ({ navigation }) => {
   const { t } = useLanguage();
   const theme = useTheme();
   const [tasks, setTasks] = useState([]);
+  const [filteredTasks, setFilteredTasks] = useState([]);
+  const [searchText, setSearchText] = useState('');
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -212,6 +214,8 @@ const TaskScreen = ({ navigation }) => {
       });
       
       setTasks(formattedTasks);
+      setFilteredTasks(formattedTasks);
+      setSearchText(''); // Limpiar búsqueda al cargar tareas
     } catch (error) {
       console.error('Error al cargar tareas:', error);
       setError(error.message || t('errorLoadingTasks'));
@@ -240,6 +244,26 @@ const TaskScreen = ({ navigation }) => {
   useEffect(() => {
     loadTasks();
   }, []);
+
+  // Filtrar tareas basado en el texto de búsqueda
+  useEffect(() => {
+    if (!searchText.trim()) {
+      setFilteredTasks(tasks);
+      return;
+    }
+
+    const filtered = tasks.filter(task => {
+      const searchLower = searchText.toLowerCase();
+      return (
+        (task.title && task.title.toLowerCase().includes(searchLower)) ||
+        (task.description && task.description.toLowerCase().includes(searchLower)) ||
+        (task.fileNumber && task.fileNumber.toLowerCase().includes(searchLower)) ||
+        (task._username && task._username.toLowerCase().includes(searchLower))
+      );
+    });
+    
+    setFilteredTasks(filtered);
+  }, [searchText, tasks]);
 
   // Función para mostrar el selector de tiempo
   const showTimePicker = () => {
@@ -915,34 +939,30 @@ const TaskScreen = ({ navigation }) => {
       }
     };
     
+    // Determinar el estilo de borde según el estado
+    const getBorderStyle = () => {
+      if (item.completed || item.status === 'completed') return styles.completedTask;
+      if (item.status === 'on_site') return styles.onSiteTask;
+      if (item.status === 'on_the_way') return styles.onTheWayTask;
+      return styles.waitingTask;
+    };
+
     return (
       <TouchableOpacity 
-        style={[styles.taskItem, item.completed && styles.completedTask]}
+        style={[styles.taskItem, getBorderStyle()]}
         onPress={() => navigation.navigate('TaskDetails', { taskId: item._id })}
       >
+        {/* Cabecera de la tarea con título y número de archivo destacado */}
         <View style={styles.taskHeader}>
-          <Text style={styles.taskTitle}>{item.title}</Text>
+          <View style={styles.titleSection}>
+            <Text style={styles.taskTitle} numberOfLines={2}>
+              {item.title}
+              {item.fileNumber && <Text style={styles.fileNumberText}> - #{item.fileNumber}</Text>}
+            </Text>
+          </View>
+          
+          {/* Panel de controles siempre visible */}
           <View style={styles.taskControls}>
-            {/* Mostrar estado para todos los usuarios */}
-            <View style={styles.statusContainer}>
-              <Text style={styles.statusLabel}>{t('status')}:</Text>
-              <Text 
-                style={[
-                  styles.statusValue, 
-                  item.status === 'completed' || item.completed ? styles.completedStatusValue : 
-                  item.status === 'on_site' ? styles.onSiteStatusValue : 
-                  item.status === 'on_the_way' ? styles.onTheWayStatusValue : 
-                  styles.waitingStatusValue
-                ]}
-              >
-                {item.status === 'completed' || item.completed ? t('completed') : 
-                 item.status === 'on_site' ? t('on_site') : 
-                 item.status === 'on_the_way' ? t('on_the_way') : 
-                 t('waiting_for_acceptance')}
-              </Text>
-            </View>
-            
-            {/* Solo los administradores ven el botón de eliminar */}
             {user && user.isAdmin && (
               <TouchableOpacity 
                 style={styles.deleteButton}
@@ -954,12 +974,33 @@ const TaskScreen = ({ navigation }) => {
           </View>
         </View>
         
+        {/* Estado de la tarea siempre visible y con mejor diseño */}
+        <View style={styles.statusRow}>
+          <Text style={styles.statusLabel}>{t('status')}:</Text>
+          <Text 
+            style={[
+              styles.statusValue, 
+              item.status === 'completed' || item.completed ? styles.completedStatusValue : 
+              item.status === 'on_site' ? styles.onSiteStatusValue : 
+              item.status === 'on_the_way' ? styles.onTheWayStatusValue : 
+              styles.waitingStatusValue
+            ]}
+          >
+            {item.status === 'completed' || item.completed ? t('completed') : 
+             item.status === 'on_site' ? t('on_site') : 
+             item.status === 'on_the_way' ? t('on_the_way') : 
+             t('waiting_for_acceptance')}
+          </Text>
+        </View>
+        
+        {/* Descripción opcional */}
         {item.description && (
           <Text style={styles.taskDescription} numberOfLines={2}>
             {item.description}
           </Text>
         )}
         
+        {/* Pie de tarea con detalles */}
         <View style={styles.taskFooter}>
           <View style={styles.taskIconsColumn}>
             <View style={styles.taskIconRow}>
@@ -989,6 +1030,7 @@ const TaskScreen = ({ navigation }) => {
       </TouchableOpacity>
     );
   };
+
   
   // Return principal del componente TaskScreen
   return (
@@ -1003,18 +1045,18 @@ const TaskScreen = ({ navigation }) => {
       </View>
       <View style={styles.statsContainer}>
         <View style={styles.statItem}>
-          <Text style={styles.statValue}>{tasks.length}</Text>
+          <Text style={styles.statValue}>{searchText ? filteredTasks.length : tasks.length}</Text>
           <Text style={styles.statLabel}>{t('total')}</Text>
         </View>
         <View style={styles.statItem}>
           <Text style={styles.statValue}>
-            {tasks.filter(task => task.completed).length}
+            {searchText ? filteredTasks.filter(task => task.completed).length : tasks.filter(task => task.completed).length}
           </Text>
           <Text style={styles.statLabel}>{t('completed')}</Text>
         </View>
         <View style={styles.statItem}>
           <Text style={styles.statValue}>
-            {tasks.filter(task => !task.completed).length}
+            {searchText ? filteredTasks.filter(task => !task.completed).length : tasks.filter(task => !task.completed).length}
           </Text>
           <Text style={styles.statLabel}>{t('pending')}</Text>
         </View>
@@ -1037,12 +1079,31 @@ const TaskScreen = ({ navigation }) => {
             </TouchableOpacity>
           )}
           
+          {/* Campo de búsqueda de tareas */}
+          <View style={styles.searchContainer}>
+            <Ionicons name="search" size={20} color="#a8a8a8" style={styles.searchIcon} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder={t('searchTasks') || "Buscar tareas..."}
+              placeholderTextColor="#a8a8a8"
+              value={searchText}
+              onChangeText={setSearchText}
+              returnKeyType="search"
+              clearButtonMode="while-editing"
+            />
+            {searchText ? (
+              <TouchableOpacity onPress={() => setSearchText('')} style={styles.clearButton}>
+                <Ionicons name="close-circle" size={20} color="#a8a8a8" />
+              </TouchableOpacity>
+            ) : null}
+          </View>
+          
           {showAddForm && user?.isAdmin ? (
             renderAddTaskForm()
           ) : (
             error ? (
               <Text style={styles.errorText}>{error}</Text>
-            ) : tasks.length === 0 ? (
+            ) : filteredTasks.length === 0 && !searchText ? (
               <View style={styles.emptyContainer}>
                 <Text style={styles.emptyText}>{t('noTasks')}</Text>
                 <Text style={styles.emptySubText}>{t('tasksWillAppearHere')}</Text>
@@ -1050,11 +1111,20 @@ const TaskScreen = ({ navigation }) => {
             ) : (
               <FlatList
                 style={styles.taskList}
-                data={tasks}
+                data={filteredTasks}
                 renderItem={renderTask}
                 keyExtractor={item => item._id}
                 refreshing={refreshing}
                 onRefresh={onRefresh}
+                indicatorStyle="white"
+                contentContainerStyle={styles.taskListContent}
+                showsVerticalScrollIndicator={true}
+                ListEmptyComponent={searchText ? (
+                  <View style={styles.emptyContainer}>
+                    <Text style={styles.emptyText}>{t('noSearchResults')}</Text>
+                    <Text style={styles.emptySubText}>{t('tryDifferentSearch') || "Intenta con otra búsqueda"}</Text>
+                  </View>
+                ) : null}
               />
             )
           )}
@@ -1067,6 +1137,33 @@ const TaskScreen = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
+  searchContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#333333',
+    borderRadius: 8,
+    marginHorizontal: 15,
+    marginBottom: 10,
+    paddingHorizontal: 10,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#444444',
+  },
+  searchIcon: {
+    marginRight: 8,
+  },
+  searchInput: {
+    flex: 1,
+    height: 40,
+    color: '#fff3e5',
+    fontSize: 14,
+    paddingVertical: 8,
+  },
+  clearButton: {
+    padding: 5,
+  },
+  taskListContent: {
+    paddingBottom: 20,
+  },
   container: {
     flex: 1,
     backgroundColor: '#2e2e2e',
@@ -1249,88 +1346,90 @@ const styles = StyleSheet.create({
     marginHorizontal: 10,
   },
   taskItem: {
-    backgroundColor: '#1c1c1c',
-    borderRadius: 15,
+    backgroundColor: '#222222',
+    borderRadius: 10,
     padding: 15,
     marginBottom: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
     borderWidth: 1,
-    borderColor: 'rgba(255, 243, 229, 0.1)',
+    borderColor: '#333333',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  completedTask: {
+    borderLeftWidth: 4,
+    borderLeftColor: '#4CAF50', // Verde para completado
+    backgroundColor: '#1c1c1c',
+    opacity: 0.9,
+  },
+  onSiteTask: {
+    borderLeftWidth: 4,
+    borderLeftColor: '#2196F3', // Azul para en el sitio
+    backgroundColor: '#1c1c1c',
+  },
+  onTheWayTask: {
+    borderLeftWidth: 4,
+    borderLeftColor: '#FF9800', // Naranja para en camino
+    backgroundColor: '#1c1c1c',
+  },
+  waitingTask: {
+    borderLeftWidth: 4,
+    borderLeftColor: '#8e8cd8', // Azul-lavanda para esperando aceptación
+    backgroundColor: '#1c1c1c',
+  },
+  titleSection: {
+    flex: 1,
+    marginRight: 10,
   },
   taskHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+    flexWrap: 'nowrap',
+  },
+  statusRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 5,
+    marginBottom: 8,
+    flexWrap: 'wrap',
   },
   taskTitle: {
     fontSize: Math.min(width * 0.04, 16),
     fontWeight: 'bold',
     color: '#fff3e5',
   },
-  deleteButton: {
-    padding: 5,
-  },
-  deleteButtonText: {
-    color: '#ff5252',
-    fontSize: Math.min(width * 0.05, 20),
+  fileNumberText: {
+    color: '#e8d5b7',
     fontWeight: 'bold',
-  },
-  taskDetails: {
-    flex: 1,
-  },
-  taskDescription: {
-    fontSize: Math.min(width * 0.035, 14),
-    color: '#ffffff',
-    opacity: 0.7,
-    marginBottom: 5,
-  },
-  assignedToContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 5,
-  },
-  assignedToLabel: {
-    fontSize: Math.min(width * 0.03, 12),
-    fontWeight: 'bold',
-    color: '#fff3e5',
-  },
-  assignedToValue: {
-    fontSize: Math.min(width * 0.035, 14),
-    color: '#ffffff',
-    opacity: 0.7,
-    marginLeft: 5,
-  },
-  taskFooter: {
-    flexDirection: 'row',
-    marginTop: 10,
-  },
-  taskIconsColumn: {
-    flexDirection: 'column',
-    flex: 1,
   },
   taskControls: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    justifyContent: 'flex-end',
+    paddingLeft: 5,
   },
   statusContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginRight: 5,
+    marginRight: 15,
   },
   statusLabel: {
-    fontSize: 14,
+    fontSize: 12,
     color: '#a8a8a8',
-    marginRight: 4,
+    marginRight: 5,
+    fontWeight: '500',
   },
   statusValue: {
-    fontSize: 14,
-    fontWeight: 'bold',
+    fontSize: 13,
+    color: '#e8d5b7',
+    fontWeight: '600',
+    backgroundColor: 'rgba(232, 213, 183, 0.15)',
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+    borderRadius: 4,
   },
   completedStatusValue: {
     color: '#4CAF50', // Verde para completado
@@ -1342,7 +1441,7 @@ const styles = StyleSheet.create({
     color: '#FF9800', // Naranja para en camino
   },
   waitingStatusValue: {
-    color: '#9C27B0', // Púrpura para esperando aceptación
+    color: '#8e8cd8', // Azul-lavanda más sutil para esperando aceptación
   },
   pendingStatusValue: {
     color: '#FFC107', // Amarillo para pendiente
@@ -1360,6 +1459,27 @@ const styles = StyleSheet.create({
   taskDate: {
     fontSize: 12,
     color: '#666',
+  },
+  deleteButton: {
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 82, 82, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 82, 82, 0.2)',
+  },
+  taskDescription: {
+    fontSize: 14,
+    color: '#d0d0d0',
+    marginBottom: 12,
+    fontStyle: 'italic',
+  },
+  taskFooter: {
+    flexDirection: 'row',
+    marginTop: 5,
+  },
+  taskIconsColumn: {
+    flexDirection: 'column',
+    flex: 1,
   },
   completeButton: {
     padding: 5,

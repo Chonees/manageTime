@@ -1222,7 +1222,7 @@ const toggleComplete = async () => {
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerBackButton}>
           <Ionicons name="arrow-back" size={22} color="#fff3e5" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>{task ? task.title : t('taskDetails')}</Text>
+        <Text style={styles.headerTitle}>{task ? `${task.title}${task.fileNumber ? ` - #${task.fileNumber}` : ''}` : t('taskDetails')}</Text>
         <View style={styles.headerRightSection}>
           {user?.isAdmin && task && (
             <TouchableOpacity onPress={() => setShowEditModal(true)} style={styles.headerEditButton}>
