@@ -11,7 +11,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useLanguage } from '../context/LanguageContext';
 import * as api from '../services/api';
-import VoiceListener from '../components/VoiceListener';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const VoiceAssistantScreen = ({ navigation }) => {
   const { t } = useLanguage();
@@ -48,11 +48,6 @@ const VoiceAssistantScreen = ({ navigation }) => {
     setLogs(prev => [`[${timestamp}] ${message}`, ...prev.slice(0, 19)]);
   };
   
-  // Función para recibir mensajes de debug desde el VoiceListener
-  const handleDebugMessage = (message) => {
-    addLog(message);
-  };
-
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
@@ -86,13 +81,6 @@ const VoiceAssistantScreen = ({ navigation }) => {
           <Text style={styles.noTaskText}>{t('noActiveTaskForVoice') || 'No hay tareas activas para el asistente de voz.'}</Text>
         </View>
       )}
-      
-      {/* Componente de escucha de voz real */}
-      <VoiceListener 
-        isTaskActive={!!activeTask} 
-        taskData={activeTask} 
-        onDebugMessage={handleDebugMessage}
-      />
       
       <View style={styles.logsContainer}>
         <Text style={styles.logsTitle}>{t('activityLog') || 'Registro de actividad'}</Text>

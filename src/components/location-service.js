@@ -1,8 +1,6 @@
 import * as Location from 'expo-location';
-import * as Notifications from 'expo-notifications';
 import { getUserTasks, saveActivity, getApiUrl } from '../services/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { registerForPushNotifications } from '../services/notification-service';
 
 // Estado para manejar las tareas que actualmente estamos dentro de su radio
 let tasksInRange = {};
@@ -23,73 +21,6 @@ const calculateDistance = (lat1, lon1, lat2, lon2) => {
 
 const toRad = (value) => {
   return value * Math.PI / 180;
-};
-
-// Configurar las notificaciones solo para obtener permisos necesarios para push notifications
-export const configureNotifications = async () => {
-  const { status } = await Notifications.requestPermissionsAsync();
-  if (status !== 'granted') {
-    console.log('No se otorgaron permisos de notificación');
-    return false;
-  }
-
-  Notifications.setNotificationHandler({
-    handleNotification: async () => ({
-      shouldShowAlert: true,
-      shouldPlaySound: true,
-      shouldSetBadge: false,
-    }),
-  });
-
-  return true;
-};
-
-// Enviar una notificación como push notification a través del servidor
-const sendNotification = async (title, body, data = {}) => {
-  try {
-    console.log('Enviando notificación push a través del servidor:', title, body);
-    
-    // Obtener token de push
-    const pushToken = await registerForPushNotifications();
-    if (!pushToken) {
-      console.error('No se pudo obtener token de push para enviar notificación');
-      return false;
-    }
-    
-    // Obtener token de autenticación
-    const token = await AsyncStorage.getItem('token');
-    if (!token) {
-      console.error('No hay token de autenticación para enviar notificación al servidor');
-      return false;
-    }
-    
-    // Enviar al servidor para notificación push
-    const url = `${getApiUrl()}/api/notifications/user`;
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify({
-        title,
-        body,
-        data: { ...data, timestamp: new Date().toISOString() },
-        pushToken
-      })
-    });
-    
-    if (!response.ok) {
-      console.error('Error al enviar notificación push al servidor:', response.status);
-      return false;
-    }
-    
-    console.log('Notificación push enviada exitosamente al servidor');
-    return true;
-  } catch (error) {
-    console.error('Error al enviar notificación push:', error);
-    return false;
-  }
 };
 
 // Crear una actividad reciente
@@ -161,20 +92,12 @@ export const checkTasksProximity = async () => {
         // Si entramos en el radio
         if (isInRange && !wasInRange) {
           console.log(`Entraste en el radio de la tarea: ${task.title}`);
-          sendNotification(
-            '¡Tarea cercana!', 
-            `Task Management en el área de la tarea: ${task.title}`
-          );
           createActivity(task.id, 'enter');
           tasksInRange[task.id] = true;
         } 
         // Si salimos del radio
         else if (!isInRange && wasInRange) {
           console.log(`Saliste del radio de la tarea: ${task.title}`);
-          sendNotification(
-            'Has salido del área', 
-            `Ya no estás en el área de la tarea: ${task.title}`
-          );
           createActivity(task.id, 'exit');
           tasksInRange[task.id] = false;
         }
@@ -200,9 +123,6 @@ export const startLocationMonitoring = async () => {
   }
   
   console.log('Iniciando monitoreo de ubicación...');
-  
-  // Configurar notificaciones
-  await configureNotifications();
   
   // Iniciar el monitoreo periódico
   locationMonitoringInterval = setInterval(checkTasksProximity, 30000); // Comprobar cada 30 segundos

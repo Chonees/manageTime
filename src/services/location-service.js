@@ -5,7 +5,6 @@ import { getUserTasks, saveActivity, saveLocation } from './api';
 import { Alert } from 'react-native';
 import { translations } from '../context/LanguageContext';
 import { getApiBaseUrl, getFetchOptions, getTimeout, getPlatformConfig } from './platform-config';
-import { sendActivityNotification } from './notification-service';
 
 export const API_URL = getApiBaseUrl();
 // Estado para manejar las tareas que actualmente estamos dentro de su radio
@@ -52,11 +51,11 @@ const sendNotification = async (title, body) => {
   try {
     console.log('Intentando enviar notificación desde location-service:', title, body);
     // Usamos sendActivityNotification en lugar de sendLocalNotification
-    await sendActivityNotification({
-      title,
-      body,
-      data: { source: 'location-service' }
-    });
+    // await sendActivityNotification({
+    //   title,
+    //   body,
+    //   data: { source: 'location-service' }
+    // });
   } catch (error) {
     // Manejo silencioso de errores
     console.error('Error sending notification from location service:', error);

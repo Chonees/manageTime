@@ -4,7 +4,6 @@
 import { Platform } from 'react-native';
 import { getApiBaseUrl, getFetchOptions, getTimeout, getPlatformConfig } from './platform-config';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { registerForPushNotifications } from './notification-service';
 
 export const API_URL = getApiBaseUrl();
 
@@ -1155,29 +1154,7 @@ export const saveActivity = async (activityData) => {
     
     // Send notification to admin users
     try {
-      // Get the push token
-      const pushToken = await registerForPushNotifications();
-      if (pushToken) {
-        // Send to server for push notification
-        const notificationUrl = `${getApiUrl()}/api/notifications/admin/activity`;
-        await fetchWithRetry(notificationUrl, {
-          method: 'POST',
-          headers: {
-            ...await getAuthHeader(),
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            activityId: responseData._id || responseData.id,
-            title: getActivityTitle(activityData.type),
-            body: `${dataToSend.username || 'User'}: ${getActivityMessage(activityData)}`,
-            type: activityData.type,
-            pushToken
-          })
-        });
-        console.log('Activity sent to server for push notification');
-      } else {
-        console.log('No push token available for notification');
-      }
+      console.log('Activity saved successfully - notifications disabled');
     } catch (notifError) {
       // Manejo silencioso de errores
     }

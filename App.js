@@ -13,7 +13,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 // Cambia estos valores para probar diferentes combinaciones
 const ENABLE_THEME_PROVIDER = true;          // Tema (colores, estilos)
 const ENABLE_LANGUAGE_PROVIDER = true;       // Idioma
-const ENABLE_LOCATION_PROVIDER = true;       // Ubicación (más problemático)
+const ENABLE_LOCATION_PROVIDER = __DEV__;    // Ubicación (más problemático) - Solo en DEV
 const ENABLE_AUTH_PROVIDER = true;           // Autenticación
 
 // Ignorar todas las advertencias en producción para evitar que una advertencia interrumpa la app
@@ -27,11 +27,6 @@ if (!__DEV__) {
     'NativeEventEmitter',
     'Setting a timer'
   ]);
-}
-
-// Desactivar cualquier intento de registrar notificaciones push
-if (global.__EXPO_PUSH_TOKEN_RUNTIME_VALUE) {
-  global.__EXPO_PUSH_TOKEN_RUNTIME_VALUE = null;
 }
 
 // Manejador global de errores para capturar cualquier excepción no manejada

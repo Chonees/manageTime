@@ -7,7 +7,6 @@ import { useLanguage } from '../context/LanguageContext';
 import { useLocationTracking } from '../context/LocationTrackingContext';
 import * as api from '../services/api';
 import { mapConfig } from '../services/platform-config';
-import VerificationPrompt from './VerificationPrompt';
 
 const LocationComponent = forwardRef(({ 
   onLocationChange, 
