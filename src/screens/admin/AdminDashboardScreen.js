@@ -17,7 +17,6 @@ import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { useTheme } from '../../context/ThemeContext';
 import AdminActivityList from '../../components/AdminActivityList';
-import AdminNotificationBadge from '../../components/AdminNotificationBadge';
 import * as api from '../../services/api';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import { Ionicons } from '@expo/vector-icons';
@@ -443,7 +442,6 @@ const AdminDashboardScreen = ({ navigation }) => {
                 >
                   <View style={styles.actionButtonContent}>
                     <Text style={[styles.actionButtonText, { color: '#000' }]}>{t('viewAllActivities')}</Text>
-                    <AdminNotificationBadge />
                   </View>
                 </TouchableOpacity>
 

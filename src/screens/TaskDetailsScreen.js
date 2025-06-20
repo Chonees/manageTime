@@ -21,11 +21,10 @@ import * as api from '../services/api';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import VoiceListener from '../components/VoiceListener'; // Importar el componente de escucha de voz
-import TaskConfirmationModal from '../components/TaskConfirmationModal'; // Importar modal de confirmación
-import TaskTimer from '../components/TaskTimer'; // Importar el nuevo componente de temporizador
-import LocationComponent from '../components/LocationComponent'; // Importar el componente de ubicación
-import TaskForm from '../components/TaskForm'; // Importar el componente de formulario de tareas
+import LocationComponent from '../components/LocationComponent';
+import TaskForm from '../components/TaskForm';
+import TaskConfirmationModal from '../components/TaskConfirmationModal';
+import TaskTimer from '../components/TaskTimer';
 
 const TaskDetailsScreen = ({ route, navigation }) => {
   const { taskId } = route.params;
@@ -1375,8 +1374,6 @@ const toggleComplete = async () => {
             <Text style={styles.submitActivityButtonText}>{t('submitActivity')}</Text>
           </TouchableOpacity>
         </View>
-        
-        {taskStarted && <VoiceListener isTaskActive={taskStarted} taskData={task} onKeywordDetected={handleKeywordDetected} />}
         
         {/* Nuevo componente para mostrar palabras clave */}
         <View style={styles.keywordsContainer}>

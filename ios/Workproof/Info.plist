@@ -58,12 +58,8 @@
     <string>Allow $(PRODUCT_NAME) to access your location</string>
     <key>NSLocationWhenInUseUsageDescription</key>
     <string>Tu ubicación es utilizada para verificar que estás dentro del área de trabajo asignada y registrar tus actividades.</string>
-    <key>NSMicrophoneUsageDescription</key>
-    <string>Esta aplicación requiere acceso al micrófono para funciones de comunicación con el equipo de trabajo.</string>
     <key>NSPhotoLibraryUsageDescription</key>
     <string>Esta aplicación requiere acceso a tu biblioteca de fotos para permitirte subir imágenes de verificación de trabajo y ubicación.</string>
-    <key>NSSpeechRecognitionUsageDescription</key>
-    <string>Esta aplicación requiere acceso al reconocimiento de voz para permitir comandos por voz en situaciones donde el uso manual no es posible.</string>
     <key>UIBackgroundModes</key>
     <array>
       <string>fetch</string>

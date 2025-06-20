@@ -2,13 +2,14 @@ import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 import { API_URL } from '@env';
 
-// URL base para el backend en producción
-const BACKEND_URL = API_URL;
-if (!BACKEND_URL) {
-  console.error('ERROR: La variable API_URL no está definida en el archivo .env');
-  throw new Error('API_URL must be defined in .env file');
+// URL base para el backend en producción con fallback
+const BACKEND_URL = API_URL || 'https://workproof-backend.onrender.com';
+
+if (!API_URL) {
+  console.warn('ADVERTENCIA: La variable API_URL no está definida en el archivo .env. Usando URL fallback:', BACKEND_URL);
+} else {
+  console.log('URL del backend configurada en platform-config:', BACKEND_URL);
 }
-console.log('URL del backend configurada en platform-config:', BACKEND_URL);
 
 // Configuración específica para cada plataforma
 const platformConfig = {

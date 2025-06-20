@@ -20,6 +20,16 @@
         "withoutCredentials": true
       }
     },
+    "production": {
+      "distribution": "store",
+      "autoIncrement": true,
+      "ios": {
+        "buildConfiguration": "Release"
+      },
+      "android": {
+        "buildType": "app-bundle"
+      }
+    },
     "diagnostic": {
       "distribution": "internal",
       "ios": {
@@ -40,9 +50,6 @@
       "cache": {
         "disabled": true
       }
-    },
-    "production": {
-      "autoIncrement": true
     }
   },
   "submit": {

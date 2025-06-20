@@ -20,7 +20,6 @@ import LocationTrackingScreen from '../screens/LocationTrackingScreen';
 import AdminDashboardScreen from '../screens/admin/AdminDashboardScreen';
 import AdminActivitiesScreen from '../screens/admin/AdminActivitiesScreen';
 import UserManagementScreen from '../screens/admin/UserManagementScreen';
-import NotificationTestScreen from '../screens/NotificationTestScreen';
 
 // Contexto de autenticación
 import { useAuth } from '../context/AuthContext';
@@ -270,11 +269,6 @@ const AdminNavigator = () => {
       <Stack.Screen 
         name="VoiceAssistant" 
         component={VoiceAssistantScreen}
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen 
-        name="NotificationTest" 
-        component={NotificationTestScreen}
         options={{ headerShown: false }}
       />
     </Stack.Navigator>
