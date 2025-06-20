@@ -1,0 +1,15 @@
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "2e37e777-0ba5-4d70-8e3e-b0c7f1d471dc"
+      }
+    },
+    "ios": {
+      "bundleIdentifier": "com.workproof.app",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    }
+  }
+}

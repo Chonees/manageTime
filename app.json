@@ -1,28 +1,62 @@
 {
   "expo": {
-    "name": "app-task",
-    "slug": "app-task",
+    "name": "Workproof",
+    "slug": "manage-time",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
+    "backgroundColor": "#282828",
+    "primaryColor": "#fff3e5",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#282828"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.workproof.app",
+      "buildNumber": "1"
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
-      }
+        "foregroundImage": "./assets/icon.png",
+        "backgroundColor": "#282828"
+      },
+      "package": "com.managetime.app",
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyDGqyJR4KZRJt9qRLmeGjdlgIBt_nb7Kqw"
+        }
+      },
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_LOCATION",
+        "WAKE_LOCK"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Permitir a ManageTime acceder a tu ubicación."
+        }
+      ]
+    ],
+    "packagerOpts": {
+      "config": "metro.config.js",
+      "sourceExts": ["js", "jsx", "ts", "tsx", "json"],
+      "assetExts": ["ttf", "png", "jpg", "jpeg", "mp3", "wav"]
+    },
+    "extra": {
+      "excludeBackend": true
     }
   }
 }

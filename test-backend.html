@@ -1,0 +1,331 @@
+npm install @react-native-picker/picker<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prueba de Conexión ManageTime</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        h1 {
+            color: #4a90e2;
+            text-align: center;
+        }
+        .card {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .button {
+            background-color: #4a90e2;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-right: 10px;
+        }
+        .button:hover {
+            background-color: #3a7bc8;
+        }
+        .button.danger {
+            background-color: #e74c3c;
+        }
+        .button.danger:hover {
+            background-color: #c0392b;
+        }
+        .result {
+            margin-top: 20px;
+            padding: 10px;
+            border-left: 4px solid #4a90e2;
+            background-color: #f5f5f5;
+        }
+        .success {
+            border-left-color: #2ecc71;
+            background-color: #e8f8f5;
+        }
+        .error {
+            border-left-color: #e74c3c;
+            background-color: #fdedec;
+        }
+        pre {
+            background-color: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+    </style>
+</head>
+<body>
+    <h1>Prueba de Conexión ManageTime</h1>
+    
+    <div class="card">
+        <h2>Información del Servidor</h2>
+        <p>URL del Backend: <span id="backendUrl">https://managetime-backend-48f256c2dfe5.herokuapp.com</span></p>
+        <button class="button" onclick="testConnection()">Probar Conexión</button>
+    </div>
+    
+    <div class="card">
+        <h2>Iniciar Sesión</h2>
+        <div class="form-group">
+            <label for="username">Usuario o Email:</label>
+            <input type="text" id="username" placeholder="Ingresa tu usuario o email" value="admin@managetime.com">
+        </div>
+        <div class="form-group">
+            <label for="password">Contraseña:</label>
+            <input type="password" id="password" placeholder="Ingresa tu contraseña" value="Admin123!">
+        </div>
+        <button class="button" onclick="login()">Iniciar Sesión</button>
+    </div>
+    
+    <div class="card">
+        <h2>Registrar Usuario</h2>
+        <div class="form-group">
+            <label for="regUsername">Usuario:</label>
+            <input type="text" id="regUsername" placeholder="Ingresa un nombre de usuario">
+        </div>
+        <div class="form-group">
+            <label for="regEmail">Email:</label>
+            <input type="email" id="regEmail" placeholder="Ingresa un email">
+        </div>
+        <div class="form-group">
+            <label for="regPassword">Contraseña:</label>
+            <input type="password" id="regPassword" placeholder="Ingresa una contraseña">
+        </div>
+        <button class="button" onclick="register()">Registrar</button>
+    </div>
+    
+    <div class="card">
+        <h2>Verificar Colecciones</h2>
+        <button class="button" onclick="getUsers()">Ver Usuarios</button>
+        <button class="button" onclick="getLocations()">Ver Ubicaciones</button>
+        <button class="button" onclick="getTasks()">Ver Tareas</button>
+    </div>
+    
+    <div id="results"></div>
+    
+    <script>
+        const backendUrl = 'http://localhost:5555';
+        
+        function addResult(title, message, isSuccess = true) {
+            const resultsDiv = document.getElementById('results');
+            const resultDiv = document.createElement('div');
+            resultDiv.className = `result ${isSuccess ? 'success' : 'error'}`;
+            
+            const titleElement = document.createElement('h3');
+            titleElement.textContent = title;
+            
+            const messageElement = document.createElement('pre');
+            messageElement.textContent = typeof message === 'object' ? JSON.stringify(message, null, 2) : message;
+            
+            resultDiv.appendChild(titleElement);
+            resultDiv.appendChild(messageElement);
+            
+            resultsDiv.prepend(resultDiv);
+        }
+        
+        async function testConnection() {
+            try {
+                addResult('Probando conexión...', 'Enviando solicitud al servidor...');
+                
+                const response = await fetch(`${backendUrl}`, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const data = await response.json();
+                addResult('Conexión exitosa', data);
+            } catch (error) {
+                addResult('Error de conexión', error.message, false);
+            }
+        }
+        
+        async function login() {
+            try {
+                const username = document.getElementById('username').value;
+                const password = document.getElementById('password').value;
+                
+                if (!username || !password) {
+                    addResult('Error', 'Por favor ingresa usuario y contraseña', false);
+                    return;
+                }
+                
+                addResult('Iniciando sesión...', `Usuario: ${username}`);
+                
+                const response = await fetch(`${backendUrl}/api/auth/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ username, password })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    addResult('Login exitoso', data);
+                    localStorage.setItem('token', data.token);
+                    localStorage.setItem('user', JSON.stringify(data.user));
+                } else {
+                    addResult('Error de login', data, false);
+                    console.error('Error de login:', data);
+                }
+            } catch (error) {
+                addResult('Error de login', error.message, false);
+                console.error('Error completo:', error);
+            }
+        }
+        
+        async function register() {
+            try {
+                const username = document.getElementById('regUsername').value;
+                const email = document.getElementById('regEmail').value;
+                const password = document.getElementById('regPassword').value;
+                
+                if (!username || !email || !password) {
+                    addResult('Error', 'Por favor completa todos los campos', false);
+                    return;
+                }
+                
+                addResult('Registrando usuario...', `Usuario: ${username}, Email: ${email}`);
+                
+                const response = await fetch(`${backendUrl}/api/auth/register`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ username, email, password })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    addResult('Registro exitoso', data);
+                } else {
+                    addResult('Error de registro', data, false);
+                }
+            } catch (error) {
+                addResult('Error de registro', error.message, false);
+            }
+        }
+        
+        async function getUsers() {
+            try {
+                const token = localStorage.getItem('token');
+                
+                if (!token) {
+                    addResult('Error', 'Debes iniciar sesión primero', false);
+                    return;
+                }
+                
+                addResult('Obteniendo usuarios...', 'Enviando solicitud al servidor...');
+                
+                const response = await fetch(`${backendUrl}/api/users`, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    addResult('Usuarios obtenidos correctamente', data);
+                } else {
+                    addResult('Error al obtener usuarios', data, false);
+                }
+            } catch (error) {
+                addResult('Error al obtener usuarios', error.message, false);
+            }
+        }
+        
+        async function getLocations() {
+            try {
+                const token = localStorage.getItem('token');
+                
+                if (!token) {
+                    addResult('Error', 'Debes iniciar sesión primero', false);
+                    return;
+                }
+                
+                addResult('Obteniendo ubicaciones...', 'Enviando solicitud al servidor...');
+                
+                const response = await fetch(`${backendUrl}/api/locations`, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    addResult('Ubicaciones obtenidas correctamente', data);
+                } else {
+                    addResult('Error al obtener ubicaciones', data, false);
+                }
+            } catch (error) {
+                addResult('Error al obtener ubicaciones', error.message, false);
+            }
+        }
+        
+        async function getTasks() {
+            try {
+                const token = localStorage.getItem('token');
+                
+                if (!token) {
+                    addResult('Error', 'Debes iniciar sesión primero', false);
+                    return;
+                }
+                
+                addResult('Obteniendo tareas...', 'Enviando solicitud al servidor...');
+                
+                const response = await fetch(`${backendUrl}/api/tasks`, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    addResult('Tareas obtenidas correctamente', data);
+                } else {
+                    addResult('Error al obtener tareas', data, false);
+                }
+            } catch (error) {
+                addResult('Error al obtener tareas', error.message, false);
+            }
+        }
+    </script>
+</body>
+</html>

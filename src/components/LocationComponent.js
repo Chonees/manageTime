@@ -1,20 +1,52 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, forwardRef, useImperativeHandle, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Dimensions, Alert, Platform } from 'react-native';
 import * as Location from 'expo-location';
-import MapView, { Marker } from 'react-native-maps';
+import MapView, { Marker, PROVIDER_GOOGLE, Circle } from 'react-native-maps';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
+import { useLocationTracking } from '../context/LocationTrackingContext';
 import * as api from '../services/api';
+import { mapConfig } from '../services/platform-config';
+import VerificationPrompt from './VerificationPrompt';
 
-const LocationComponent = ({ onLocationChange, showWorkControls = false }) => {
+const LocationComponent = forwardRef(({ 
+  onLocationChange, 
+  showWorkControls = false, 
+  mapOnly = false,
+  customHeight,
+  transparentContainer = false,
+  taskLocation = null
+}, ref) => {
   const { user } = useAuth();
+  const { t } = useLanguage();
+  const { startTracking, stopTracking } = useLocationTracking();
   const [location, setLocation] = useState(null);
   const [errorMsg, setErrorMsg] = useState(null);
   const [loading, setLoading] = useState(true);
   const [permissionGranted, setPermissionGranted] = useState(false);
-  const [isWorking, setIsWorking] = useState(false);
-  const [workStartTime, setWorkStartTime] = useState(null);
   const [loadingAction, setLoadingAction] = useState(false);
   const [mapReady, setMapReady] = useState(false);
+  const [mapError, setMapError] = useState(false);
+  const [useNativeDriver, setUseNativeDriver] = useState(false);
+  const [mapKey, setMapKey] = useState(1); // Clave para forzar re-renderizado del mapa
+  
+  // Referencia al componente de mapa
+  const mapRef = useRef(null);
+  
+  // Exponer métodos al componente padre
+  useImperativeHandle(ref, () => ({
+    // Método para centrar el mapa en una ubicación específica
+    centerOnLocation: (latitude, longitude) => {
+      if (mapRef.current && latitude && longitude) {
+        mapRef.current.animateToRegion({
+          latitude,
+          longitude,
+          latitudeDelta: 0.005,
+          longitudeDelta: 0.005
+        }, 1000); // Duración de la animación en ms
+      }
+    }
+  }));
 
   const getLocation = async () => {
     setLoading(true);
@@ -30,402 +62,465 @@ const LocationComponent = ({ onLocationChange, showWorkControls = false }) => {
       setPermissionGranted(isGranted);
       
       if (!isGranted) {
-        setErrorMsg('Esta aplicación requiere acceso a tu ubicación para funcionar. Por favor, habilita los servicios de ubicación en la configuración de tu dispositivo.');
+        setErrorMsg(t('locationPermissionRequired'));
+        setLoading(false);
+        return;
+      }
+      
+      // Verificar si los servicios de ubicación están habilitados
+      const enabled = await Location.hasServicesEnabledAsync();
+      if (!enabled) {
+        setErrorMsg(t('locationServicesDisabled'));
         setLoading(false);
         return;
       }
       
       console.log('Getting current position...');
-      // Get the current location with a timeout
-      const currentLocation = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Highest,
-        timeout: 15000, // 15 second timeout
-        maximumAge: 10000, // Accept positions that are up to 10 seconds old
-      });
       
-      console.log('Location received:', currentLocation ? 'success' : 'null');
+      // Importar la configuración de la plataforma
+      const { getPlatformConfig, getPlatformOptions } = require('../services/platform-config');
+      const locationConfig = getPlatformConfig('location');
+      const platformOptions = getPlatformOptions('location');
+      
+      // Opciones para obtener la ubicación
+      const options = {
+        accuracy: Location.Accuracy[Platform.OS === 'android' ? 'Balanced' : 'BestForNavigation'],
+        timeout: locationConfig.timeout || 20000,
+        maximumAge: locationConfig.maximumAge || 10000,
+        ...platformOptions
+      };
+      
+      console.log('Location options:', JSON.stringify(options));
+      const currentLocation = await Location.getCurrentPositionAsync(options);
+      
+      console.log('Location received:', currentLocation ? JSON.stringify(currentLocation.coords) : 'null');
       
       if (!currentLocation) {
         throw new Error('Location data is null');
       }
       
+      if (!currentLocation.coords || 
+          typeof currentLocation.coords.latitude !== 'number' || 
+          typeof currentLocation.coords.longitude !== 'number') {
+        throw new Error('Invalid location data');
+      }
+      
       setLocation(currentLocation);
       
-      // Notify parent component about location update
       if (onLocationChange) {
         onLocationChange(currentLocation);
       }
+      
     } catch (error) {
-      console.error('Location error:', error);
-      setErrorMsg('No se pudo obtener la ubicación: ' + (error.message || 'Error desconocido'));
+      console.error('Error getting location:', error);
+      setErrorMsg(t('locationError'));
     } finally {
       setLoading(false);
     }
   };
 
-  // Get location when component mounts
+  // Efecto para obtener la ubicación al montar el componente
   useEffect(() => {
-    getLocation();
+    let isMounted = true;
+    let locationSubscription = null;
     
-    // Check if user is currently working
-    const checkWorkStatus = async () => {
+    const setupLocation = async () => {
       try {
-        // En una implementación real, esto sería una llamada a la API
-        // const status = await api.getWorkStatus();
-        // setIsWorking(status.isWorking);
-        // if (status.isWorking && status.startTime) {
-        //   setWorkStartTime(new Date(status.startTime));
-        // }
+        // First get a single location update
+        await getLocation();
         
-        // Simulación para desarrollo
-        setIsWorking(false);
-        setWorkStartTime(null);
+        if (!isMounted) return;
+        
+        // Then start watching for location updates
+        if (Platform.OS === 'web') {
+          // On web, watching position might not work as expected, so we just get position periodically
+          const intervalId = setInterval(() => {
+            if (isMounted) {
+              getLocation();
+            }
+          }, 60000); // every minute
+          
+          return () => clearInterval(intervalId);
+        } else {
+          // On native, we can use the watchPosition API
+          locationSubscription = await Location.watchPositionAsync(
+            {
+              accuracy: Location.Accuracy.Balanced,
+              distanceInterval: 10,
+              timeInterval: 60000 // Update at most once per minute
+            },
+            (newLocation) => {
+              if (isMounted) {
+                setLocation(newLocation);
+                if (onLocationChange) {
+                  onLocationChange(newLocation);
+                }
+              }
+            }
+          );
+        }
       } catch (error) {
-        console.error('Error checking work status:', error);
+        console.error('Error setting up location:', error);
+        if (isMounted) {
+          setErrorMsg(t('locationError'));
+        }
       }
     };
     
-    if (showWorkControls) {
-      checkWorkStatus();
-    }
+    setupLocation();
+    
+    // Limpiar al desmontar
+    return () => {
+      isMounted = false;
+      if (locationSubscription) {
+        locationSubscription.remove();
+      }
+    };
   }, []);
 
-  // Función para iniciar trabajo
-  const handleStartWork = async () => {
-    if (!location) {
-      Alert.alert('Error', 'No se puede iniciar el trabajo sin ubicación');
-      return;
-    }
-    
-    try {
-      setLoadingAction(true);
-      
-      const coords = {
-        latitude: location.coords.latitude,
-        longitude: location.coords.longitude
-      };
-      
-      await api.startWork(coords);
-      
-      setIsWorking(true);
-      setWorkStartTime(new Date());
-      
-      Alert.alert('Éxito', 'Has iniciado tu jornada de trabajo');
-    } catch (error) {
-      Alert.alert('Error', error.message || 'No se pudo iniciar el trabajo');
-    } finally {
-      setLoadingAction(false);
-    }
+  // Función para obtener de nuevo la ubicación
+  const handleRefreshLocation = () => {
+    getLocation();
   };
-
-  // Función para finalizar trabajo
-  const handleEndWork = async () => {
-    if (!location) {
-      Alert.alert('Error', 'No se puede finalizar el trabajo sin ubicación');
-      return;
-    }
-    
-    try {
-      setLoadingAction(true);
-      
-      const coords = {
-        latitude: location.coords.latitude,
-        longitude: location.coords.longitude
-      };
-      
-      await api.endWork(coords);
-      
-      setIsWorking(false);
-      setWorkStartTime(null);
-      
-      Alert.alert('Éxito', 'Has finalizado tu jornada de trabajo');
-    } catch (error) {
-      Alert.alert('Error', error.message || 'No se pudo finalizar el trabajo');
-    } finally {
-      setLoadingAction(false);
-    }
+  
+  // Handler for map ready event
+  const onMapReady = () => {
+    console.log('Map is ready');
+    setMapReady(true);
+    setMapError(false);
   };
-
-  // Formatear tiempo de trabajo
-  const formatWorkTime = () => {
-    if (!workStartTime) return '00:00:00';
-    
-    const now = new Date();
-    const diffMs = now - workStartTime;
-    
-    const hours = Math.floor(diffMs / (1000 * 60 * 60));
-    const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
-    const seconds = Math.floor((diffMs % (1000 * 60)) / 1000);
-    
-    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-  };
-
-  // Actualizar tiempo cada segundo si está trabajando
-  useEffect(() => {
-    let interval;
-    
-    if (isWorking && workStartTime) {
-      interval = setInterval(() => {
-        // Forzar actualización del componente
-        setWorkStartTime(prevTime => new Date(prevTime.getTime()));
+  
+  // Handler for map error event
+  const onMapError = (error) => {
+    console.error('Map error:', error);
+    setMapError(true);
+    if (Platform.OS === 'android') {
+      setUseNativeDriver(true);
+      // Try to reload the map with native driver
+      setTimeout(() => {
+        setMapKey(prev => prev + 1);
       }, 500);
     }
-    
-    return () => {
-      if (interval) {
-        clearInterval(interval);
-      }
-    };
-  }, [isWorking, workStartTime]);
-
-  // Render different content based on state
-  let content;
+  };
   
-  if (loading) {
-    content = (
-      <View style={styles.messageContainer}>
-        <ActivityIndicator size="large" color="#4A90E2" />
-        <Text style={styles.messageText}>Obteniendo tu ubicación...</Text>
+  // Función para reintentar cargar el mapa
+  const retryMap = () => {
+    setMapError(false);
+    setMapKey(prev => prev + 1);
+  };
+
+  // Renderizado condicional según el estado del componente
+  if (permissionGranted === false && errorMsg) {
+    return (
+      <View style={[
+        styles.container, 
+        transparentContainer ? null : styles.containerBackground
+      ]}>
+        <Text style={styles.errorText}>{errorMsg}</Text>
+        <TouchableOpacity onPress={handleRefreshLocation} style={styles.refreshButton}>
+          <Text style={styles.refreshButtonText}>{t('refreshLocation')}</Text>
+        </TouchableOpacity>
+        
+        {/* Add permission explanation if needed */}
+        <View style={styles.permissionContainer}>
+          <Text style={styles.permissionText}>{t('locationPermissionExplanation')}</Text>
+        </View>
       </View>
     );
-  } else if (errorMsg) {
-    content = (
-      <View style={styles.messageContainer}>
-        <Text style={styles.errorText}>{errorMsg}</Text>
-        <TouchableOpacity 
-          style={[styles.retryButton, {marginTop: 10}]} 
-          onPress={getLocation}
-        >
-          <Text style={styles.retryButtonText}>Reintentar</Text>
+  }
+
+  if (loading) {
+    return (
+      <View style={[
+        styles.container, 
+        transparentContainer ? null : styles.containerBackground,
+        { justifyContent: 'center', alignItems: 'center' }
+      ]}>
+        <ActivityIndicator size="large" color="#fff3e5" />
+        <Text style={styles.loadingText}>{t('loadingLocation')}</Text>
+      </View>
+    );
+  }
+
+  if (!location || !location.coords) {
+    return (
+      <View style={[
+        styles.container, 
+        transparentContainer ? null : styles.containerBackground
+      ]}>
+        <Text style={styles.errorText}>{t('noLocationData')}</Text>
+        <TouchableOpacity onPress={handleRefreshLocation} style={styles.refreshButton}>
+          <Text style={styles.refreshButtonText}>{t('refreshLocation')}</Text>
         </TouchableOpacity>
       </View>
     );
-  } else if (location) {
-    // Ensure location coordinates are valid numbers
-    const latitude = typeof location.coords.latitude === 'number' ? location.coords.latitude : 0;
-    const longitude = typeof location.coords.longitude === 'number' ? location.coords.longitude : 0;
-    
-    content = (
-      <View style={styles.locationInfoContainer}>
-        {/* Renderizado condicional del mapa para evitar errores */}
-        <View style={styles.mapContainer}>
-          {Platform.OS === 'ios' ? (
-            <MapView 
-              style={styles.map}
-              initialRegion={{
-                latitude: latitude,
-                longitude: longitude,
-                latitudeDelta: 0.0922,
-                longitudeDelta: 0.0421,
-              }}
-              onMapReady={() => setMapReady(true)}
-            >
-              {mapReady && (
+  }
+
+  // Determinar la región del mapa basado en la ubicación del usuario o la tarea seleccionada
+  const mapRegion = taskLocation ? {
+    latitude: taskLocation.latitude,
+    longitude: taskLocation.longitude,
+    latitudeDelta: 0.005, // Zoom level
+    longitudeDelta: 0.005, // Zoom level
+  } : {
+    latitude: location.coords.latitude,
+    longitude: location.coords.longitude,
+    latitudeDelta: 0.005, // Zoom level
+    longitudeDelta: 0.005, // Zoom level
+  };
+
+  // Si solo queremos mostrar el mapa, renderizamos una versión simplificada
+  if (mapOnly) {
+    return (
+      <View style={[
+        styles.mapOnlyContainer,
+        customHeight ? { height: customHeight } : null
+      ]}>
+        {mapError ? (
+          <View style={[styles.mapErrorContainer, { height: customHeight || 250 }]}>
+            <Text style={styles.errorText}>{t('mapLoadError')}</Text>
+            <TouchableOpacity onPress={retryMap} style={styles.refreshButton}>
+              <Text style={styles.refreshButtonText}>{t('tryAgain')}</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <MapView
+            ref={mapRef}
+            key={`map-${mapKey}`}
+            style={styles.map}
+            region={mapRegion}
+            provider={Platform.OS === 'ios' ? undefined : PROVIDER_GOOGLE}
+            onMapReady={onMapReady}
+            onError={onMapError}
+            showsUserLocation={true}
+            showsMyLocationButton={true}
+            showsCompass={true}
+            rotateEnabled={true}
+            scrollEnabled={true}
+            zoomEnabled={true}
+            pitchEnabled={true}
+            toolbarEnabled={Platform.OS === 'android'}
+            loadingEnabled={true}
+            loadingIndicatorColor="#fff3e5"
+            loadingBackgroundColor="#2e2e2e"
+            animateToRegion={false}
+            liteMode={useNativeDriver}
+          >
+            {/* Marcador de la ubicación del usuario */}
+            {location && location.coords && typeof location.coords.latitude === 'number' && typeof location.coords.longitude === 'number' && (
+              <Marker
+                coordinate={{
+                  latitude: location.coords.latitude,
+                  longitude: location.coords.longitude,
+                }}
+                title={t('yourLocation')}
+                description={`${location.coords.latitude.toFixed(6)}, ${location.coords.longitude.toFixed(6)}`}
+              />
+            )}
+            
+            {/* Marcador y círculo de la tarea seleccionada */}
+            {taskLocation && (
+              <>
                 <Marker
                   coordinate={{
-                    latitude: latitude,
-                    longitude: longitude,
+                    latitude: taskLocation.latitude,
+                    longitude: taskLocation.longitude,
                   }}
-                  title="Mi ubicación"
-                  description="Estoy aquí"
+                  title={taskLocation.title || t('taskLocation')}
+                  description={taskLocation.description || ''}
+                  pinColor="#FFD700" /* Color dorado para distinguirlo */
                 />
-              )}
-            </MapView>
-          ) : (
-            <View style={styles.map}>
-              <Text style={styles.locationText}>
-                Latitud: {latitude.toFixed(6)}, Longitud: {longitude.toFixed(6)}
-              </Text>
-            </View>
-          )}
-        </View>
-        
-        {showWorkControls && (
-          <View style={styles.workControlsContainer}>
-            {isWorking ? (
-              <>
-                <View style={styles.workTimeContainer}>
-                  <Text style={styles.workTimeLabel}>Tiempo de trabajo:</Text>
-                  <Text style={styles.workTimeValue}>{formatWorkTime()}</Text>
-                </View>
-                <TouchableOpacity 
-                  style={[styles.workButton, styles.endWorkButton]}
-                  onPress={handleEndWork}
-                  disabled={loadingAction}
-                >
-                  <Text style={styles.workButtonText}>
-                    {loadingAction ? 'Finalizando...' : 'Finalizar Trabajo'}
-                  </Text>
-                </TouchableOpacity>
+                {taskLocation.radius && (
+                  <Circle
+                    center={{
+                      latitude: taskLocation.latitude,
+                      longitude: taskLocation.longitude,
+                    }}
+                    radius={(taskLocation.radius || 0.1) * 1000} /* Radio en metros (convertir de km) */
+                    fillColor="rgba(255, 215, 0, 0.2)"
+                    strokeColor="rgba(255, 215, 0, 0.5)"
+                    strokeWidth={2}
+                  />
+                )}
               </>
-            ) : (
-              <TouchableOpacity 
-                style={[styles.workButton, styles.startWorkButton]}
-                onPress={handleStartWork}
-                disabled={loadingAction}
-              >
-                <Text style={styles.workButtonText}>
-                  {loadingAction ? 'Iniciando...' : 'Iniciar Trabajo'}
-                </Text>
-              </TouchableOpacity>
             )}
-          </View>
+          </MapView>
         )}
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
-      <View style={styles.card}>
-        <View style={styles.cardHeader}>
-          <Text style={styles.cardTitle}>Mi Ubicación</Text>
+    <View style={[
+      styles.container,
+      transparentContainer ? null : styles.containerBackground
+    ]}>
+      {errorMsg && <Text style={styles.errorText}>{errorMsg}</Text>}
+      
+      {!mapError ? (
+        <View style={styles.mapContainer}>
+          <MapView
+            ref={mapRef}
+            key={`map-${mapKey}`}
+            style={styles.map}
+            region={mapRegion}
+            provider={Platform.OS === 'ios' ? undefined : PROVIDER_GOOGLE}
+            onMapReady={onMapReady}
+            onError={onMapError}
+            showsUserLocation={true}
+            showsMyLocationButton={true}
+            showsCompass={true}
+            rotateEnabled={true}
+            scrollEnabled={true}
+            zoomEnabled={true}
+            pitchEnabled={true}
+            toolbarEnabled={Platform.OS === 'android'}
+            loadingEnabled={true}
+            loadingIndicatorColor="#fff3e5"
+            loadingBackgroundColor="#2e2e2e"
+            animateToRegion={false}
+            liteMode={useNativeDriver}
+          >
+            {/* Marcador de la ubicación del usuario */}
+            {location && location.coords && typeof location.coords.latitude === 'number' && typeof location.coords.longitude === 'number' && (
+              <Marker
+                coordinate={{
+                  latitude: location.coords.latitude,
+                  longitude: location.coords.longitude,
+                }}
+                title={t('yourLocation')}
+                description={`${location.coords.latitude.toFixed(6)}, ${location.coords.longitude.toFixed(6)}`}
+              />
+            )}
+            
+            {/* Marcador y círculo de la tarea seleccionada */}
+            {taskLocation && (
+              <>
+                <Marker
+                  coordinate={{
+                    latitude: taskLocation.latitude,
+                    longitude: taskLocation.longitude,
+                  }}
+                  title={taskLocation.title || t('taskLocation')}
+                  description={taskLocation.description || ''}
+                  pinColor="#FFD700" /* Color dorado para distinguirlo */
+                />
+                {taskLocation.radius && (
+                  <Circle
+                    center={{
+                      latitude: taskLocation.latitude,
+                      longitude: taskLocation.longitude,
+                    }}
+                    radius={(taskLocation.radius || 0.1) * 1000} /* Radio en metros (convertir de km) */
+                    fillColor="rgba(255, 215, 0, 0.2)"
+                    strokeColor="rgba(255, 215, 0, 0.5)"
+                    strokeWidth={2}
+                  />
+                )}
+              </>
+            )}
+          </MapView>
         </View>
-        {content}
-        <TouchableOpacity 
-          style={styles.refreshButton} 
-          onPress={getLocation}
-          disabled={loading}
-        >
-          <Text style={styles.refreshButtonText}>
-            {loading ? 'Actualizando...' : 'Actualizar Ubicación'}
-          </Text>
+      ) : (
+        <View style={styles.mapErrorContainer}>
+          <Text style={styles.errorText}>{t('mapLoadError')}</Text>
+          <TouchableOpacity onPress={retryMap} style={styles.refreshButton}>
+            <Text style={styles.refreshButtonText}>{t('tryAgain')}</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+      
+      <View style={styles.coordsContainer}>
+        <Text style={styles.coordsText}>
+          {t('locationCoordinates')}: {location && location.coords && typeof location.coords.latitude === 'number' && typeof location.coords.longitude === 'number' 
+            ? `${location.coords.latitude.toFixed(6)}, ${location.coords.longitude.toFixed(6)}`
+            : t('unavailable')}
+        </Text>
+        <TouchableOpacity onPress={handleRefreshLocation} style={styles.refreshButton}>
+          <Text style={styles.refreshButtonText}>{t('refreshLocation')}</Text>
         </TouchableOpacity>
       </View>
     </View>
   );
-};
+});
 
 const styles = StyleSheet.create({
   container: {
     paddingHorizontal: 15,
     paddingVertical: 10,
   },
-  card: {
-    backgroundColor: '#fff',
-    borderRadius: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-    overflow: 'hidden',
-  },
-  cardHeader: {
-    backgroundColor: '#4A90E2',
-    padding: 15,
-  },
-  cardTitle: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  messageContainer: {
-    padding: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  messageText: {
-    marginTop: 10,
-    fontSize: 16,
-    color: '#666',
-    textAlign: 'center',
+  containerBackground: {
+    backgroundColor: '#2e2e2e',
+    borderRadius: 15,
   },
   errorText: {
-    fontSize: 16,
-    color: '#e74c3c',
+    color: '#ff6b6b',
     textAlign: 'center',
+    marginBottom: 10,
+    padding: 10,
   },
-  locationInfoContainer: {
-    padding: 20,
+  loadingText: {
+    color: '#fff3e5',
+    marginTop: 10,
   },
   mapContainer: {
-    width: '100%',
     height: 250,
-    borderRadius: 8,
-    marginBottom: 15,
+    marginBottom: 10,
+    borderRadius: 15,
     overflow: 'hidden',
-    backgroundColor: '#f5f5f5',
+  },
+  mapOnlyContainer: {
+    height: 250,
+    width: '100%',
+    overflow: 'hidden',
+  },
+  mapErrorContainer: {
+    height: 250,
+    borderRadius: 15,
+    backgroundColor: '#3a3a3a',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 10,
   },
   map: {
     width: '100%',
     height: '100%',
-    borderRadius: 8,
-    justifyContent: 'center',
+  },
+  coordsContainer: {
+    flexDirection: 'row',
     alignItems: 'center',
-  },
-  locationLabel: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginBottom: 10,
-    color: '#333',
-  },
-  locationText: {
-    fontSize: 15,
-    color: '#666',
+    justifyContent: 'space-between',
     marginBottom: 5,
-    textAlign: 'center',
+    flexWrap: 'wrap',
+  },
+  coordsText: {
+    color: '#fff3e5',
+    fontSize: 14,
+    marginBottom: 5,
+    flex: 1,
   },
   refreshButton: {
-    backgroundColor: '#4A90E2',
-    padding: 12,
-    alignItems: 'center',
-    borderBottomLeftRadius: 8,
-    borderBottomRightRadius: 8,
+    padding: 8,
+    backgroundColor: '#1c1c1c',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 243, 229, 0.2)',
   },
   refreshButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
+    color: '#fff3e5',
+    fontSize: 14,
+    fontWeight: '500',
   },
-  retryButton: {
-    backgroundColor: '#3498db',
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 5,
-  },
-  retryButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  workControlsContainer: {
-    marginTop: 10,
-  },
-  workButton: {
-    padding: 15,
-    borderRadius: 5,
-    alignItems: 'center',
-  },
-  startWorkButton: {
-    backgroundColor: '#2ecc71',
-  },
-  endWorkButton: {
-    backgroundColor: '#e74c3c',
-  },
-  workButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  workTimeContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 15,
-    backgroundColor: '#f8f8f8',
+  permissionContainer: {
+    marginTop: 15,
     padding: 10,
-    borderRadius: 5,
+    backgroundColor: 'rgba(0, 0, 0, 0.2)',
+    borderRadius: 8,
   },
-  workTimeLabel: {
-    fontSize: 16,
-    color: '#333',
-    fontWeight: 'bold',
-  },
-  workTimeValue: {
-    fontSize: 16,
-    color: '#e74c3c',
-    fontWeight: 'bold',
+  permissionText: {
+    color: '#fff3e5',
+    fontSize: 14,
+    textAlign: 'center',
   },
 });
 
