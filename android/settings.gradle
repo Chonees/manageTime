@@ -21,7 +21,7 @@ extensions.configure(com.facebook.react.ReactSettingsExtension) { ex ->
   }
 }
 
-rootProject.name = 'ManageTime'
+rootProject.name = 'Workproof'
 
 dependencyResolutionManagement {
   versionCatalogs {
