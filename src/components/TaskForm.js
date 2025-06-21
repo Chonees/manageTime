@@ -528,7 +528,7 @@ const TaskForm = ({
             timeLimit: (selectedHours * 60) + selectedMinutes,
             keywords: taskKeywords,
             handsFreeMode: handsFreeMode,
-            fileNumber: fileNumber
+      
           }}
         />
       )}
