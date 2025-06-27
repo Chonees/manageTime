@@ -22,48 +22,54 @@ def post_install_fixes(installer)
       config.build_settings['CLANG_WARN_NULLABLE_TO_NONNULL_CONVERSION'] = 'NO'
       config.build_settings['CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF'] = 'NO'
       config.build_settings['GCC_WARN_ABOUT_DEPRECATED_FUNCTIONS'] = 'NO'
-      config.build_settings['CLANG_WARN_DOCUMENTATION_COMMENTS'] = 'NO'
-      config.build_settings['CLANG_WARN_NULLABILITY_COMPLETENESS'] = 'NO'
-      config.build_settings['CLANG_WARN_MISSING_NOESCAPE'] = 'NO'
-      config.build_settings['CLANG_WARN_IMPLICIT_SIGN_CONVERSION'] = 'NO'
-      config.build_settings['CLANG_WARN_OBJC_REPEATED_USE_OF_WEAK'] = 'NO'
-      config.build_settings['GCC_WARN_UNINITIALIZED_AUTOS'] = 'NO'
-      config.build_settings['CLANG_WARN_OBJC_ROOT_CLASS'] = 'NO'
-      
-      # Silenciar advertencias de Swift 6
+      config.build_settings['CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS'] = 'NO'
+      config.build_settings['CLANG_WARN_OBJC_IMPLICIT_ATOMIC_PROPERTIES'] = 'NO'
+      config.build_settings['CLANG_WARN_STRICT_PROTOTYPES'] = 'NO' # Disable prototype warnings
+      config.build_settings['CLANG_WARN_MISSING_PROTOTYPES'] = 'NO'
       config.build_settings['SWIFT_SUPPRESS_WARNINGS'] = 'YES'
-      config.build_settings['CLANG_WARN_DOCUMENTATION_COMMENTS'] = 'NO'
-      config.build_settings['CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER'] = 'NO'
-      config.build_settings['GCC_WARN_UNUSED_FUNCTION'] = 'NO'
-      config.build_settings['GCC_WARN_UNUSED_VARIABLE'] = 'NO'
       
-      # Disable specific nullability warning flags
-      config.build_settings['WARNING_CFLAGS'] = [
-        '$(inherited)', 
-        '-Wno-nullability-completeness', 
-        '-Wno-deprecated-declarations',
-        '-Wno-missing-prototypes',
-        '-Wno-sign-compare',
-        '-Wno-implicit-function-declaration',
-        '-Wno-nullability', 
-        '-Wno-incompatible-pointer-types',
-        '-Wno-deprecated-implementations'
-      ]
+      # Disable nullability specific warnings
+      config.build_settings['CLANG_WARN_NULLABLE_TO_NONNULL_CONVERSION'] = 'NO'
+      config.build_settings['CLANG_ANALYZER_NONNULL'] = 'NO'
+      
+      # Disable documentation warnings
+      config.build_settings['CLANG_WARN_DOCUMENTATION_COMMENTS'] = 'NO'
       
       # Set minimum iOS deployment target
       if config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'].to_f < 13.0
         config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '13.0'
       end
       
-      # Completely disable warnings for all code
+      # Add extensive compiler flags to silence all warnings
+      warning_flags = [
+        '-Wno-everything', # Disable ALL warnings
+        '-Wno-nullability-completeness',
+        '-Wno-nullability',
+        '-Wno-implicit-function-declaration',
+        '-Wno-deprecated-declarations',
+        '-Wno-#warnings',
+        '-Wno-error',
+        '-Wno-unused-parameter',
+        '-Wno-sign-compare',
+        '-Wno-incompatible-pointer-types',
+        '-Wno-duplicate-decl-specifier',
+        '-Wno-strict-prototypes', # Silence "function declared without a prototype" warnings
+        '-Wno-missing-prototypes',
+        '-w'  # This silences ALL warnings
+      ]
+      
+      # Add warning flags to OTHER_CFLAGS
       if config.build_settings['OTHER_CFLAGS'].nil?
-        config.build_settings['OTHER_CFLAGS'] = ['$(inherited)', '-w', '-Wno-nullability-completeness', '-Wno-error=nullability-completeness']
+        config.build_settings['OTHER_CFLAGS'] = ['$(inherited)'] + warning_flags
       else
         config.build_settings['OTHER_CFLAGS'] = config.build_settings['OTHER_CFLAGS'].is_a?(Array) ? config.build_settings['OTHER_CFLAGS'] : [config.build_settings['OTHER_CFLAGS']]
-        config.build_settings['OTHER_CFLAGS'] += ['-w', '-Wno-nullability-completeness', '-Wno-error=nullability-completeness']
+        config.build_settings['OTHER_CFLAGS'] += warning_flags
       end
       
-      # Disable Swift warnings
+      # Add warning flags to WARNING_CFLAGS
+      config.build_settings['WARNING_CFLAGS'] = ['$(inherited)'] + warning_flags
+      
+      # Add Swift warning suppression flags
       if config.build_settings['OTHER_SWIFT_FLAGS'].nil?
         config.build_settings['OTHER_SWIFT_FLAGS'] = ['$(inherited)', '-suppress-warnings']
       else
@@ -71,31 +77,69 @@ def post_install_fixes(installer)
         config.build_settings['OTHER_SWIFT_FLAGS'] += ['-suppress-warnings']
       end
       
-      # Disable specific warnings for header files
+      # Define preprocessor macro to handle nullability warnings in header files
       config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] ||= ['$(inherited)']
       config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] << 'DISABLE_NULLABILITY_WARNINGS=1'
+      config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] << '_NONNULL='
+      config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] << '_NULLABLE='
+      
+      # Force treat warnings as errors to OFF
+      config.build_settings['GCC_TREAT_WARNINGS_AS_ERRORS'] = 'NO'
+      config.build_settings['SWIFT_TREAT_WARNINGS_AS_ERRORS'] = 'NO'
     end
   end
+  
+  # Update to recommended settings for projects
+  installer.pods_project.build_configurations.each do |config|
+    config.build_settings["CLANG_ANALYZER_LOCALIZABILITY_NONLOCALIZED"] = "YES"
+    config.build_settings["CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER"] = "NO" # Avoid framework header warnings
+  end
+  
+  # Update main project settings too
+  installer.aggregate_targets.each do |aggregate_target|
+    aggregate_target.user_project.build_configurations.each do |config|
+      config.build_settings["CLANG_ANALYZER_LOCALIZABILITY_NONLOCALIZED"] = "YES"
+      config.build_settings["CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER"] = "NO"
+    end
+    aggregate_target.user_project.save
+  end
 
-  # Fix issues with Script build phases
+  # Apply all relevant warning suppression flags to each pod target
   installer.pods_project.targets.each do |target|
-    if ['expo-updates', 'React-Fabric', 'React-FabricComponents', 'hermes-engine'].include?(target.name)
+    target.build_configurations.each do |config|
+      # Disable ALL clang warnings and deprecation warnings
+      config.build_settings['GCC_WARN_INHIBIT_ALL_WARNINGS'] = 'YES'
+      config.build_settings['CLANG_WARN_NULLABLE_TO_NONNULL_CONVERSION'] = 'NO'
+      config.build_settings['CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF'] = 'NO'
+      config.build_settings['GCC_WARN_ABOUT_DEPRECATED_FUNCTIONS'] = 'NO'
+      config.build_settings['CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS'] = 'NO'
+      config.build_settings['CLANG_WARN_OBJC_IMPLICIT_ATOMIC_PROPERTIES'] = 'NO'
+      config.build_settings['GCC_TREAT_WARNINGS_AS_ERRORS'] = 'NO'
+      config.build_settings['SWIFT_TREAT_WARNINGS_AS_ERRORS'] = 'NO'
+    end
+  end
+  
+  # Fix specific expo-updates script phase issues
+  installer.pods_project.targets.each do |target|
+    if target.name == "EXUpdates" || target.name == "expo-updates"
       target.build_phases.each do |build_phase|
-        if build_phase.is_a?(Xcodeproj::Project::Object::PBXShellScriptBuildPhase)
+        if build_phase.is_a?(Xcodeproj::Project::Object::PBXShellScriptBuildPhase) && 
+           build_phase.name && build_phase.name.include?("Generate updates resources for expo-updates")
           build_phase.dependency_file = nil
-          build_phase.always_out_of_date = '1'
+          build_phase.always_out_of_date = "1"
         end
       end
     end
   end
   
-  # Disable ANALYZE_UNNECESSARY_WARNINGS for React Native targets
+  # Fix all other known script phase issues
   installer.pods_project.targets.each do |target|
-    if target.name.start_with?('React') || target.name.start_with?('Expo')
-      target.build_configurations.each do |config|
-        config.build_settings['CLANG_ANALYZER_NONNULL'] = 'NO'
-        config.build_settings['CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING'] = 'NO'
-        config.build_settings['GCC_NO_COMMON_BLOCKS'] = 'NO'
+    if ['expo-updates', 'EXUpdates', 'React-Fabric', 'React-FabricComponents', 'hermes-engine', 'React-Core'].include?(target.name)
+      target.build_phases.each do |build_phase|
+        if build_phase.is_a?(Xcodeproj::Project::Object::PBXShellScriptBuildPhase)
+          build_phase.dependency_file = nil
+          build_phase.always_out_of_date = "1"
+        end
       end
     end
   end
@@ -103,6 +147,8 @@ def post_install_fixes(installer)
   # Update to recommended settings
   installer.pods_project.root_object.attributes['LastUpgradeCheck'] = '1500'
   installer.pods_project.save
+  
+  puts "Applied aggressive warning suppression to all pod targets"
 end
 
 target 'Workproof' do
