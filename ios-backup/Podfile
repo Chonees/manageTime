@@ -32,32 +32,54 @@ def post_install_fixes(installer)
       
       # Silenciar advertencias de Swift 6
       config.build_settings['SWIFT_SUPPRESS_WARNINGS'] = 'YES'
+      config.build_settings['CLANG_WARN_DOCUMENTATION_COMMENTS'] = 'NO'
+      config.build_settings['CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER'] = 'NO'
+      config.build_settings['GCC_WARN_UNUSED_FUNCTION'] = 'NO'
+      config.build_settings['GCC_WARN_UNUSED_VARIABLE'] = 'NO'
       
-      # Establecer la versión de iOS mínima a 13.0 para todos los pods
-      # Esto evita advertencias relacionadas con APIs obsoletas
+      # Disable specific nullability warning flags
+      config.build_settings['WARNING_CFLAGS'] = [
+        '$(inherited)', 
+        '-Wno-nullability-completeness', 
+        '-Wno-deprecated-declarations',
+        '-Wno-missing-prototypes',
+        '-Wno-sign-compare',
+        '-Wno-implicit-function-declaration',
+        '-Wno-nullability', 
+        '-Wno-incompatible-pointer-types',
+        '-Wno-deprecated-implementations'
+      ]
+      
+      # Set minimum iOS deployment target
       if config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'].to_f < 13.0
         config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '13.0'
       end
       
-      # Añadir flags para suprimir TODAS las advertencias
+      # Completely disable warnings for all code
       if config.build_settings['OTHER_CFLAGS'].nil?
-        config.build_settings['OTHER_CFLAGS'] = ['$(inherited)', '-w', '-Wno-nullability-completeness', '-Wno-nullability', '-Wno-implicit-function-declaration', '-Wno-deprecated-declarations', '-Wno-everything']
+        config.build_settings['OTHER_CFLAGS'] = ['$(inherited)', '-w', '-Wno-nullability-completeness', '-Wno-error=nullability-completeness']
       else
-        # Asegurarnos de que OTHER_CFLAGS es un array
-        config.build_settings['OTHER_CFLAGS'] = Array(config.build_settings['OTHER_CFLAGS'])
-        config.build_settings['OTHER_CFLAGS'].concat(['-w', '-Wno-nullability-completeness', '-Wno-nullability', '-Wno-implicit-function-declaration', '-Wno-deprecated-declarations', '-Wno-everything'])
+        config.build_settings['OTHER_CFLAGS'] = config.build_settings['OTHER_CFLAGS'].is_a?(Array) ? config.build_settings['OTHER_CFLAGS'] : [config.build_settings['OTHER_CFLAGS']]
+        config.build_settings['OTHER_CFLAGS'] += ['-w', '-Wno-nullability-completeness', '-Wno-error=nullability-completeness']
       end
       
-      # Añadir flags para resolver problemas de Swift 6
+      # Disable Swift warnings
       if config.build_settings['OTHER_SWIFT_FLAGS'].nil?
         config.build_settings['OTHER_SWIFT_FLAGS'] = ['$(inherited)', '-suppress-warnings']
       else
-        config.build_settings['OTHER_SWIFT_FLAGS'] << '-suppress-warnings'
+        config.build_settings['OTHER_SWIFT_FLAGS'] = config.build_settings['OTHER_SWIFT_FLAGS'].is_a?(Array) ? config.build_settings['OTHER_SWIFT_FLAGS'] : [config.build_settings['OTHER_SWIFT_FLAGS']]
+        config.build_settings['OTHER_SWIFT_FLAGS'] += ['-suppress-warnings']
       end
+      
+      # Disable specific warnings for header files
+      config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] ||= ['$(inherited)']
+      config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] << 'DISABLE_NULLABILITY_WARNINGS=1'
     end
-    
-    # Fix for script build phase warnings by disabling dependency analysis
-    if ['EXUpdates', 'React-Fabric', 'React-FabricComponents', 'hermes-engine'].include?(target.name)
+  end
+
+  # Fix issues with Script build phases
+  installer.pods_project.targets.each do |target|
+    if ['expo-updates', 'React-Fabric', 'React-FabricComponents', 'hermes-engine'].include?(target.name)
       target.build_phases.each do |build_phase|
         if build_phase.is_a?(Xcodeproj::Project::Object::PBXShellScriptBuildPhase)
           build_phase.dependency_file = nil
@@ -66,6 +88,21 @@ def post_install_fixes(installer)
       end
     end
   end
+  
+  # Disable ANALYZE_UNNECESSARY_WARNINGS for React Native targets
+  installer.pods_project.targets.each do |target|
+    if target.name.start_with?('React') || target.name.start_with?('Expo')
+      target.build_configurations.each do |config|
+        config.build_settings['CLANG_ANALYZER_NONNULL'] = 'NO'
+        config.build_settings['CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING'] = 'NO'
+        config.build_settings['GCC_NO_COMMON_BLOCKS'] = 'NO'
+      end
+    end
+  end
+  
+  # Update to recommended settings
+  installer.pods_project.root_object.attributes['LastUpgradeCheck'] = '1500'
+  installer.pods_project.save
 end
 
 target 'Workproof' do
