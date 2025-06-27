@@ -13,8 +13,60 @@ install! 'cocoapods',
 
 prepare_react_native_project!
 
-# Cargar nuestro archivo de correcciones post-install
-require_relative './Podfile.post_install'
+# Definición de correcciones post-install integradas directamente
+def post_install_fixes(installer)
+  installer.pods_project.targets.each do |target|
+    # Ignorar advertencias de nullability en todos los archivos de los pods
+    target.build_configurations.each do |config|
+      # Deshabilitar todas las advertencias relacionadas con nullability
+      config.build_settings['CLANG_WARN_NULLABLE_TO_NONNULL_CONVERSION'] = 'NO'
+      config.build_settings['CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF'] = 'NO'
+      config.build_settings['GCC_WARN_ABOUT_DEPRECATED_FUNCTIONS'] = 'NO'
+      config.build_settings['CLANG_WARN_DOCUMENTATION_COMMENTS'] = 'NO'
+      config.build_settings['CLANG_WARN_NULLABILITY_COMPLETENESS'] = 'NO'
+      config.build_settings['CLANG_WARN_MISSING_NOESCAPE'] = 'NO'
+      config.build_settings['CLANG_WARN_IMPLICIT_SIGN_CONVERSION'] = 'NO'
+      config.build_settings['CLANG_WARN_OBJC_REPEATED_USE_OF_WEAK'] = 'NO'
+      config.build_settings['GCC_WARN_UNINITIALIZED_AUTOS'] = 'NO'
+      config.build_settings['CLANG_WARN_OBJC_ROOT_CLASS'] = 'NO'
+      
+      # Silenciar advertencias de Swift 6
+      config.build_settings['SWIFT_SUPPRESS_WARNINGS'] = 'YES'
+      
+      # Establecer la versión de iOS mínima a 13.0 para todos los pods
+      # Esto evita advertencias relacionadas con APIs obsoletas
+      if config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'].to_f < 13.0
+        config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '13.0'
+      end
+      
+      # Añadir flags para suprimir TODAS las advertencias
+      if config.build_settings['OTHER_CFLAGS'].nil?
+        config.build_settings['OTHER_CFLAGS'] = ['$(inherited)', '-w', '-Wno-nullability-completeness', '-Wno-nullability', '-Wno-implicit-function-declaration', '-Wno-deprecated-declarations', '-Wno-everything']
+      else
+        # Asegurarnos de que OTHER_CFLAGS es un array
+        config.build_settings['OTHER_CFLAGS'] = Array(config.build_settings['OTHER_CFLAGS'])
+        config.build_settings['OTHER_CFLAGS'].concat(['-w', '-Wno-nullability-completeness', '-Wno-nullability', '-Wno-implicit-function-declaration', '-Wno-deprecated-declarations', '-Wno-everything'])
+      end
+      
+      # Añadir flags para resolver problemas de Swift 6
+      if config.build_settings['OTHER_SWIFT_FLAGS'].nil?
+        config.build_settings['OTHER_SWIFT_FLAGS'] = ['$(inherited)', '-suppress-warnings']
+      else
+        config.build_settings['OTHER_SWIFT_FLAGS'] << '-suppress-warnings'
+      end
+    end
+    
+    # Fix for script build phase warnings by disabling dependency analysis
+    if ['EXUpdates', 'React-Fabric', 'React-FabricComponents', 'hermes-engine'].include?(target.name)
+      target.build_phases.each do |build_phase|
+        if build_phase.is_a?(Xcodeproj::Project::Object::PBXShellScriptBuildPhase)
+          build_phase.dependency_file = nil
+          build_phase.always_out_of_date = '1'
+        end
+      end
+    end
+  end
+end
 
 target 'Workproof' do
   use_expo_modules!
