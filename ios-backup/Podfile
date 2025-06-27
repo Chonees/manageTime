@@ -13,6 +13,9 @@ install! 'cocoapods',
 
 prepare_react_native_project!
 
+# Cargar nuestro archivo de correcciones post-install mejorado
+require_relative './Podfile.post_install'
+
 # Definición de correcciones post-install integradas directamente
 def post_install_fixes(installer)
   installer.pods_project.targets.each do |target|
