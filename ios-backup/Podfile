@@ -13,6 +13,9 @@ install! 'cocoapods',
 
 prepare_react_native_project!
 
+# Cargar nuestro archivo de correcciones post-install
+require_relative './Podfile.post_install'
+
 target 'Workproof' do
   use_expo_modules!
 
@@ -62,5 +65,8 @@ target 'Workproof' do
         end
       end
     end
+    
+    # Llamar a nuestras correcciones personalizadas
+    post_install_fixes(installer)
   end
 end
