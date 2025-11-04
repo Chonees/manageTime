@@ -41,13 +41,19 @@ const setupErrorHandling = () => {
       const errorString = typeof error === 'string' ? error : JSON.stringify(error, Object.getOwnPropertyNames(error));
       console.log('Error global capturado:', errorString, 'Fatal:', isFatal);
       
-      // Guardar en AsyncStorage para poder verlo después
+      // Guardar en AsyncStorage para diagnóstico posterior
       AsyncStorage.setItem('lastCriticalError', errorString).catch(() => {});
+      // Guardar también el componente donde ocurrió el error
+      AsyncStorage.setItem('errorComponent', 'GlobalHandler').catch(() => {});
+      // Guardar timestamp del error
+      AsyncStorage.setItem('errorTimestamp', new Date().toISOString()).catch(() => {});
       
-      // Mostrar alerta en modo desarrollo
-      if (__DEV__) {
-        Alert.alert('Error detectado', errorString.substring(0, 100) + '...', [{ text: 'OK' }]);
-      }
+      // Mostrar alerta siempre en caso de error fatal para diagnóstico
+      Alert.alert(
+        'Error detectado', 
+        errorString.substring(0, 150) + '...', 
+        [{ text: 'OK' }]
+      );
     } catch (e) {
       console.log('Error al procesar excepción:', e);
     }

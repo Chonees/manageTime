@@ -16,7 +16,7 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.workproof.app",
+      "bundleIdentifier": "com.managetime.app",
       "buildNumber": "1"
     },
     "android": {

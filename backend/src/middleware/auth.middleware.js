@@ -57,4 +57,12 @@ const isAdmin = (req, res, next) => {
   next();
 };
 
-module.exports = { verifyToken, isAdmin };
+// Middleware para verificar si el usuario es superadmin
+const isSuperAdmin = (req, res, next) => {
+  if (!req.user.isSuperAdmin) {
+    return res.status(403).json({ message: 'Acceso denegado: se requieren permisos de superadministrador' });
+  }
+  next();
+};
+
+module.exports = { verifyToken, isAdmin, isSuperAdmin };

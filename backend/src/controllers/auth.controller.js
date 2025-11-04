@@ -31,7 +31,7 @@ exports.register = async (req, res) => {
     
     // Generar token JWT
     const token = jwt.sign(
-      { id: user._id, isAdmin: user.isAdmin },
+      { id: user._id, isAdmin: user.isAdmin, isSuperAdmin: user.isSuperAdmin },
       process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRES_IN }
     );
@@ -42,6 +42,7 @@ exports.register = async (req, res) => {
       username: user.username,
       email: user.email,
       isAdmin: user.isAdmin,
+      isSuperAdmin: user.isSuperAdmin,
       isActive: user.isActive,
       createdAt: user.createdAt
     };
@@ -102,7 +103,7 @@ exports.login = async (req, res) => {
     
     // Generar token JWT
     const token = jwt.sign(
-      { id: user._id, isAdmin: user.isAdmin },
+      { id: user._id, isAdmin: user.isAdmin, isSuperAdmin: user.isSuperAdmin },
       process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRES_IN }
     );
@@ -113,6 +114,7 @@ exports.login = async (req, res) => {
       username: user.username,
       email: user.email,
       isAdmin: user.isAdmin,
+      isSuperAdmin: user.isSuperAdmin,
       isActive: user.isActive,
       createdAt: user.createdAt
     };

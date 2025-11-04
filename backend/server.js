@@ -35,6 +35,9 @@ app.use(cors({
 app.use(express.json());
 app.use(morgan('dev'));
 
+// Servir archivos estáticos desde la carpeta 'public'
+app.use(express.static('public'));
+
 // Middleware para mejorar compatibilidad con Android
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');

@@ -3,7 +3,7 @@ import Constants from 'expo-constants';
 import { API_URL } from '@env';
 
 // URL base para el backend en producción con fallback
-const BACKEND_URL = API_URL || 'https://workproof-backend.onrender.com';
+const BACKEND_URL = API_URL || 'https://managetime-backend-48f256c2dfe5.herokuapp.com';
 
 if (!API_URL) {
   console.warn('ADVERTENCIA: La variable API_URL no está definida en el archivo .env. Usando URL fallback:', BACKEND_URL);

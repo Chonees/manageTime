@@ -519,6 +519,17 @@ const TaskForm = ({
           visible={showTemplateSelector}
           onClose={() => setShowTemplateSelector(false)}
           onSelectTemplate={handleSelectTemplate}
+          currentTask={{
+            title: taskTitle,
+            description: taskDescription,
+            location: taskLocation,
+            radius: taskRadius,
+            locationName: taskLocationName,
+            timeLimit: (selectedHours * 60) + selectedMinutes,
+            keywords: taskKeywords,
+            handsFreeMode: handsFreeMode,
+      
+          }}
         />
       )}
     </ScrollView>

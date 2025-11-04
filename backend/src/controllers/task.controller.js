@@ -24,13 +24,6 @@ const registerTaskActivity = async (userId, taskId, type, taskData) => {
           location: taskData.location || null
         };
         break;
-      case 'task_update':
-        message = `Tarea "${taskData.title}" actualizada`;
-        metadata = { 
-          changes: taskData.changes || {},
-          title: taskData.title
-        };
-        break;
       case 'task_complete':
         message = `Tarea "${taskData.title}" completada`;
         metadata = { 
@@ -89,6 +82,75 @@ const registerTaskActivity = async (userId, taskId, type, taskData) => {
     console.error('Error al registrar actividad de tarea:', error);
     // No lanzamos el error para que no afecte a la operación principal
     return null;
+  }
+};
+
+// Asignar una tarea a un usuario (endpoint específico)
+exports.assignTask = async (req, res) => {
+  try {
+    const { taskId, userId } = req.params;
+    
+    // Verificar permisos de administrador
+    if (!req.user.isAdmin) {
+      return res.status(403).json({ message: "Solo los administradores pueden asignar tareas" });
+    }
+    
+    // Verificar que la tarea exista
+    const task = await Task.findById(taskId);
+    if (!task) {
+      return res.status(404).json({ message: "Tarea no encontrada" });
+    }
+    
+    // Verificar que el usuario exista
+    const targetUser = await User.findById(userId);
+    if (!targetUser) {
+      return res.status(404).json({ message: "Usuario no encontrado" });
+    }
+    
+    // IMPORTANTE: Verificar que el administrador puede asignar tareas a este usuario
+    if (!req.user.isSuperAdmin) {
+      // Si no es superadmin, verificar que el usuario está asignado a él
+      if (!targetUser.assignedAdmin || targetUser.assignedAdmin.toString() !== req.user._id.toString()) {
+        console.log(`Intento de asignar tarea a usuario no asignado: Admin ${req.user.username} (${req.user._id}), Usuario ${targetUser.username} (${userId}), Asignado a: ${targetUser.assignedAdmin || 'nadie'}`);
+        return res.status(403).json({ 
+          message: `No puedes asignar tareas al usuario ${targetUser.username} porque no está asignado a tu gestión` 
+        });
+      }
+    }
+    
+    // Asignar la tarea al usuario
+    task.userId = userId;
+    task.status = 'assigned'; // Actualizar estado a asignado
+    await task.save();
+    
+    // Registrar la actividad
+    await registerTaskActivity(req.user._id, taskId, 'task_assign', {
+      title: task.title,
+      assignedTo: targetUser.username
+    });
+    
+    // Enviar notificación al usuario
+    try {
+      await notificationUtil.notifyUser(userId, `Nueva tarea asignada: ${task.title}`, {
+        taskId: taskId,
+        type: 'task_assigned'
+      });
+    } catch (notifError) {
+      console.error('Error al enviar notificación:', notifError);
+    }
+    
+    return res.status(200).json({
+      success: true,
+      message: `Tarea asignada correctamente a ${targetUser.username}`,
+      task
+    });
+  } catch (error) {
+    console.error('Error al asignar tarea:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Error al asignar la tarea',
+      error: error.message
+    });
   }
 };
 
@@ -216,14 +278,51 @@ exports.createTask = async (req, res) => {
   }
 };
 
-// Crear una tarea asignada a uno o más usuarios (solo admin)
+// Crear una tarea asignada a un usuario específico (solo admin)
 exports.createAssignedTask = async (req, res) => {
   try {
+    // Solo administradores pueden crear tareas asignadas
+    if (!req.user.isAdmin) {
+      return res.status(403).json({ message: "No tienes permiso para crear tareas asignadas" });
+    }
+    
+    const { userId, userIds } = req.body;
+    
+    // Determinar todos los IDs de usuarios a los que se les asignarán tareas
+    let allUserIds = [];
+    if (userIds && Array.isArray(userIds) && userIds.length > 0) {
+      allUserIds = [...userIds];
+    } else if (userId) {
+      allUserIds = [userId];
+    }
+    
+    if (allUserIds.length === 0) {
+      return res.status(400).json({ message: "Se requiere al menos un ID de usuario" });
+    }
+    
+    // Verificar que el administrador puede asignar tareas a estos usuarios
+    if (!req.user.isSuperAdmin) {
+      // Si no es superadmin, verificar que todos los usuarios están asignados a él
+      for (const id of allUserIds) {
+        const targetUser = await User.findById(id);
+        if (!targetUser) {
+          return res.status(404).json({ message: `Usuario con ID ${id} no encontrado` });
+        }
+        
+        // Verificar si el usuario está asignado a este administrador
+        if (!targetUser.assignedAdmin || targetUser.assignedAdmin.toString() !== req.user._id.toString()) {
+          console.log(`Intento de asignar tarea a usuario no asignado: Admin ${req.user._id}, Usuario ${id}, Asignado a: ${targetUser.assignedAdmin || 'nadie'}`);
+          return res.status(403).json({ 
+            message: `No puedes asignar tareas al usuario ${targetUser.username} porque no está asignado a tu gestión` 
+          });
+        }
+      }
+      console.log(`Verificación completada: Admin ${req.user.username} puede asignar tareas a todos los usuarios seleccionados`);
+    }
+    
     const { 
       title, 
       description, 
-      userId, 
-      userIds, 
       location, 
       radius, 
       locationName, 
@@ -613,19 +712,8 @@ exports.updateTask = async (req, res) => {
     
     console.log(`Tarea actualizada: ${task._id}`);
     
-    // Solo registrar actividad si:
-    // 1. Se especifica explícitamente que hay que registrarla (edición de administrador desde botón especial)
-    // 2. El usuario es un administrador 
-    if (registerActivity === true && req.user.isAdmin) {
-      console.log(`Registrando actividad de actualización por administrador para tarea ${task._id}`);
-      
-      // Registrar la actividad con metadatos adicionales
-      await registerTaskActivity(req.user._id, task._id, 'task_update', {
-        title: task.title,
-        changes: req.body,
-        adminUpdate: true  // Marcar explícitamente como actualización de administrador
-      });
-    }
+    // Se ha eliminado la lógica de registro de actividades ''
+    // Los administradores pueden seguir editando tareas, pero no se registrarán como actividades
     
     res.status(200).json(updatedTask);
   } catch (error) {

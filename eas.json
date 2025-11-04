@@ -28,6 +28,9 @@
       },
       "android": {
         "buildType": "app-bundle"
+      },
+      "env": {
+        "API_URL": "https://managetime-backend-48f256c2dfe5.herokuapp.com"
       }
     },
     "diagnostic": {
@@ -53,6 +56,11 @@
     }
   },
   "submit": {
-    "production": {}
+    "production": {
+      "ios": {
+        "ascAppId": "6511092962",
+        "appleTeamId": "8G9JBU87A2"
+      }
+    }
   }
 }

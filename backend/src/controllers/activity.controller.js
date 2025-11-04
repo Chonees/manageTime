@@ -29,7 +29,7 @@ exports.createActivity = async (req, res) => {
     // Validar el tipo de actividad
     const validTypes = [
       'location_enter', 'location_exit', 
-      'task_complete', 'task_create', 'task_update', 'task_delete',
+      'task_complete', 'task_create', 'task_delete',
       'task_activity',
       'task_accept', 'task_reject', 'task_assign',
       'NOTES' // Añadido soporte para notas
@@ -172,7 +172,7 @@ exports.getRecentActivities = async (req, res) => {
     const activities = await Activity.find({ userId })
       .sort({ createdAt: -1 })
       .limit(limit)
-      .populate('taskId', 'title description');
+      .populate('taskId', 'fileNumber title description locationName status completed');
 
     res.status(200).json(activities);
   } catch (error) {
@@ -223,14 +223,19 @@ exports.getAllActivities = async (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const skip = (page - 1) * limit;
     
-    // Ya no excluimos location_check para que aparezcan en el panel de admin
-    // const excludedTypes = ['location_check']; 
+    // Procesar parámetros de exclusión (tipos de actividad a excluir)
+    const excludeParam = req.query.exclude;
     
-    // No aplicamos filtro de exclusión por tipo
-    // const filter = { type: { $nin: excludedTypes } };
+    // Crear un filtro base
+    let filter = {};
     
-    // Filtro vacío para incluir todas las actividades
-    const filter = {};
+    // Si se especifican tipos a excluir, añadirlos al filtro
+    if (excludeParam) {
+      // Puede ser un solo tipo o varios separados por comas
+      const excludedTypes = excludeParam.split(',');
+      filter.type = { $nin: excludedTypes };
+      console.log(`Excluyendo tipos de actividad:`, excludedTypes);
+    }
     
     // Aplicar filtro de ordenación si existe
     const sort = req.query.sort || { createdAt: -1 };
@@ -244,7 +249,7 @@ exports.getAllActivities = async (req, res) => {
       .skip(skip)
       .limit(limit)
       .populate('userId', 'username email')  // Incluir datos del usuario
-      .populate('taskId', 'title description locationName');  // Incluir datos de la tarea
+      .populate('taskId', 'fileNumber title description locationName status completed');  // Incluir datos de la tarea
 
     // Devolver actividades con metadatos de paginación
     res.status(200).json({

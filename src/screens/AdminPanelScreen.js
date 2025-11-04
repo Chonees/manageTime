@@ -208,7 +208,7 @@ const AdminPanelScreen = () => {
         iconName = 'add-circle-outline';
         iconColor = '#2196F3';
         break;
-      case 'task_update':
+
         activityText = activityText || t('taskUpdate');
         iconName = 'create-outline';
         iconColor = '#FF9800';

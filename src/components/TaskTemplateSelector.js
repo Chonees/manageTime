@@ -60,20 +60,46 @@ const TaskTemplateSelector = ({
       return;
     }
 
+    // Validar que haya un título (campo obligatorio en el backend)
+    if (!currentTask.title || !currentTask.title.trim()) {
+      Alert.alert(t('error'), 'El título de la tarea es obligatorio');
+      return;
+    }
+
     setSavingTemplate(true);
     try {
       // Extraer solo los campos necesarios para la plantilla
+      // Preparamos la ubicación correctamente para MongoDB
+      let locationData = null;
+      
+      if (currentTask.location && 
+         (Array.isArray(currentTask.location.coordinates) || 
+          (currentTask.longitude !== undefined && currentTask.latitude !== undefined))) {
+        locationData = {
+          type: 'Point',
+          coordinates: Array.isArray(currentTask.location.coordinates) 
+            ? currentTask.location.coordinates 
+            : [currentTask.longitude || 0, currentTask.latitude || 0]
+        };
+      }
+
       const templateData = {
         name: templateName,
-        title: currentTask.title || '',
+        title: currentTask.title.trim(),
         description: currentTask.description || '',
         locationName: currentTask.locationName || '',
-        location: currentTask.location || null,
-        radius: currentTask.radius || 1.0,
-        timeLimit: currentTask.timeLimit || null,
-        keywords: currentTask.keywords || [],
-        handsFreeMode: currentTask.handsFreeMode || false
+        location: locationData,
+        radius: parseFloat(currentTask.radius) || 0.1,
+        timeLimit: parseInt(currentTask.timeLimit) || 15,
+        keywords: Array.isArray(currentTask.keywords) 
+          ? currentTask.keywords 
+          : (typeof currentTask.keywords === 'string' 
+              ? currentTask.keywords.split(',').map(k => k.trim()) 
+              : []),
+        handsFreeMode: Boolean(currentTask.handsFreeMode)
       };
+      
+      console.log('Guardando plantilla con datos:', JSON.stringify(templateData, null, 2));
 
       await api.saveTaskTemplate(templateData);
       Alert.alert(t('success'), t('templateSaved'));
@@ -82,7 +108,7 @@ const TaskTemplateSelector = ({
       loadTemplates(); // Recargar la lista de plantillas
     } catch (err) {
       console.error('Error al guardar plantilla:', err);
-      Alert.alert(t('error'), t('errorSavingTemplate'));
+      Alert.alert(t('error'), `${t('errorSavingTemplate')}: ${err.message}`);
     } finally {
       setSavingTemplate(false);
     }
@@ -138,40 +164,48 @@ const TaskTemplateSelector = ({
   );
 
   // Renderizar el formulario para guardar una nueva plantilla
-  const renderSaveForm = () => (
-    <View style={styles.saveForm}>
-      <Text style={styles.saveFormTitle}>{t('saveAsTemplate')}</Text>
-      <TextInput
-        style={styles.input}
-        placeholder={t('templateName')}
-        placeholderTextColor="rgba(255, 243, 229, 0.5)"
-        value={templateName}
-        onChangeText={setTemplateName}
-      />
-      <View style={styles.saveFormActions}>
-        <TouchableOpacity 
-          style={styles.cancelButton}
-          onPress={() => {
-            setTemplateName('');
-            setShowSaveForm(false);
-          }}
-        >
-          <Text style={styles.cancelButtonText}>{t('cancel')}</Text>
-        </TouchableOpacity>
-        <TouchableOpacity 
-          style={[styles.saveButton, !templateName.trim() && styles.disabledButton]}
-          onPress={handleSaveTemplate}
-          disabled={!templateName.trim() || savingTemplate}
-        >
-          {savingTemplate ? (
-            <ActivityIndicator size="small" color="#000" />
-          ) : (
-            <Text style={styles.saveButtonText}>{t('saveTemplate')}</Text>
-          )}
-        </TouchableOpacity>
+  const renderSaveForm = () => {
+    // Verificar si la tarea tiene un título (requisito para guardar)
+    const hasTitle = currentTask.title && currentTask.title.trim().length > 0;
+    const canSave = templateName.trim().length > 0 && hasTitle;
+    
+    return (
+      <View style={styles.saveForm}>
+        <Text style={styles.saveFormTitle}>{t('saveAsTemplate')}</Text>
+        <TextInput 
+          style={styles.input}
+          placeholder={t('templateName')}
+          placeholderTextColor="rgba(255, 243, 229, 0.5)"
+          value={templateName}
+          onChangeText={setTemplateName}
+        />
+        
+        {!hasTitle && (
+          <Text style={styles.validationErrorText}>Para guardar como plantilla, la tarea debe tener un título.</Text>
+        )}
+        
+        <View style={styles.saveFormActions}>
+          <TouchableOpacity 
+            style={styles.cancelButton}
+            onPress={() => setShowSaveForm(false)}
+          >
+            <Text style={styles.cancelButtonText}>{t('cancel')}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={[styles.saveButton, (!canSave || savingTemplate) && styles.disabledButton]}
+            onPress={handleSaveTemplate}
+            disabled={!canSave || savingTemplate}
+          >
+            {savingTemplate ? (
+              <ActivityIndicator size="small" color="#000" />
+            ) : (
+              <Text style={styles.saveButtonText}>{t('save')}</Text>
+            )}
+          </TouchableOpacity>
+        </View>
       </View>
-    </View>
-  );
+    );
+  };
 
   return (
     <Modal
@@ -414,6 +448,11 @@ const styles = StyleSheet.create({
   },
   disabledButton: {
     opacity: 0.5,
+  },
+  validationErrorText: {
+    color: '#ff5252',
+    marginBottom: 15,
+    fontSize: 14,
   },
 });
 
